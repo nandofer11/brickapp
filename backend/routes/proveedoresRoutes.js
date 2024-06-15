@@ -1,21 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const proveedorController = require('../src/controllers/proveedorController');
-const authMiddleware = require('../src/middlewares/authMiddleware');
 
 // Listar todos los proveedores
-router.get('/', authMiddleware, proveedorController.getAllProveedores);
+router.get('/', proveedorController.findAll);
 
 // Crear un proveedor
-router.post('/', authMiddleware, proveedorController.createProveedor);
+router.post('/', proveedorController.create);
 
 // Obtener un proveedor por ID
-router.get('/:id', authMiddleware, proveedorController.getProveedorById);
+router.get('/:id', proveedorController.findOne);
 
 // Actualizar un proveedor por ID
-router.put('/:id', authMiddleware, proveedorController.updateProveedor);
+router.put('/:id', proveedorController.update);
 
 // Eliminar un proveedor por ID
-router.delete('/:id', authMiddleware, proveedorController.deleteProveedor);
+router.delete('/:id',proveedorController.delete);
 
 module.exports = router;

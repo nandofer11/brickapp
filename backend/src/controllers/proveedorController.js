@@ -1,121 +1,113 @@
-const { Proveedor, Usuario } = require('../models');
+// controllers/proveedor.controller.js
+const Proveedor = require('../models/Proveedor');
 
 // Crear un nuevo proveedor
-const createProveedor = async (req, res) => {
-  try {
-    const { ruc, razonSocial, direccion, distrito, provincia, departamento, UsuarioId } = req.body;
+exports.create = (req, res) => {
+  if (!req.body.ruc) {
+    res.status(400).send({ message: "El contenido no puede estar vacío!" });
+    return;
+  }
 
-    // Verificar si el usuario existe
-    const usuario = await Usuario.findByPk(UsuarioId);
+  const proveedor = {
+    ruc: req.body.ruc,
+    razon_social: req.body.razon_social,
+    direccion: req.body.direccion,
+    distrito: req.body.distrito,
+    provincia: req.body.provincia,
+    departamento: req.body.departamento
+  };
 
-    if (!usuario) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
-      }
-
-    // Crear el proveedor
-    const proveedor = await Proveedor.create({
-      ruc,
-      razonSocial,
-      direccion,
-      distrito,
-      provincia,
-      departamento,
-      UsuarioId
+  Proveedor.create(proveedor)
+    .then(data => {
+      res.send(data);
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: err.message || "Ocurrió un error al crear el Proveedor."
+      });
     });
-
-    res.status(201).json(proveedor);
-  } catch (error) {
-    res.status(500).json({ message: 'Error al crear el proveedor', error });
-    console.log(error.message)
-  }
-};
-
-// Obtener un proveedor por ID
-const getProveedorById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const proveedor = await Proveedor.findByPk(id, {
-      include: Usuario
-    });
-
-    if (!proveedor) {
-      return res.status(404).json({ message: 'Proveedor no encontrado' });
-    }
-
-    res.status(200).json(proveedor);
-  } catch (error) {
-    res.status(500).json({ message: 'Error al obtener el proveedor', error });
-  }
-};
-
-// Actualizar un proveedor por ID
-const updateProveedor = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { ruc, razonSocial, direccion, distrito, provincia, departamento, UsuarioId } = req.body;
-
-    // Verificar si el usuario existe
-    const usuario = await Usuario.findByPk(UsuarioId);
-    if (!usuario) {
-      return res.status(404).json({ message: 'Usuario no encontrado' });
-    }
-
-    const proveedor = await Proveedor.findByPk(id);
-
-    if (!proveedor) {
-      return res.status(404).json({ message: 'Proveedor no encontrado' });
-    }
-
-    proveedor.ruc = ruc;
-    proveedor.razonSocial = razonSocial;
-    proveedor.direccion = direccion;
-    proveedor.distrito = distrito;
-    proveedor.provincia = provincia;
-    proveedor.departamento = departamento;
-    proveedor.UsuarioId = UsuarioId;
-
-    await proveedor.save();
-
-    res.status(200).json(proveedor);
-  } catch (error) {
-    res.status(500).json({ message: 'Error al actualizar el proveedor', error });
-  }
-};
-
-// Eliminar un proveedor por ID
-const deleteProveedor = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const proveedor = await Proveedor.findByPk(id);
-
-    if (!proveedor) {
-      return res.status(404).json({ message: 'Proveedor no encontrado' });
-    }
-
-    await proveedor.destroy();
-
-    res.status(204).json();
-  } catch (error) {
-    res.status(500).json({ message: 'Error al eliminar el proveedor', error });
-  }
 };
 
 // Obtener todos los proveedores
-const getAllProveedores = async (req, res) => {
-  try {
-    const proveedores = await Proveedor.findAll({
-      include: Usuario
+exports.findAll = (req, res) => {
+  Proveedor.findAll()
+    .then(data => {
+      res.send(data);
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: err.message || "Ocurrió un error al obtener los Proveedores."
+      });
     });
-    res.status(200).json(proveedores);
-  } catch (error) {
-    res.status(500).json({ message: 'Error al obtener los proveedores', error });
-  }
 };
 
-module.exports = {
-  createProveedor,
-  getProveedorById,
-  updateProveedor,
-  deleteProveedor,
-  getAllProveedores
+// Obtener un proveedor por id
+exports.findOne = (req, res) => {
+  const id = req.params.id;
+
+  Proveedor.findByPk(id)
+    .then(data => {
+      if (data) {
+        res.send(data);
+      } else {
+        res.status(404).send({
+          message: `No se encontró el Proveedor con id=${id}.`
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "Error al obtener el Proveedor con id=" + id
+      });
+    });
+};
+
+// Actualizar un proveedor por id
+exports.update = (req, res) => {
+  const id = req.params.id;
+
+  Proveedor.update(req.body, {
+    where: { id_proveedor: id }
+  })
+    .then(num => {
+      if (num == 1) {
+        res.send({
+          message: "El Proveedor fue actualizado exitosamente."
+        });
+      } else {
+        res.send({
+          message: `No se puede actualizar el Proveedor con id=${id}. Tal vez el Proveedor no fue encontrado o el cuerpo de la solicitud está vacío.`
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "Error al actualizar el Proveedor con id=" + id
+      });
+    });
+};
+
+// Eliminar un proveedor por id
+exports.delete = (req, res) => {
+  const id = req.params.id;
+
+  Proveedor.destroy({
+    where: { id_proveedor: id }
+  })
+    .then(num => {
+      if (num == 1) {
+        res.send({
+          message: "El Proveedor fue eliminado exitosamente!"
+        });
+      } else {
+        res.send({
+          message: `No se puede eliminar el Proveedor con id=${id}. Tal vez el Proveedor no fue encontrado.`
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "No se pudo eliminar el Proveedor con id=" + id
+      });
+    });
 };

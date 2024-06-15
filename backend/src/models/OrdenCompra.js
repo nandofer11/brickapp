@@ -1,25 +1,29 @@
-// models/usuario.model.js
+// models/orden_compra.model.js
 const { DataTypes } = require('sequelize');
 const {sequelize} = require('../config/db');
 const Empresa = require('../models/Empresa.js');
-const Rol = require('../models/Rol.js');
+const Proveedor = require('../models/Proveedor.js');
 
-const Usuario = sequelize.define('Usuario', {
-  id_usuario: {
+const OrdenCompra = sequelize.define('OrdenCompra', {
+  id_orden_compra: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
     primaryKey: true
   },
-  nombre_completo: {
-    type: DataTypes.STRING(50),
+  fecha_compra: {
+    type: DataTypes.DATE,
     allowNull: false
   },
-  usuario: {
+  fecha_entrega: {
+    type: DataTypes.DATE,
+    allowNull: false
+  },
+  estado: {
     type: DataTypes.STRING(45),
     allowNull: false
   },
-  contraseña: {
-    type: DataTypes.STRING(100),
+  forma_pago: {
+    type: DataTypes.STRING(45),
     allowNull: false
   },
   Empresa_id_empresa: {
@@ -30,17 +34,17 @@ const Usuario = sequelize.define('Usuario', {
       key: 'id_empresa'
     }
   },
-  Rol_id_rol: {
+  Proveedor_id_proveedor: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: Rol,
-      key: 'id_rol'
+      model: Proveedor,
+      key: 'id_proveedor'
     }
   }
 }, {
-  tableName: 'Usuario',
+  tableName: 'Orden_Compra',
   timestamps: false
 });
 
-module.exports = Usuario;
+module.exports = OrdenCompra;

@@ -8,30 +8,33 @@ db.connect();
 
 // Importar rutas
 const authRoutes = require('./routes/authRoutes');
-const proveedorRoutes = require('./routes/proveedoresRoutes');
 const empresaRoutes = require('./routes/empresaRoutes');
 const materialRoutes = require('./routes/materialRoutes');
-const compraRoutes = require('./routes/compraRoutes');
-const detalleCompraRoutes = require('./routes/detalleCompraRoutes');
-// Importar otras rutas necesarias
+const ordenCompraRoutes = require('./routes/ordenCompraRoutes');
+const ordenCompraMaterialRoutes = require('./routes/ordenCompraMaterialRoutes');
+const proveedorRoutes = require('./routes/proveedoresRoutes'); // Nombre corregido
+const rolRoutes = require('./routes/rolRoutes');
+const authProveedorRoutes = require('./routes/authProveedorRoutes');
 
 // Middleware para parsear JSON
 app.use(express.json());
 
 // Configurar rutas
-app.use('/api/auth', authRoutes);
-app.use('/api/proveedores', proveedorRoutes);
+app.use('/api/auth', authRoutes); // Ruta de autenticación para usuarios de empresa
 app.use('/api/empresas', empresaRoutes);
 app.use('/api/materiales', materialRoutes);
-app.use('/api/compras', compraRoutes);
-app.use('/api/detalleCompras', detalleCompraRoutes);
-// Configurar otras rutas necesarias
+app.use('/api/ordencompra', ordenCompraRoutes);
+app.use('/api/ordencompramaterial', ordenCompraMaterialRoutes);
+app.use('/api/proveedores', proveedorRoutes);
+app.use('/api/roles', rolRoutes);
+app.use('/api/authProveedor', authProveedorRoutes);  // Ruta de autenticación para usuarios de proveedor
+
 
 // Puerto del servidor
 const PORT = process.env.PORT || 3000;
 
 // Sincronizar modelos con la base de datos y luego iniciar el servidor
-sequelize.sync({ force: true }) // Cambiar a 'false' para evitar que se eliminen y vuelvan a crear las tablas cada vez
+sequelize.sync({ force: false }) // Cambiar a 'false' para evitar que se eliminen y vuelvan a crear las tablas cada vez
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Servidor iniciado en el puerto ${PORT}`);

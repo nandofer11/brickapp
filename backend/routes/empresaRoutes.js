@@ -1,12 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const empresaController = require('../src/controllers/empresaController');
-const authMiddleware = require('../src/middlewares/authMiddleware');
 
-router.get('/', authMiddleware, empresaController.getEmpresas);
-router.post('/', authMiddleware, empresaController.createEmpresa);
-router.get('/:id', authMiddleware, empresaController.getEmpresaById);
-router.put('/:id', authMiddleware, empresaController.updateEmpresa);
-router.delete('/:id', authMiddleware, empresaController.deleteEmpresa);
+router.get('/', empresaController.findAll);
+router.post('/', empresaController.create);
+router.get('/:id', empresaController.findOne);
+router.put('/:id', empresaController.update);
+router.delete('/:id', empresaController.delete);
 
 module.exports = router;

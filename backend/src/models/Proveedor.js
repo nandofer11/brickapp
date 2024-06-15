@@ -1,39 +1,39 @@
 const { DataTypes } = require('sequelize');
-const { sequelize } = require('../config/db');
+const {sequelize} = require('../config/db');
 
 const Proveedor = sequelize.define('Proveedor', {
-  idProveedor: {
+  id_proveedor: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
-    primaryKey: true,
+    primaryKey: true
   },
   ruc: {
     type: DataTypes.STRING(11),
-    allowNull: false,
+    allowNull: false
   },
-  razonSocial: {
+  razon_social: {
     type: DataTypes.STRING(45),
-    allowNull: false,
+    allowNull: false
   },
   direccion: {
     type: DataTypes.STRING(80),
-    allowNull: false,
+    allowNull: false
   },
   distrito: {
     type: DataTypes.STRING(45),
-    allowNull: false,
+    allowNull: false
   },
   provincia: {
     type: DataTypes.STRING(45),
-    allowNull: false,
+    allowNull: false
   },
   departamento: {
     type: DataTypes.STRING(45),
-    allowNull: true,
-  },
+    allowNull: true
+  }
 }, {
-  tableName: 'Proveedor'
+  tableName: 'Proveedor',
+  // timestamps: false
 });
-
 
 module.exports = Proveedor;

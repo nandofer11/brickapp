@@ -1,93 +1,112 @@
+// controllers/material.controller.js
 const Material = require('../models/Material');
-const Proveedor = require('../models/Proveedor');
 
-exports.createMaterial = async (req, res) => {
-  const { Proveedor_idProveedor, nombre, descripcion, peso, precioUnitario } = req.body;
+// Crear un nuevo material
+exports.create = (req, res) => {
+  if (!req.body.nombre) {
+    res.status(400).send({ message: "El contenido no puede estar vacío!" });
+    return;
+  }
 
-  try {
-    const newMaterial = await Material.create({
-      Proveedor_idProveedor,
-      nombre,
-      descripcion,
-      peso,
-      precioUnitario,
+  const material = {
+    nombre: req.body.nombre,
+    descripcion: req.body.descripcion,
+    peso: req.body.peso,
+    precio_unitario: req.body.precio_unitario,
+    Proveedor_id_proveedor: req.body.Proveedor_id_proveedor
+  };
+
+  Material.create(material)
+    .then(data => {
+      res.send(data);
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: err.message || "Ocurrió un error al crear el Material."
+      });
     });
-
-    res.status(201).json(newMaterial);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al crear el material' });
-  }
 };
 
-exports.getMaterials = async (req, res) => {
-  try {
-    const materiales = await Material.findAll();
-    res.status(200).json(materiales);
-  } catch (error) {
-    console.error('Error al obtener los materiales: ', error)
-    res.status(500).json({ error: 'Error al obtener los materiales'});
-  }
+// Obtener todos los materiales
+exports.findAll = (req, res) => {
+  Material.findAll()
+    .then(data => {
+      res.send(data);
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: err.message || "Ocurrió un error al obtener los Materiales."
+      });
+    });
 };
 
-exports.getMaterialById = async (req, res) => {
-  const { id } = req.params;
+// Obtener un material por id
+exports.findOne = (req, res) => {
+  const id = req.params.id;
 
-  try {
-    const material = await Material.findByPk(id, {
-      include: {
-        model: Proveedor,
-        attributes: ['razonSocial']
+  Material.findByPk(id)
+    .then(data => {
+      if (data) {
+        res.send(data);
+      } else {
+        res.status(404).send({
+          message: `No se encontró el Material con id=${id}.`
+        });
       }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "Error al obtener el Material con id=" + id
+      });
     });
-
-    if (!material) {
-      return res.status(404).json({ error: 'Material no encontrado' });
-    }
-
-    res.status(200).json(material);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener el material' });
-  }
 };
 
-exports.updateMaterial = async (req, res) => {
-  const { id } = req.params;
-  const { Proveedor_idProveedor, nombre, descripcion, peso, precioUnitario } = req.body;
+// Actualizar un material por id
+exports.update = (req, res) => {
+  const id = req.params.id;
 
-  try {
-    const material = await Material.findByPk(id);
-
-    if (!material) {
-      return res.status(404).json({ error: 'Material no encontrado' });
-    }
-
-    material.Proveedor_idProveedor = Proveedor_idProveedor;
-    material.nombre = nombre;
-    material.descripcion = descripcion;
-    material.peso = peso;
-    material.precioUnitario = precioUnitario;
-
-    await material.save();
-
-    res.status(200).json(material);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar el material' });
-  }
+  Material.update(req.body, {
+    where: { id_material: id }
+  })
+    .then(num => {
+      if (num == 1) {
+        res.send({
+          message: "El Material fue actualizado exitosamente."
+        });
+      } else {
+        res.send({
+          message: `No se puede actualizar el Material con id=${id}. Tal vez el Material no fue encontrado o el cuerpo de la solicitud está vacío.`
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "Error al actualizar el Material con id=" + id
+      });
+    });
 };
 
-exports.deleteMaterial = async (req, res) => {
-  const { id } = req.params;
+// Eliminar un material por id
+exports.delete = (req, res) => {
+  const id = req.params.id;
 
-  try {
-    const material = await Material.findByPk(id);
-
-    if (!material) {
-      return res.status(404).json({ error: 'Material no encontrado' });
-    }
-
-    await material.destroy();
-    res.status(204).json();
-  } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar el material' });
-  }
+  Material.destroy({
+    where: { id_material: id }
+  })
+    .then(num => {
+      if (num == 1) {
+        res.send({
+          message: "El Material fue eliminado exitosamente!"
+        });
+      } else {
+        res.send({
+          message: `No se puede eliminar el Material con id=${id}. Tal vez el Material no fue encontrado.`
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "No se pudo eliminar el Material con id=" + id
+      });
+    });
 };

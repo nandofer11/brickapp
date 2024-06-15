@@ -1,107 +1,116 @@
+// controllers/empresa.controller.js
 const Empresa = require('../models/Empresa');
-const Usuario = require('../models/Usuario');
 
-exports.createEmpresa = async (req, res) => {
-  try{
-    const { ruc, nombreComercial, direccion, telefono, email, web, UsuarioId} = req.body;
-    //Verificar si el usuario existe
-    const usuario = await Usuario.findByPk(UsuarioId);
+// Crear una nueva empresa
+exports.create = (req, res) => {
+  if (!req.body.ruc) {
+    res.status(400).send({ message: "El contenido no puede estar vacío!" });
+    return;
+  }
 
-    if(!usuario){
-      return res.status(404).json({message: 'Usuario no encontrado.'})
-    }
+  const empresa = {
+    ruc: req.body.ruc,
+    nombre_comercial: req.body.nombre_comercial,
+    direccion: req.body.direccion,
+    telefono: req.body.telefono,
+    email: req.body.email,
+    web: req.body.web,
+    distrito: req.body.distrito,
+    provincia: req.body.provincia,
+    departamento: req.body.departamento
+  };
 
-    //Crear la empresa
-    const empresa = await Empresa.create({
-      ruc,
-      nombreComercial,
-      direccion,
-      telefono,
-      email,
-      web,
-      UsuarioId
+  Empresa.create(empresa)
+    .then(data => {
+      res.send(data);
     })
-    res.status(201).json(empresa);
-  }catch(error){
-    res.status(500).json({message: 'Error al crear la empresa', error});
-    console.log(error.message);
-  }
-};
-
-exports.getEmpresas = async (req, res) => {
-  try {
-    const empresas = await Empresa.findAll({
-      include: {
-        model: Usuario
-      }
+    .catch(err => {
+      res.status(500).send({
+        message: err.message || "Ocurrió un error al crear la Empresa."
+      });
     });
-    res.status(200).json(empresas);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener las empresas' });
-  }
 };
 
-exports.getEmpresaById = async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const empresa = await Empresa.findByPk(id, {
-      include: {
-        model: Usuario
-      }
+// Obtener todas las empresas
+exports.findAll = (req, res) => {
+  Empresa.findAll()
+    .then(data => {
+      res.send(data);
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: err.message || "Ocurrió un error al obtener las Empresas."
+      });
     });
-
-    if (!empresa) {
-      return res.status(404).json({ error: 'Empresa no encontrada' });
-    }
-
-    res.status(200).json(empresa);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener la empresa' });
-  }
 };
 
-exports.updateEmpresa = async (req, res) => {
-  const { id } = req.params;
-  const { ruc, nombreComercial, direccion, telefono, email, web, UsuarioId } = req.body;
+// Obtener una empresa por id
+exports.findOne = (req, res) => {
+  const id = req.params.id;
 
-  try {
-    const empresa = await Empresa.findByPk(id);
-
-    if (!empresa) {
-      return res.status(404).json({ error: 'Empresa no encontrada' });
-    }
-
-    empresa.Usuario_idUsuario = Usuario_idUsuario;
-    empresa.ruc = ruc;
-    empresa.nombreComercial = nombreComercial;
-    empresa.direccion = direccion;
-    empresa.telefono = telefono;
-    empresa.email = email;
-    empresa.web = web;
-    empresa.UsuarioId = UsuarioId;
-
-    await empresa.save();
-
-    res.status(200).json(empresa);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al actualizar la empresa' });
-  }
+  Empresa.findByPk(id)
+    .then(data => {
+      if (data) {
+        res.send(data);
+      } else {
+        res.status(404).send({
+          message: `No se encontró la Empresa con id=${id}.`
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "Error al obtener la Empresa con id=" + id
+      });
+    });
 };
 
-exports.deleteEmpresa = async (req, res) => {
-  const { id } = req.params;
+// Actualizar una empresa por id
+exports.update = (req, res) => {
+  const id = req.params.id;
 
-  try {
-    const empresa = await Empresa.findByPk(id);
+  Empresa.update(req.body, {
+    where: { id_empresa: id }
+  })
+    .then(num => {
+      if (num == 1) {
+        res.send({
+          message: "La Empresa fue actualizada exitosamente."
+        });
+      } else {
+        res.send({
+          message: `No se puede actualizar la Empresa con id=${id}. Tal vez la Empresa no fue encontrada o el cuerpo de la solicitud está vacío.`
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "Error al actualizar la Empresa con id=" + id
+      });
+    });
+};
 
-    if (!empresa) {
-      return res.status(404).json({ error: 'Empresa no encontrada' });
-    }
+// Eliminar una empresa por id
+exports.delete = (req, res) => {
+  const id = req.params.id;
 
-    await empresa.destroy();
-    res.status(204).json();
-  } catch (error) {
-    res.status(500).json({ error: 'Error al eliminar la empresa' });
-  }
+  Empresa.destroy({
+    where: { id_empresa: id }
+  })
+    .then(num => {
+      if (num == 1) {
+        res.send({
+          message: "La Empresa fue eliminada exitosamente!"
+        });
+      } else {
+        res.send({
+          message: `No se puede eliminar la Empresa con id=${id}. Tal vez la Empresa no fue encontrada.`
+        });
+      }
+    })
+    .catch(err => {
+      res.status(500).send({
+        message: "No se pudo eliminar la Empresa con id=" + id
+      });
+    });
 };
