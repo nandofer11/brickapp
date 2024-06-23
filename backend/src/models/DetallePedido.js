@@ -1,11 +1,11 @@
 // models/orden_compra_material.model.js
 const { DataTypes } = require('sequelize');
-const {sequelize} = require('../config/db');
-const OrdenCompra = require('./OrdenCompra.js');
+const {sequelize} = require('../config/db.js');
+const Pedido= require('./Pedido.js');
 const Material = require('./Material.js');
 
-const OrdenCompraMaterial = sequelize.define('OrdenCompraMaterial', {
-  id_orden_compra_material: {
+const DetallePedido = sequelize.define('DetallePedido', {
+  id_detalle_pedido: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
     primaryKey: true
@@ -15,15 +15,15 @@ const OrdenCompraMaterial = sequelize.define('OrdenCompraMaterial', {
     allowNull: false
   },
   subtotal: {
-    type: DataTypes.DECIMAL(7, 2),
+    type: DataTypes.FLOAT,
     allowNull: false
   },
-  Orden_Compra_id_orden_compra: {
+  Pedido_id_pedido: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: OrdenCompra,
-      key: 'id_orden_compra'
+      model: Pedido,
+      key: 'id_pedido'
     }
   },
   Material_id_material: {
@@ -35,8 +35,11 @@ const OrdenCompraMaterial = sequelize.define('OrdenCompraMaterial', {
     }
   }
 }, {
-  tableName: 'Orden_Compra_Material',
+  tableName: 'Detalle_Pedido',
   timestamps: false
 });
 
-module.exports = OrdenCompraMaterial;
+// DetallePedido.belongsTo(Pedido, { foreignKey: 'Pedido_id_pedido' });
+// DetallePedido.belongsTo(Material, { foreignKey: 'Material_id_material' });
+
+module.exports = DetallePedido;

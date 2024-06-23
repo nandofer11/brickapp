@@ -8,8 +8,8 @@ const Proveedor = require("../models/Proveedor.js");
 const Rol = require("../models/Rol");
 const Usuario = require("../models/Usuario.js");
 const Material = require("../models/Material.js");
-const OrdenCompra = require("../models/OrdenCompra.js");
-const OrdenCompraMaterial = require("../models/OrdenCompraMaterial");
+const Pedido = require("../models/Pedido.js");
+const DetallePedido = require("../models/DetallePedido.js");
 const UsuarioProveedor = require('../models/UsuarioProveedor.js');
 
 const db = {
@@ -20,12 +20,12 @@ const db = {
   Proveedor,
   Empresa,
   Material,
-  OrdenCompra,
-  OrdenCompraMaterial,
+  Pedido,
+  DetallePedido,
   UsuarioProveedor
 };
 
-// Definir asociaciones
+// Definir relaciones
 Empresa.hasMany(Usuario, { foreignKey: 'Empresa_id_empresa' });
 Usuario.belongsTo(Empresa, { foreignKey: 'Empresa_id_empresa' });
 
@@ -35,17 +35,17 @@ Usuario.belongsTo(Rol, { foreignKey: 'Rol_id_rol' });
 Proveedor.hasMany(Material, { foreignKey: 'Proveedor_id_proveedor' });
 Material.belongsTo(Proveedor, { foreignKey: 'Proveedor_id_proveedor' });
 
-Empresa.hasMany(OrdenCompra, { foreignKey: 'Empresa_id_empresa' });
-OrdenCompra.belongsTo(Empresa, { foreignKey: 'Empresa_id_empresa' });
+Usuario.hasMany(Pedido, { foreignKey: 'Usuario_id_usuario' });
+Pedido.belongsTo(Usuario, { foreignKey: 'Usuario_id_usuario' });
 
-Proveedor.hasMany(OrdenCompra, { foreignKey: 'Proveedor_id_proveedor' });
-OrdenCompra.belongsTo(Proveedor, { foreignKey: 'Proveedor_id_proveedor' });
+Proveedor.hasMany(Pedido, { foreignKey: 'Proveedor_id_proveedor' });
+Pedido.belongsTo(Proveedor, { foreignKey: 'Proveedor_id_proveedor' });
 
-OrdenCompra.hasMany(OrdenCompraMaterial, { foreignKey: 'Orden_Compra_id_orden_compra' });
-OrdenCompraMaterial.belongsTo(OrdenCompra, { foreignKey: 'Orden_Compra_id_orden_compra' });
+Pedido.hasMany(DetallePedido, { foreignKey: 'Pedido_id_pedido' });
+DetallePedido.belongsTo(Pedido, { foreignKey: 'Pedido_id_pedido' });
 
-Material.hasMany(OrdenCompraMaterial, { foreignKey: 'Material_id_material' });
-OrdenCompraMaterial.belongsTo(Material, { foreignKey: 'Material_id_material' });
+Material.hasMany(DetallePedido, { foreignKey: 'Material_id_material' });
+DetallePedido.belongsTo(Material, { foreignKey: 'Material_id_material' });
 
 Proveedor.hasMany(UsuarioProveedor, { foreignKey: 'Proveedor_id_proveedor' });
 UsuarioProveedor.belongsTo(Proveedor, { foreignKey: 'Proveedor_id_proveedor' });

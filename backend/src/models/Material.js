@@ -10,19 +10,19 @@ const Material = sequelize.define('Material', {
     primaryKey: true
   },
   nombre: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
   },
   descripcion: {
-    type: DataTypes.STRING(250),
+    type: DataTypes.STRING,
     allowNull: true
   },
   peso: {
-    type: DataTypes.DECIMAL(5, 2),
+    type: DataTypes.FLOAT,
     allowNull: false
   },
   precio_unitario: {
-    type: DataTypes.DECIMAL(5, 2),
+    type: DataTypes.FLOAT,
     allowNull: false
   },
   Proveedor_id_proveedor: {
@@ -37,5 +37,7 @@ const Material = sequelize.define('Material', {
   tableName: 'Material',
   timestamps: false
 });
+
+// Material.belongsTo(Proveedor, { foreignKey: 'Proveedor_id_proveedor' });
 
 module.exports = Material;

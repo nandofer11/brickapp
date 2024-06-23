@@ -12,28 +12,24 @@ const Proveedor = sequelize.define('Proveedor', {
     allowNull: false
   },
   razon_social: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
   },
   direccion: {
-    type: DataTypes.STRING(80),
-    allowNull: false
-  },
-  distrito: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
   },
   provincia: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
   },
   departamento: {
-    type: DataTypes.STRING(45),
-    allowNull: true
+    type: DataTypes.STRING,
+    allowNull: false
   }
 }, {
   tableName: 'Proveedor',
-  // timestamps: false
+  timestamps: false
 });
 
 module.exports = Proveedor;

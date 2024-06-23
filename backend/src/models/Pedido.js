@@ -1,16 +1,16 @@
 // models/orden_compra.model.js
 const { DataTypes } = require('sequelize');
-const {sequelize} = require('../config/db');
-const Empresa = require('../models/Empresa.js');
-const Proveedor = require('../models/Proveedor.js');
+const {sequelize} = require('../config/db.js');
+const Proveedor = require('./Proveedor.js');
+const Usuario = require('./Usuario.js');
 
-const OrdenCompra = sequelize.define('OrdenCompra', {
-  id_orden_compra: {
+const Pedido = sequelize.define('Pedido', {
+  id_pedido: {
     type: DataTypes.INTEGER,
     autoIncrement: true,
     primaryKey: true
   },
-  fecha_compra: {
+  fecha_pedido: {
     type: DataTypes.DATE,
     allowNull: false
   },
@@ -18,20 +18,20 @@ const OrdenCompra = sequelize.define('OrdenCompra', {
     type: DataTypes.DATE,
     allowNull: false
   },
-  estado: {
-    type: DataTypes.STRING(45),
-    allowNull: false
-  },
   forma_pago: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
   },
-  Empresa_id_empresa: {
+  estado: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
+  Usuario_id_usuario: {
     type: DataTypes.INTEGER,
     allowNull: false,
     references: {
-      model: Empresa,
-      key: 'id_empresa'
+      model: Usuario,
+      key: 'id_usuario'
     }
   },
   Proveedor_id_proveedor: {
@@ -43,8 +43,11 @@ const OrdenCompra = sequelize.define('OrdenCompra', {
     }
   }
 }, {
-  tableName: 'Orden_Compra',
+  tableName: 'Pedido',
   timestamps: false
 });
 
-module.exports = OrdenCompra;
+// Pedido.belongsTo(Usuario, { foreignKey: 'Usuario_id_usuario' });
+// Pedido.belongsTo(Proveedor, { foreignKey: 'Proveedor_id_proveedor' });
+
+module.exports = Pedido;

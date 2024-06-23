@@ -9,17 +9,12 @@ const UsuarioProveedor = sequelize.define('UsuarioProveedor', {
     autoIncrement: true,
     primaryKey: true
   },
-  nombre_completo: {
-    type: DataTypes.STRING(50),
+  usuario: {
+    type: DataTypes.STRING,
     allowNull: false
   },
-  usuario: {
-    type: DataTypes.STRING(45),
-    allowNull: false,
-    unique: true
-  },
   contraseña: {
-    type: DataTypes.STRING(100),
+    type: DataTypes.STRING,
     allowNull: false
   },
   Proveedor_id_proveedor: {
@@ -31,8 +26,10 @@ const UsuarioProveedor = sequelize.define('UsuarioProveedor', {
     }
   }
 }, {
-  tableName: 'UsuarioProveedor',
-//   timestamps: false
+  tableName: 'Usuario_Proveedor',
+  timestamps: false
 });
+
+// UsuarioProveedor.belongsTo(Proveedor, { foreignKey: 'Proveedor_id_proveedor' });
 
 module.exports = UsuarioProveedor;

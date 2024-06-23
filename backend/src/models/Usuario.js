@@ -11,15 +11,15 @@ const Usuario = sequelize.define('Usuario', {
     primaryKey: true
   },
   nombre_completo: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING,
     allowNull: false
   },
   usuario: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
   },
   contraseña: {
-    type: DataTypes.STRING(100),
+    type: DataTypes.STRING,
     allowNull: false
   },
   Empresa_id_empresa: {
@@ -42,5 +42,8 @@ const Usuario = sequelize.define('Usuario', {
   tableName: 'Usuario',
   timestamps: false
 });
+
+// Usuario.belongsTo(Empresa, { foreignKey: 'Empresa_id_empresa' });
+// Usuario.belongsTo(Rol, { foreignKey: 'Rol_id_rol' });
 
 module.exports = Usuario;

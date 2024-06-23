@@ -9,16 +9,16 @@ const Rol = sequelize.define('Rol', {
     primaryKey: true
   },
   nombre: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING,
     allowNull: false
   },
   descripcion: {
-    type: DataTypes.STRING(250),
+    type: DataTypes.STRING,
     allowNull: true
   }
 }, {
   tableName: 'Rol',
-//   timestamps: false
+  timestamps: false
 });
 
 module.exports = Rol;

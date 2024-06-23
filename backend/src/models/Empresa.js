@@ -13,40 +13,40 @@ const Empresa = sequelize.define('Empresa', {
     allowNull: false
   },
   nombre_comercial: {
-    type: DataTypes.STRING(50),
+    type: DataTypes.STRING,
     allowNull: false
   },
   direccion: {
-    type: DataTypes.STRING(80),
+    type: DataTypes.STRING,
     allowNull: false
   },
-  telefono: {
-    type: DataTypes.STRING(45),
-    allowNull: true
-  },
-  email: {
-    type: DataTypes.STRING(45),
-    allowNull: true
-  },
-  web: {
-    type: DataTypes.STRING(45),
-    allowNull: true
-  },
   distrito: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
   },
   provincia: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
   },
   departamento: {
-    type: DataTypes.STRING(45),
+    type: DataTypes.STRING,
     allowNull: false
+  },
+  telefono: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  email: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  web: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   tableName: 'Empresa',
-  // timestamps: false
+  timestamps: false
 });
 
 module.exports = Empresa;
