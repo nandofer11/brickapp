@@ -2,29 +2,27 @@
 const Material = require('../models/Material');
 
 // Crear un nuevo material
-exports.create = (req, res) => {
-  if (!req.body.nombre) {
-    res.status(400).send({ message: "El contenido no puede estar vacío!" });
-    return;
+exports.create = async (req, res) => {
+  const { nombre, descripcion, peso, precio_unitario, Proveedor_id_proveedor } = req.body;
+
+  // Verificar que todos los campos obligatorios estén presentes
+  if (!nombre || !peso || !precio_unitario || !Proveedor_id_proveedor) {
+    return res.status(400).send({ error: 'Todos los campos son obligatorios.' });
   }
 
-  const material = {
-    nombre: req.body.nombre,
-    descripcion: req.body.descripcion,
-    peso: req.body.peso,
-    precio_unitario: req.body.precio_unitario,
-    Proveedor_id_proveedor: req.body.Proveedor_id_proveedor
-  };
-
-  Material.create(material)
-    .then(data => {
-      res.send(data);
-    })
-    .catch(err => {
-      res.status(500).send({
-        message: err.message || "Ocurrió un error al crear el Material."
-      });
+  try {
+    const material = await Material.create({
+      nombre,
+      descripcion,
+      peso,
+      precio_unitario,
+      Proveedor_id_proveedor,
     });
+    res.status(201).send(material);
+  } catch (error) {
+    console.error('Error al registrar el material:', error);
+    res.status(500).send({ error: 'Error al registrar el material.' });
+  }
 };
 
 // Obtener todos los materiales
@@ -109,4 +107,16 @@ exports.delete = (req, res) => {
         message: "No se pudo eliminar el Material con id=" + id
       });
     });
+};
+
+// Obtener materiales por proveedor
+exports.findByProveedor = async (req, res) => {
+  try {
+    const materiales = await Material.findAll({
+      where: { Proveedor_id_proveedor: req.params.proveedorId },
+    });
+    res.status(200).json(materiales);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener los materiales' });
+  }
 };

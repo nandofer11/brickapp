@@ -33,30 +33,37 @@ exports.register = async (req, res) => {
 exports.login = async (req, res) => {
   const { usuario, contraseña } = req.body;
 
-  if (!usuario || !contraseña) {
-    return res.status(400).json({ error: 'Se requieren usuario y contraseña' });
-  }
-
   try {
-    const user = await UsuarioProveedor.findOne({ where: { usuario } });
-    
-    if (!user) {
+    const usuarioProveedor = await UsuarioProveedor.findOne({ where: { usuario } });
+    // console.log(usuarioProveedor);
+    if (!usuarioProveedor) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
     }
 
-    const isMatch = await bcrypt.compare(contraseña, user.contraseña);
-    
+    const isMatch = await bcrypt.compare(contraseña, usuarioProveedor.contraseña);
     if (!isMatch) {
       return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
 
-    const token = jwt.sign({ id: user.id_usuario_proveedor }, config.JWT_SECRET, {
+    const proveedor = await Proveedor.findByPk(usuarioProveedor.Proveedor_id_proveedor);
+    const token = jwt.sign({ 
+      id: usuarioProveedor.id_usuario_proveedor, 
+      Proveedor_id_proveedor: usuarioProveedor.Proveedor_id_proveedor }, 
+      config.JWT_SECRET, {
       expiresIn: '1h',
     });
 
-    res.json({ token, user: { id: user.id_usuario_proveedor, usuario: user.usuario, nombre_completo: user.nombre_completo } });
+    res.json({
+      token,
+      user: {
+        id_usuario_proveedor: usuarioProveedor.id_usuario_proveedor,
+        usuario: usuarioProveedor.usuario,
+        Proveedor_id_proveedor: usuarioProveedor.Proveedor_id_proveedor,
+        proveedor: proveedor.razon_social,
+      },
+    });
+    // console.log("el proveedor es: " +  proveedor.razon_social);
   } catch (error) {
-    console.error('Error en el inicio de sesión:', error);
     res.status(500).json({ error: 'Error en el inicio de sesión' });
   }
 };

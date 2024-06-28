@@ -42,24 +42,17 @@ exports.findAll = (req, res) => {
 };
 
 // Obtener un proveedor por id
-exports.findOne = (req, res) => {
-  const id = req.params.id;
-
-  Proveedor.findByPk(id)
-    .then(data => {
-      if (data) {
-        res.send(data);
-      } else {
-        res.status(404).send({
-          message: `No se encontró el Proveedor con id=${id}.`
-        });
-      }
-    })
-    .catch(err => {
-      res.status(500).send({
-        message: "Error al obtener el Proveedor con id=" + id
-      });
-    });
+exports.findOne = async (req, res) => {
+  try {
+    const proveedor = await Proveedor.findByPk(req.params.id);
+    if (proveedor) {
+      res.status(200).json(proveedor);
+    } else {
+      res.status(404).json({ error: 'Proveedor no encontrado' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener el proveedor' });
+  }
 };
 
 // Actualizar un proveedor por id
