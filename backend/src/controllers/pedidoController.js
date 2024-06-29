@@ -1,33 +1,44 @@
-// controllers/orden_compra.controller.js
 const Pedido = require('../models/Pedido');
+const Material = require('../models/Material');
+const DetallePedido = require('../models/DetallePedido');
 
-// Crear un nuevo pedido
-exports.create = (req, res) => {
-  if (!req.body.fecha_pedido) {
-    res.status(400).send({ message: "El contenido no puede estar vacío!" });
-    return;
-  }
+// Crear un nuevo pedido y sus detalles
+exports.create = async (req, res) => {
+  const { fecha_pedido, fecha_entrega, forma_pago, estado, Usuario_id_usuario, Proveedor_id_proveedor, Material_id_material, cantidad } = req.body;
 
-  const pedido = {
-    fecha_pedido: req.body.fecha_pedido,
-    fecha_entrega: req.body.fecha_entrega,
-    forma_pago: req.body.forma_pago,
-    estado: req.body.estado,
-    Usuario_id_usuario: req.body.Usuario_id_usuario,
-    Proveedor_id_proveedor: req.body.Proveedor_id_proveedor
-  };
-
-  console.log(pedido);
-
-  Pedido.create(pedido)
-    .then(data => {
-      res.send(data);
-    })
-    .catch(err => {
-      res.status(500).send({
-        message: err.message || "Ocurrió un error al crear el Pedido."
-      });
+  try {
+    // Crear el pedido
+    const pedido = await Pedido.create({
+      fecha_pedido,
+      fecha_entrega,
+      forma_pago,
+      estado,
+      Usuario_id_usuario,
+      Proveedor_id_proveedor
     });
+
+    // Obtener el precio_unitario del material
+    const material = await Material.findByPk(Material_id_material);
+    if (!material) {
+      return res.status(404).json({ error: 'Material no encontrado' });
+    }
+
+    // Calcular el subtotal
+    const subtotal = cantidad * material.precio_unitario;
+
+    // Crear el detalle del pedido
+    const detallePedido = await DetallePedido.create({
+      cantidad,
+      subtotal,
+      Pedido_id_pedido: pedido.id_pedido,
+      Material_id_material
+    });
+
+    res.status(201).json({ pedido, detallePedido });
+  } catch (error) {
+    console.error('Error al crear el pedido y su detalle:', error);
+    res.status(500).json({ error: 'Error al crear el pedido y su detalle.' });
+  }
 };
 
 // Obtener todos los pedidos

@@ -1,5 +1,7 @@
 // controllers/material.controller.js
 const Material = require('../models/Material');
+const {Op} = require('sequelize');
+const Proveedor = require('../models/Proveedor');
 
 // Crear un nuevo material
 exports.create = async (req, res) => {
@@ -118,5 +120,36 @@ exports.findByProveedor = async (req, res) => {
     res.status(200).json(materiales);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener los materiales' });
+  }
+};
+
+// Buscar materiales por nombre
+exports.buscarPorNombre = async (req, res) => {
+  const { nombre } = req.query;
+
+  if (!nombre) {
+    return res.status(400).json({ error: 'Debe proporcionar un nombre para buscar.' });
+  }
+
+  console.log(`Buscando materiales con el nombre: ${nombre}`);
+
+  try {
+    const materiales = await Material.findAll({
+      where: {
+        nombre: {
+          [Op.like]: `%${nombre}%`,
+        },
+      },
+      include: Proveedor,
+    });
+
+    if (materiales.length === 0) {
+      return res.status(404).json({ error: 'No se encontraron materiales con ese nombre.' });
+    }
+
+    res.status(200).json(materiales);
+  } catch (error) {
+    console.error('Error al buscar materiales:', error);
+    res.status(500).json({ error: 'Error al buscar materiales.' });
   }
 };
