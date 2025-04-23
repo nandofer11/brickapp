@@ -27,13 +27,14 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "react-toastify";
+import { useAuth } from "@/hooks/useAuth";
 
 // Interfaces para definir tipos
 interface Usuario {
   id_usuario: number;
   nombre_completo: string;
   usuario: string;
-  contraseña?: string;
+  contrasena?: string;
   email: string;
   celular: string;
   id_rol: number;
@@ -63,6 +64,7 @@ interface Empresa {
 
 // COMPONENTE DE GESTIÓN DE USUARIOS
 function GestionUsuarios() {
+  const { user } = useAuth(); // Obtener usuario de la sesión
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -70,26 +72,39 @@ function GestionUsuarios() {
     id_usuario: 0,
     nombre_completo: '',
     usuario: '',
-    contraseña: '',
+    contrasena: '',
     email: '',
     celular: '',
     id_rol: 0,
-    id_empresa: 0
+    id_empresa: user?.id_empresa || 0
   });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetchUsuarios();
-    fetchRoles();
-    fetchEmpresas();
-  }, []);
+    if (user?.id_empresa) {
+      fetchUsuarios();
+      fetchRoles();
+    }
+  }, [user]);
+
+  // Actualizar id_empresa en el estado cuando el usuario se carga
+  useEffect(() => {
+    if (user?.id_empresa && !isEditing) {
+      setUsuario(prev => ({
+        ...prev,
+        id_empresa: user.id_empresa
+      }));
+    }
+  }, [user, isEditing]);
 
   const fetchUsuarios = async () => {
+    if (!user?.id_empresa) return;
+    
     setIsLoading(true);
     try {
-      const response = await fetch('/api/usuarios');
+      const response = await fetch(`/api/usuarios?id_empresa=${user.id_empresa}`);
       if (response.ok) {
         const data = await response.json();
         setUsuarios(data);
@@ -105,8 +120,10 @@ function GestionUsuarios() {
   };
 
   const fetchRoles = async () => {
+    if (!user?.id_empresa) return;
+    
     try {
-      const response = await fetch('/api/roles');
+      const response = await fetch(`/api/rol?id_empresa=${user.id_empresa}`);
       if (response.ok) {
         const data = await response.json();
         setRoles(data);
@@ -144,24 +161,37 @@ function GestionUsuarios() {
       id_usuario: 0,
       nombre_completo: '',
       usuario: '',
-      contraseña: '',
+      contrasena: '',
       email: '',
       celular: '',
       id_rol: 0,
-      id_empresa: 0
+      id_empresa: user?.id_empresa || 0 // Mantener id_empresa del usuario logueado
     });
     setIsEditing(false);
   };
 
   const handleSave = async () => {
+    if (!user?.id_empresa) {
+      toast.error("No se pudo determinar la empresa del usuario");
+      return;
+    }
+
     try {
-      const url = isEditing ? `/api/usuarios/${usuario.id_usuario}` : '/api/usuarios';
+      // Asegurar que el id_empresa sea el del usuario logueado
+      const userData = {
+        ...usuario,
+        id_empresa: user.id_empresa
+      };
+
+      const url = isEditing 
+        ? `/api/usuarios/${usuario.id_usuario}?id_empresa=${user.id_empresa}` 
+        : `/api/usuarios?id_empresa=${user.id_empresa}`;
       const method = isEditing ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(usuario)
+        body: JSON.stringify(userData)
       });
 
       if (response.ok) {
@@ -179,18 +209,24 @@ function GestionUsuarios() {
   };
 
   const handleEdit = (user: Usuario) => {
+    // Al editar, no modificar id_empresa
     setUsuario({
       ...user,
-      contraseña: ''
+      contrasena: ''
     });
     setIsEditing(true);
     setDialogOpen(true);
   };
 
   const handleDelete = async (id: number) => {
+    if (!user?.id_empresa) {
+      toast.error("No se pudo determinar la empresa del usuario");
+      return;
+    }
+
     if (confirm('¿Está seguro de eliminar este usuario?')) {
       try {
-        const response = await fetch(`/api/usuarios/${id}`, {
+        const response = await fetch(`/api/usuarios/${id}?id_empresa=${user.id_empresa}`, {
           method: 'DELETE'
         });
 
@@ -250,7 +286,7 @@ function GestionUsuarios() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="usuario">Usuario</Label>
+                    <Label htmlFor="usuario">Nombre de Usuario</Label>
                     <Input 
                       id="usuario" 
                       name="usuario" 
@@ -259,6 +295,18 @@ function GestionUsuarios() {
                       placeholder="Nombre de usuario"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="contraseña">Contraseña {isEditing && "(Dejar en blanco para mantener la actual)"}</Label>
+                  <Input 
+                    id="contraseña" 
+                    name="contraseña" 
+                    type="password" 
+                    value={usuario.contrasena} 
+                    onChange={handleInputChange} 
+                    placeholder="Contraseña"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -286,68 +334,37 @@ function GestionUsuarios() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="id_rol">Rol</Label>
-                    <Select 
-                      value={usuario.id_rol ? usuario.id_rol.toString() : undefined} 
-                      onValueChange={(value) => handleSelectChange(value, "id_rol")}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione un rol" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {roles.map((rol) => (
-                          <SelectItem key={rol.id_rol} value={rol.id_rol.toString()}>
-                            {rol.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="id_empresa">Empresa</Label>
-                    <Select 
-                      value={usuario.id_empresa ? usuario.id_empresa.toString() : undefined} 
-                      onValueChange={(value) => handleSelectChange(value, "id_empresa")}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione una empresa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {empresas.map((empresa) => (
-                          <SelectItem key={empresa.id_empresa} value={empresa.id_empresa.toString()}>
-                            {empresa.razon_social}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <Label htmlFor="contraseña">
-                    {isEditing ? "Nueva Contraseña (Dejar en blanco para mantener actual)" : "Contraseña"}
-                  </Label>
-                  <Input 
-                    id="contraseña" 
-                    name="contraseña" 
-                    type="password" 
-                    value={usuario.contraseña || ''} 
-                    onChange={handleInputChange} 
-                    placeholder={isEditing ? "Nueva contraseña (opcional)" : "Contraseña"}
-                  />
+                  <Label htmlFor="id_rol">Rol</Label>
+                  <Select 
+                    value={usuario.id_rol ? usuario.id_rol.toString() : undefined} 
+                    onValueChange={(value) => handleSelectChange(value, "id_rol")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccione un rol" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((rol) => (
+                        <SelectItem key={rol.id_rol} value={rol.id_rol.toString()}>
+                          {rol.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                
+                {/* Eliminamos el campo id_empresa ya que se obtiene de la sesión */}
+
               </div>
 
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline" onClick={resetForm}>
+                  <Button variant="outline" type="button">
+                    <X className="h-4 w-4 mr-2" />
                     Cancelar
                   </Button>
                 </DialogClose>
-                <Button onClick={handleSave}>
+                <Button type="button" onClick={handleSave}>
                   <Save className="h-4 w-4 mr-2" />
                   Guardar
                 </Button>
@@ -365,20 +382,19 @@ function GestionUsuarios() {
               <TableHead>Usuario</TableHead>
               <TableHead>Email</TableHead>
               <TableHead>Rol</TableHead>
-              <TableHead>Empresa</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-10">
+                <TableCell colSpan={5} className="text-center py-10">
                   Cargando usuarios...
                 </TableCell>
               </TableRow>
             ) : usuarios.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-10">
+                <TableCell colSpan={5} className="text-center py-10">
                   No hay usuarios registrados
                 </TableCell>
               </TableRow>
@@ -389,7 +405,6 @@ function GestionUsuarios() {
                   <TableCell>{user.usuario}</TableCell>
                   <TableCell>{user.email || "-"}</TableCell>
                   <TableCell>{user.rol?.nombre || "-"}</TableCell>
-                  <TableCell>{user.empresa?.razon_social || "-"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
@@ -412,14 +427,14 @@ function GestionUsuarios() {
 
 // COMPONENTE DE GESTIÓN DE ROLES
 function GestionRoles() {
+  const { user } = useAuth(); // Obtener usuario de la sesión
   const [roles, setRoles] = useState<Rol[]>([]);
   const [permisos, setPermisos] = useState<Permiso[]>([]);
-  const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [rol, setRol] = useState<Rol>({
     id_rol: 0,
     nombre: '',
     descripcion: '',
-    id_empresa: 0,
+    id_empresa: user?.id_empresa || 0,
   });
   const [selectedRol, setSelectedRol] = useState<Rol | null>(null);
   const [rolPermisos, setRolPermisos] = useState<number[]>([]);
@@ -428,15 +443,28 @@ function GestionRoles() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetchRoles();
-    fetchPermisos();
-    fetchEmpresas();
-  }, []);
+    if (user?.id_empresa) {
+      fetchRoles();
+      fetchPermisos();
+    }
+  }, [user]);
+
+  // Actualizar id_empresa en el estado cuando el usuario se carga
+  useEffect(() => {
+    if (user?.id_empresa && !isEditing) {
+      setRol(prev => ({
+        ...prev,
+        id_empresa: user.id_empresa
+      }));
+    }
+  }, [user, isEditing]);
 
   const fetchRoles = async () => {
+    if (!user?.id_empresa) return;
+    
     setIsLoading(true);
     try {
-      const response = await fetch('/api/roles');
+      const response = await fetch(`/api/roles?id_empresa=${user.id_empresa}`);
       if (response.ok) {
         const data = await response.json();
         setRoles(data);
@@ -464,22 +492,11 @@ function GestionRoles() {
     }
   };
 
-  const fetchEmpresas = async () => {
-    try {
-      const response = await fetch('/api/empresas');
-      if (response.ok) {
-        const data = await response.json();
-        setEmpresas(data);
-      }
-    } catch (error) {
-      console.error("Error al cargar empresas:", error);
-      toast.error("Error al cargar las empresas");
-    }
-  };
-
   const fetchRolPermisos = async (id: number) => {
+    if (!user?.id_empresa) return;
+    
     try {
-      const response = await fetch(`/api/roles/${id}/permisos`);
+      const response = await fetch(`/api/roles/${id}/permisos?id_empresa=${user.id_empresa}`);
       if (response.ok) {
         const data = await response.json();
         setRolPermisos(data.map((p: { id_permiso: number }) => p.id_permiso));
@@ -504,20 +521,33 @@ function GestionRoles() {
       id_rol: 0,
       nombre: '',
       descripcion: '',
-      id_empresa: 0
+      id_empresa: user?.id_empresa || 0
     });
     setIsEditing(false);
   };
 
   const handleSave = async () => {
+    if (!user?.id_empresa) {
+      toast.error("No se pudo determinar la empresa del usuario");
+      return;
+    }
+
     try {
-      const url = isEditing ? `/api/roles/${rol.id_rol}` : '/api/roles';
+      // Asegurar que el id_empresa sea el del usuario logueado
+      const rolData = {
+        ...rol,
+        id_empresa: user.id_empresa
+      };
+
+      const url = isEditing 
+        ? `/api/roles/${rol.id_rol}?id_empresa=${user.id_empresa}` 
+        : `/api/roles?id_empresa=${user.id_empresa}`;
       const method = isEditing ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(rol)
+        body: JSON.stringify(rolData)
       });
 
       if (response.ok) {
@@ -543,9 +573,14 @@ function GestionRoles() {
   };
 
   const handleDelete = async (id: number) => {
+    if (!user?.id_empresa) {
+      toast.error("No se pudo determinar la empresa del usuario");
+      return;
+    }
+
     if (confirm('¿Está seguro de eliminar este rol?')) {
       try {
-        const response = await fetch(`/api/roles/${id}`, {
+        const response = await fetch(`/api/roles/${id}?id_empresa=${user.id_empresa}`, {
           method: 'DELETE'
         });
 
@@ -571,11 +606,11 @@ function GestionRoles() {
   };
 
   const handlePermissionChange = async (id_permiso: number, checked: boolean) => {
-    if (!selectedRol) return;
+    if (!selectedRol || !user?.id_empresa) return;
 
     try {
       const method = checked ? 'POST' : 'DELETE';
-      const url = `/api/roles/${selectedRol.id_rol}/permisos/${id_permiso}`;
+      const url = `/api/roles/${selectedRol.id_rol}/permisos/${id_permiso}?id_empresa=${user.id_empresa}`;
 
       const response = await fetch(url, { method });
 
@@ -645,34 +680,16 @@ function GestionRoles() {
                     placeholder="Descripción del rol"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="id_empresa">Empresa</Label>
-                  <Select 
-                    value={rol.id_empresa ? rol.id_empresa.toString() : undefined} 
-                    onValueChange={(value) => handleSelectChange(value, "id_empresa")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccione una empresa" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {empresas.map((empresa) => (
-                        <SelectItem key={empresa.id_empresa} value={empresa.id_empresa.toString()}>
-                          {empresa.razon_social}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
 
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline" onClick={resetForm}>
+                  <Button variant="outline" type="button">
+                    <X className="h-4 w-4 mr-2" />
                     Cancelar
                   </Button>
                 </DialogClose>
-                <Button onClick={handleSave}>
+                <Button type="button" onClick={handleSave}>
                   <Save className="h-4 w-4 mr-2" />
                   Guardar
                 </Button>
@@ -699,7 +716,7 @@ function GestionRoles() {
               >
                 <div>
                   <div className="font-medium">{role.nombre}</div>
-                  <div className="text-sm opacity-70">{role.empresa?.razon_social || 'Sin empresa'}</div>
+                  <div className="text-sm opacity-70">{role.descripcion || 'Sin descripción'}</div>
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="sm" onClick={(e) => {
@@ -763,6 +780,7 @@ function GestionRoles() {
 
 // COMPONENTE DE GESTIÓN DE PERMISOS
 function GestionPermisos() {
+  const { user } = useAuth(); // Obtener usuario de la sesión
   const [permisos, setPermisos] = useState<Permiso[]>([]);
   const [permiso, setPermiso] = useState<Permiso>({
     id_permiso: 0,
@@ -774,12 +792,15 @@ function GestionPermisos() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    fetchPermisos();
-  }, []);
+    if (user?.id_empresa) {
+      fetchPermisos();
+    }
+  }, [user]);
 
   const fetchPermisos = async () => {
     setIsLoading(true);
     try {
+      // Los permisos son globales, no necesitan id_empresa
       const response = await fetch('/api/permisos');
       if (response.ok) {
         const data = await response.json();
@@ -810,8 +831,15 @@ function GestionPermisos() {
   };
 
   const handleSave = async () => {
+    if (!user?.id_empresa && !isEditing) {
+      toast.error("No se pudo determinar la empresa del usuario");
+      return;
+    }
+
     try {
-      const url = isEditing ? `/api/permisos/${permiso.id_permiso}` : '/api/permisos';
+      const url = isEditing 
+        ? `/api/permisos/${permiso.id_permiso}` 
+        : '/api/permisos';
       const method = isEditing ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -920,11 +948,12 @@ function GestionPermisos() {
 
               <DialogFooter>
                 <DialogClose asChild>
-                  <Button variant="outline" onClick={resetForm}>
+                  <Button variant="outline" type="button">
+                    <X className="h-4 w-4 mr-2" />
                     Cancelar
                   </Button>
                 </DialogClose>
-                <Button onClick={handleSave}>
+                <Button type="button" onClick={handleSave}>
                   <Save className="h-4 w-4 mr-2" />
                   Guardar
                 </Button>
@@ -986,11 +1015,11 @@ function GestionPermisos() {
 export default function UsuariosPage() {
   const [activeTab, setActiveTab] = useState("usuarios");
 
-  useEffect(() => {
-    document.title = "Gestión de Usuarios";
-  }, []);
+    useEffect(() => {
+        document.title = "Gestión de Usuarios";
+    }, []);
 
-  return (
+    return (
     <div className="container mx-auto py-6">
       <h1 className="text-3xl font-bold mb-6">Gestión de Usuarios y Permisos</h1>
       
@@ -1054,6 +1083,6 @@ export default function UsuariosPage() {
           </TabsContent>
         </div>
       </Tabs>
-    </div>
-  );
+        </div>
+    );
 }

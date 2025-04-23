@@ -3,8 +3,8 @@
 import type React from "react"
 
 import { useEffect, useState } from "react"
-import { signIn, getSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { signIn, getSession, useSession } from "next-auth/react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { toast } from "react-toastify"
 import Link from "next/link"
 import { Loader2 } from "lucide-react"
@@ -16,37 +16,75 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 
 export default function LoginPage() {
   const [usuario, setUsuario] = useState("")
-  const [contraseña, setContraseña] = useState("")
+  const [contrasena, setContrasena] = useState("")
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { data: session, status } = useSession()
+
+  // Obtener la URL de callback si existe
+  const callbackUrl = searchParams?.get("callbackUrl") || "/admin/dashboard"
 
   useEffect(() => {
     document.title = "Iniciar Sesión"
-  }, [])
+    
+    // Verificar si ya estamos autenticados
+    if (status === "authenticated" && session) {
+      console.log("Usuario ya autenticado:", session.user)
+      toast.info("Ya has iniciado sesión")
+      router.push("/admin/dashboard")
+    }
+  }, [status, session, router])
+
+  // Mostrar información de depuración en desarrollo
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      console.log("Estado de autenticación:", status)
+      console.log("URL de callback:", callbackUrl)
+      
+      // Verificar cookies en el navegador
+      console.log("Cookies disponibles:", document.cookie)
+    }
+  }, [status, callbackUrl])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError("")
 
-    // toast.error("Esto es una prueba de error");
-
+    try {
     const result = await signIn("credentials", {
       usuario,
-      contraseña,
-      redirect: false, // No redirigir automáticamente
+      contrasena,
+        redirect: false,
+        callbackUrl
     })
 
-    console.log("Resultado de signIn:", result) // 👀 Verifica qué devuelve
+      console.log("Resultado de signIn:", result)
 
     if (result?.error) {
-      toast.error("Usuario o contraseña incorrectos")
+        setError(result.error)
+        toast.error(result.error || "Error al iniciar sesión")
+      } else if (result?.ok) {
+        // Verificar si la sesión se creó correctamente
+        const session = await getSession()
+        console.log("✅ Usuario autenticado:", session?.user)
+        
+        if (session) {
+          toast.success("Inicio de sesión exitoso 🎉")
+          router.push(callbackUrl)
+        } else {
+          console.error("La sesión no se creó correctamente")
+          toast.error("Error al iniciar sesión: la sesión no se creó correctamente")
+        }
+      }
+    } catch (err) {
+      console.error("Error durante el inicio de sesión:", err)
+      toast.error("Error inesperado durante el inicio de sesión")
+    } finally {
       setLoading(false)
-    } else {
-      const session = await getSession()
-      console.log("✅ Usuario autenticado:", session?.user)
-      toast.success("Inicio de sesión exitoso 🎉")
-      router.push("/admin/dashboard")
     }
   }
 
@@ -59,6 +97,11 @@ export default function LoginPage() {
             <CardDescription className="text-center">Ingresa tus credenciales para acceder</CardDescription>
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="bg-red-50 text-red-500 p-3 rounded-md mb-4 text-sm">
+                {error}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="usuario">Usuario</Label>
@@ -72,12 +115,12 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="contraseña">Contraseña</Label>
+                <Label htmlFor="contrasena">Contraseña</Label>
                 <Input
-                  id="contraseña"
+                  id="contrasena"
                   type="password"
-                  value={contraseña}
-                  onChange={(e) => setContraseña(e.target.value)}
+                  value={contrasena}
+                  onChange={(e) => setContrasena(e.target.value)}
                   required
                   placeholder="Ingresa tu contraseña"
                 />

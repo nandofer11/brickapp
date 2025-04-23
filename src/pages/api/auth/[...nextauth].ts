@@ -9,11 +9,11 @@ export const authOptions: AuthOptions = {
       name: "Credentials",
       credentials: {
         usuario: { label: "Usuario", type: "text" },
-        contraseña: { label: "Contraseña", type: "password" },
+        contrasena: { label: "Contraseña", type: "password" },
       },
       async authorize(credentials) {
         try {
-          if (!credentials?.usuario || !credentials?.contraseña) {
+          if (!credentials?.usuario || !credentials?.contrasena) {
             return null;
           }
 
@@ -23,7 +23,7 @@ export const authOptions: AuthOptions = {
               u.id_usuario, 
               u.nombre_completo,
               u.usuario,
-              u.contraseña,
+              u.contrasena,
               u.id_rol,
               u.id_empresa,
               r.nombre as rol_nombre,
@@ -45,10 +45,10 @@ export const authOptions: AuthOptions = {
           
           try {
             // Intentar con bcrypt
-            isValid = await compare(credentials.contraseña, user.contraseña);
+            isValid = await compare(credentials.contrasena, user.contrasena);
           } catch (e) {
             // Si falla bcrypt, intentar con texto plano
-            isValid = credentials.contraseña === user.contraseña;
+            isValid = credentials.contrasena === user.contrasena;
           }
 
           if (!isValid) {

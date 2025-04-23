@@ -1,0 +1,29 @@
+.table thead th {
+    background-color: #f8f9fa; /* Color de fondo para el encabezado */
+    text-align: center;
+    border: 1px solid #dee2e6;
+  }
+  
+  .table td, .table th {
+    border: 1px solid #dee2e6; /* Bordes visibles en toda la tabla */
+    vertical-align: middle;
+    text-align: center;
+  }
+  
+  @media (max-width: 768px) {
+    .table-responsive {
+      overflow-x: auto;
+    }
+    
+    .table th, .table td {
+      font-size: 14px; /* Ajustar el tamaño del texto en pantallas pequeñas */
+      white-space: nowrap; /* Evita saltos de línea */
+    }
+    
+    .action-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+    }
+  }
+  
