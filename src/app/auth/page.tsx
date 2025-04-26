@@ -49,6 +49,19 @@ export default function LoginPage() {
     }
   }, [status, callbackUrl])
 
+  useEffect(() => {
+    if (status === "authenticated" && session) {
+      console.log("Usuario autenticado:", session.user);
+
+      // Redirigir según el rol del usuario
+      if (session.user.id_rol === 1) { // Ejemplo: rol ADMINISTRADOR
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/"); // Redirigir a la página pública
+      }
+    }
+  }, [status, session, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)

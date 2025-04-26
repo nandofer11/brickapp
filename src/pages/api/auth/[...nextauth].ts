@@ -1,9 +1,11 @@
 import NextAuth, { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { prisma } from '@/lib/prisma';
 
 export const authOptions: AuthOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -17,55 +19,27 @@ export const authOptions: AuthOptions = {
             return null;
           }
 
-          // Buscar usuario con una sola consulta
-          const userData = await prisma.$queryRaw`
-            SELECT 
-              u.id_usuario, 
-              u.nombre_completo,
-              u.usuario,
-              u.contrasena,
-              u.id_rol,
-              u.id_empresa,
-              r.nombre as rol_nombre,
-              e.razon_social
-            FROM usuario u 
-            LEFT JOIN empresa e ON u.id_empresa = e.id_empresa
-            LEFT JOIN rol r ON u.id_rol = r.id_rol
-            WHERE u.usuario = ${credentials.usuario}
-          `;
+          const user = await prisma.usuario.findUnique({
+            where: { usuario: credentials.usuario },
+            include: {
+              rol: true,
+              empresa: true,
+            },
+          });
 
-          if (!Array.isArray(userData) || userData.length === 0) {
-            return null;
+          if (user && await compare(credentials.contrasena, user.contrasena)) {
+            return {
+              id: String(user.id_usuario),
+              name: user.nombre_completo,
+              email: user.email || `${user.usuario}@example.com`, // NextAuth requiere email
+              usuario: user.usuario,
+              id_empresa: Number(user.id_empresa),
+              id_rol: Number(user.id_rol),
+              rol: user.rol?.nombre || "Sin rol",
+              razon_social: user.empresa?.razon_social || "No especificado",
+            };
           }
-
-          const user = userData[0] as any;
-
-          // Verificar contraseña
-          let isValid = false;
-          
-          try {
-            // Intentar con bcrypt
-            isValid = await compare(credentials.contrasena, user.contrasena);
-          } catch (e) {
-            // Si falla bcrypt, intentar con texto plano
-            isValid = credentials.contrasena === user.contrasena;
-          }
-
-          if (!isValid) {
-            return null;
-          }
-
-          // Retornar un objeto simple para evitar problemas de serialización
-          return {
-            id: String(user.id_usuario),
-            name: user.nombre_completo,
-            email: user.email || `${user.usuario}@example.com`, // NextAuth requiere email
-            usuario: user.usuario,
-            id_empresa: String(user.id_empresa),
-            id_rol: String(user.id_rol),
-            rol: user.rol_nombre || "Sin rol",
-            razon_social: user.razon_social || "No especificado",
-          };
+          return null;
         } catch (error) {
           console.error("Error en autenticación:", error);
           throw new Error("Error en autenticación");
@@ -79,32 +53,53 @@ export const authOptions: AuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: '/auth',
-    error: '/auth/error',
   },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        // Asegurarnos de que el token tenga una estructura básica correcta
-        // y que sea serializable en JSON
+        // Incluir roles, permisos, razón social y nombre completo en el token
+        const dbUser = await prisma.usuario.findUnique({
+          where: { id_usuario: Number(user.id) },
+          include: {
+            rol: {
+              include: {
+                rol_permiso: {
+                  include: { permiso: true }
+                }
+              }
+            },
+            empresa: true,
+          }
+        });
+
         token.user = {
-          id: user.id,
-          name: user.name || null,
-          email: user.email || null,
-          usuario: user.usuario || null,
-          id_empresa: user.id_empresa || null,
-          id_rol: user.id_rol || null,
-          rol: user.rol || null,
-          razon_social: user.razon_social || null
+          id: dbUser?.id_usuario,
+          id_empresa: dbUser?.id_empresa,
+          id_rol: dbUser?.id_rol,
+          nombre_completo: dbUser?.nombre_completo,
+          razon_social: dbUser?.empresa?.razon_social || "No especificado",
+          rol: dbUser?.rol?.nombre || "Sin rol",
+          permisos: dbUser?.rol?.rol_permiso.map((rp) => rp.permiso.nombre) || []
         };
       }
       return token;
     },
     async session({ session, token }) {
-      if (token.user) {
-        session.user = token.user as any;
-      }
+      // Pasar roles, permisos, razón social y nombre completo a la sesión
+      session.user = token.user as {
+        id: number;
+        name?: string | null | undefined;
+        email?: string | null | undefined;
+        image?: string | null | undefined;
+        id_empresa: number;
+        id_rol: number;
+        nombre_completo: string;
+        razon_social: string;
+        rol: string;
+        permisos: string[];
+      };
       return session;
-    },
+    }
   },
 };
 
