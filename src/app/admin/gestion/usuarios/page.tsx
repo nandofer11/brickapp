@@ -3,7 +3,7 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield, Users, UserCog, PlusCircle, Trash2, Pencil, Save, X, RefreshCw } from "lucide-react";
+import { Users, UserCog, PlusCircle, Trash2, Pencil, Save, X, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -27,7 +27,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { toast } from "react-toastify";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, AuthUser } from "@/hooks/useAuth";
 
 // Interfaces para definir tipos
 interface Usuario {
@@ -64,7 +64,7 @@ interface Empresa {
 
 // COMPONENTE DE GESTIÓN DE USUARIOS
 function GestionUsuarios() {
-  const { user } = useAuth(); // Obtener usuario de la sesión
+  const { user } = useAuth() as { user: AuthUser & { token?: string } }; // Obtener usuario de la sesión
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [roles, setRoles] = useState<Rol[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -85,7 +85,7 @@ function GestionUsuarios() {
   useEffect(() => {
     if (user?.id_empresa) {
       fetchUsuarios();
-      fetchRoles();
+      // fetchRoles();
     }
   }, [user]);
 
@@ -100,16 +100,25 @@ function GestionUsuarios() {
   }, [user, isEditing]);
 
   const fetchUsuarios = async () => {
-    if (!user?.id_empresa) return;
-    
+    if (!user?.id_empresa || !user?.token) {
+      toast.error("Token no proporcionado o empresa no definida");
+      return;
+    }
+
+    console.log("Usuario", user);
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/usuarios?id_empresa=${user.id_empresa}`);
+      const response = await fetch(`/api/usuarios?id_empresa=${user.id_empresa}`, {
+        headers: {
+          Authorization: `Bearer ${user.token}`, // Asegurarse de que el token esté presente
+        },
+      });
       if (response.ok) {
         const data = await response.json();
         setUsuarios(data);
       } else {
-        toast.error("No se pudieron cargar los usuarios");
+        const error = await response.json();
+        toast.error(error.message || "No se pudieron cargar los usuarios");
       }
     } catch (error) {
       console.error("Error al cargar usuarios:", error);
@@ -119,20 +128,24 @@ function GestionUsuarios() {
     }
   };
 
-  const fetchRoles = async () => {
-    if (!user?.id_empresa) return;
-    
-    try {
-      const response = await fetch(`/api/rol?id_empresa=${user.id_empresa}`);
-      if (response.ok) {
-        const data = await response.json();
-        setRoles(data);
-      }
-    } catch (error) {
-      console.error("Error al cargar roles:", error);
-      toast.error("Error al cargar roles");
-    }
-  };
+  // const fetchRoles = async () => {
+  //   if (!user?.id_empresa) return;
+
+  //   try {
+  //     const response = await fetch(`/api/rol?id_empresa=${user.id_empresa}`, {
+  //       headers: {
+  //         Authorization: `Bearer ${user.token}`, // Agregar token al encabezado
+  //       },
+  //     });
+  //     if (response.ok) {
+  //       const data = await response.json();
+  //       setRoles(data);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error al cargar roles:", error);
+  //     toast.error("Error al cargar roles");
+  //   }
+  // };
 
   const fetchEmpresas = async () => {
     try {
@@ -177,31 +190,33 @@ function GestionUsuarios() {
     }
 
     try {
-      // Asegurar que el id_empresa sea el del usuario logueado
       const userData = {
         ...usuario,
-        id_empresa: user.id_empresa
+        id_empresa: user.id_empresa,
       };
 
-      const url = isEditing 
-        ? `/api/usuarios/${usuario.id_usuario}?id_empresa=${user.id_empresa}` 
+      const url = isEditing
+        ? `/api/usuarios/${usuario.id_usuario}?id_empresa=${user.id_empresa}`
         : `/api/usuarios?id_empresa=${user.id_empresa}`;
-      const method = isEditing ? 'PUT' : 'POST';
+      const method = isEditing ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.token}`, // Agregar token al encabezado
+        },
+        body: JSON.stringify(userData),
       });
 
       if (response.ok) {
-        toast.success(`Usuario ${isEditing ? 'actualizado' : 'creado'} correctamente`);
+        toast.success(`Usuario ${isEditing ? "actualizado" : "creado"} correctamente`);
         fetchUsuarios();
         setDialogOpen(false);
         resetForm();
       } else {
         const error = await response.json();
-        throw new Error(error.message || 'Error al guardar usuario');
+        throw new Error(error.message || "Error al guardar usuario");
       }
     } catch (error: any) {
       toast.error(error.message || "Error al guardar usuario");
@@ -425,8 +440,8 @@ function GestionUsuarios() {
   );
 }
 
-// COMPONENTE DE GESTIÓN DE ROLES
-function GestionRoles() {
+// COMPONENTE DE GESTIÓN DE ROLES Y PERMISOS
+function GestionRolesPermisos() {
   const { user } = useAuth(); // Obtener usuario de la sesión
   const [roles, setRoles] = useState<Rol[]>([]);
   const [permisos, setPermisos] = useState<Permiso[]>([]);
@@ -464,7 +479,7 @@ function GestionRoles() {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/roles?id_empresa=${user.id_empresa}`);
+      const response = await fetch(`/api/rol?id_empresa=${user.id_empresa}`);
       if (response.ok) {
         const data = await response.json();
         setRoles(data);
@@ -510,10 +525,6 @@ function GestionRoles() {
   const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setRol(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSelectChange = (value: string, name: string) => {
-    setRol(prev => ({ ...prev, [name]: parseInt(value) }));
   };
 
   const resetForm = () => {
@@ -634,7 +645,6 @@ function GestionRoles() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {/* Lista de Roles */}
       <div className="md:col-span-1 border rounded-lg p-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium">Roles</h3>
@@ -738,7 +748,6 @@ function GestionRoles() {
         )}
       </div>
 
-      {/* Permisos del Rol */}
       <div className="md:col-span-2 border rounded-lg p-4">
         <h3 className="text-lg font-medium mb-4">
           {selectedRol 
@@ -778,264 +787,26 @@ function GestionRoles() {
   );
 }
 
-// COMPONENTE DE GESTIÓN DE PERMISOS
-function GestionPermisos() {
-  const { user } = useAuth(); // Obtener usuario de la sesión
-  const [permisos, setPermisos] = useState<Permiso[]>([]);
-  const [permiso, setPermiso] = useState<Permiso>({
-    id_permiso: 0,
-    nombre: '',
-    descripcion: ''
-  });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    if (user?.id_empresa) {
-      fetchPermisos();
-    }
-  }, [user]);
-
-  const fetchPermisos = async () => {
-    setIsLoading(true);
-    try {
-      // Los permisos son globales, no necesitan id_empresa
-      const response = await fetch('/api/permisos');
-      if (response.ok) {
-        const data = await response.json();
-        setPermisos(data);
-      } else {
-        toast.error("No se pudieron cargar los permisos");
-      }
-    } catch (error) {
-      console.error("Error al cargar permisos:", error);
-      toast.error("Error al cargar permisos");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleInputChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setPermiso(prev => ({ ...prev, [name]: value }));
-  };
-
-  const resetForm = () => {
-    setPermiso({
-      id_permiso: 0,
-      nombre: '',
-      descripcion: ''
-    });
-    setIsEditing(false);
-  };
-
-  const handleSave = async () => {
-    if (!user?.id_empresa && !isEditing) {
-      toast.error("No se pudo determinar la empresa del usuario");
-      return;
-    }
-
-    try {
-      const url = isEditing 
-        ? `/api/permisos/${permiso.id_permiso}` 
-        : '/api/permisos';
-      const method = isEditing ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(permiso)
-      });
-
-      if (response.ok) {
-        toast.success(`Permiso ${isEditing ? 'actualizado' : 'creado'} correctamente`);
-        fetchPermisos();
-        setDialogOpen(false);
-        resetForm();
-      } else {
-        const error = await response.json();
-        throw new Error(error.message || 'Error al guardar permiso');
-      }
-    } catch (error: any) {
-      toast.error(error.message || "Error al guardar permiso");
-    }
-  };
-
-  const handleEdit = (perm: Permiso) => {
-    setPermiso({
-      ...perm
-    });
-    setIsEditing(true);
-    setDialogOpen(true);
-  };
-
-  const handleDelete = async (id: number) => {
-    if (confirm('¿Está seguro de eliminar este permiso? Esto podría afectar a los roles que lo utilizan.')) {
-      try {
-        const response = await fetch(`/api/permisos/${id}`, {
-          method: 'DELETE'
-        });
-
-        if (response.ok) {
-          toast.success("Permiso eliminado correctamente");
-          fetchPermisos();
-        } else {
-          const error = await response.json();
-          throw new Error(error.message || 'Error al eliminar permiso');
-        }
-      } catch (error: any) {
-        toast.error(error.message || "Error al eliminar permiso");
-      }
-    }
-  };
-
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-semibold">Lista de Permisos</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchPermisos}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualizar
-          </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => {
-                resetForm();
-                setIsEditing(false);
-              }}>
-                <PlusCircle className="h-4 w-4 mr-2" />
-                Nuevo Permiso
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {isEditing ? "Editar Permiso" : "Crear Nuevo Permiso"}
-                </DialogTitle>
-                <DialogDescription>
-                  Complete el formulario para {isEditing ? "actualizar el" : "crear un nuevo"} permiso del sistema.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="nombre">Nombre del Permiso</Label>
-                  <Input 
-                    id="nombre" 
-                    name="nombre" 
-                    value={permiso.nombre} 
-                    onChange={handleInputChange} 
-                    placeholder="ej: crear_usuarios"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Use nombres descriptivos sin espacios, como: ver_dashboard, crear_usuarios
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="descripcion">Descripción</Label>
-                  <Input 
-                    id="descripcion" 
-                    name="descripcion" 
-                    value={permiso.descripcion} 
-                    onChange={handleInputChange} 
-                    placeholder="Descripción del permiso"
-                  />
-                </div>
-              </div>
-
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline" type="button">
-                    <X className="h-4 w-4 mr-2" />
-                    Cancelar
-                  </Button>
-                </DialogClose>
-                <Button type="button" onClick={handleSave}>
-                  <Save className="h-4 w-4 mr-2" />
-                  Guardar
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
-
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>Nombre</TableHead>
-              <TableHead>Descripción</TableHead>
-              <TableHead className="text-right">Acciones</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center py-10">
-                  Cargando permisos...
-                </TableCell>
-              </TableRow>
-            ) : permisos.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-center py-10">
-                  No hay permisos registrados
-                </TableCell>
-              </TableRow>
-            ) : (
-              permisos.map((perm) => (
-                <TableRow key={perm.id_permiso}>
-                  <TableCell>{perm.id_permiso}</TableCell>
-                  <TableCell className="font-medium">{perm.nombre}</TableCell>
-                  <TableCell>{perm.descripcion || "-"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(perm)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(perm.id_permiso)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
-}
-
 export default function UsuariosPage() {
   const [activeTab, setActiveTab] = useState("usuarios");
 
-    useEffect(() => {
-        document.title = "Gestión de Usuarios";
-    }, []);
+  useEffect(() => {
+    document.title = "Gestión de Usuarios";
+  }, []);
 
-    return (
+  return (
     <div className="container mx-auto py-6">
-      <h1 className="text-3xl font-bold mb-6">Gestión de Usuarios y Permisos</h1>
+      <h1 className="text-3xl font-bold mb-6">Gestión de Usuarios y Roles</h1>
       
       <Tabs defaultValue="usuarios" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="usuarios" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             <span>Usuarios</span>
           </TabsTrigger>
           <TabsTrigger value="roles" className="flex items-center gap-2">
             <UserCog className="h-4 w-4" />
-            <span>Roles</span>
-          </TabsTrigger>
-          <TabsTrigger value="permisos" className="flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            <span>Permisos</span>
+            <span>Roles y Permisos</span>
           </TabsTrigger>
         </TabsList>
         
@@ -1057,32 +828,18 @@ export default function UsuariosPage() {
           <TabsContent value="roles">
             <Card>
               <CardHeader>
-                <CardTitle>Gestión de Roles</CardTitle>
+                <CardTitle>Gestión de Roles y Permisos</CardTitle>
                 <CardDescription>
-                  Administra los roles del sistema y los permisos asignados a cada rol.
+                  Administra los roles del sistema y asigna permisos a cada rol.
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <GestionRoles />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="permisos">
-            <Card>
-              <CardHeader>
-                <CardTitle>Gestión de Permisos</CardTitle>
-                <CardDescription>
-                  Administra los permisos disponibles en el sistema.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <GestionPermisos />
+                <GestionRolesPermisos />
               </CardContent>
             </Card>
           </TabsContent>
         </div>
       </Tabs>
-        </div>
-    );
+    </div>
+  );
 }
