@@ -176,51 +176,49 @@ export default function PersonalPage() {
 
   const validateDNI = async () => {
     if (!currentPersonal?.dni) {
-      toast.error("Ingrese un DNI")
-      setCurrentPersonal((prev) => ({ ...prev!, dni: "" }))
-      return
+      toast.error("Ingrese un DNI");
+      setCurrentPersonal((prev) => ({ ...prev!, dni: "" }));
+      return;
     }
 
     if (currentPersonal.dni.length !== 8 || isNaN(Number(currentPersonal.dni))) {
-      toast.error("El DNI debe tener 8 dígitos numéricos.")
-      setCurrentPersonal((prev) => ({ ...prev!, dni: "" }))
-      return
+      toast.error("El DNI debe tener 8 dígitos numéricos.");
+      setCurrentPersonal((prev) => ({ ...prev!, dni: "" }));
+      return;
     }
 
     try {
-      setValidatingDni(true)
-      const res = await fetch(`/api/validar-dni?dni=${currentPersonal.dni}`)
+      setValidatingDni(true);
+      const res = await fetch("/api/validar-dni", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dni: currentPersonal.dni }),
+      });
 
       if (!res.ok) {
-        const errorData = await res.json()
-
-        if (res.status === 409) {
-          toast.error("El DNI ya está registrado en el sistema.")
-          setCurrentPersonal((prev) => ({ ...prev!, dni: "" }))
-          return
-        }
-
-        throw new Error(errorData.message || "Error en la validación del DNI")
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Error en la validación del DNI");
       }
 
-      const data = await res.json()
+      const data = await res.json();
 
-      if (data.nombreCompleto) {
-        setCurrentPersonal((prev) => ({ ...prev!, nombre_completo: data.nombreCompleto }))
-        toast.success("DNI validado correctamente.")
+      if (data.nombres && data.apellido_paterno && data.apellido_materno) {
+        const nombreCompleto = `${data.nombres} ${data.apellido_paterno} ${data.apellido_materno}`;
+        setCurrentPersonal((prev) => ({ ...prev!, nombre_completo: nombreCompleto }));
+        toast.success("DNI validado correctamente.");
       } else {
-        toast.error("DNI no válido o no encontrado.")
-        setCurrentPersonal((prev) => ({ ...prev!, dni: "" }))
+        toast.error("DNI no válido o no encontrado.");
+        setCurrentPersonal((prev) => ({ ...prev!, dni: "" }));
       }
     } catch (error) {
-      setCurrentPersonal((prev) => ({ ...prev!, dni: "" }))
+      setCurrentPersonal((prev) => ({ ...prev!, dni: "" }));
       if (error instanceof Error) {
-        toast.error(error.message)
+        toast.error(error.message);
       } else {
-        toast.error("Error desconocido al validar el DNI.")
+        toast.error("Error desconocido al validar el DNI.");
       }
     } finally {
-      setValidatingDni(false)
+      setValidatingDni(false);
     }
   }
 

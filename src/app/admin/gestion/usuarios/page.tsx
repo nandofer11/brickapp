@@ -37,6 +37,7 @@ interface Usuario {
   contrasena?: string;
   email: string;
   celular: string;
+  created_at?: string;
   id_rol: number;
   id_empresa: number;
   rol?: Rol;
@@ -100,32 +101,55 @@ function GestionUsuarios() {
   }, [user, isEditing]);
 
   const fetchUsuarios = async () => {
-    if (!user?.id_empresa || !user?.token) {
-      toast.error("Token no proporcionado o empresa no definida");
-      return;
-    }
+    // console.log("USER:", user);
 
-    console.log("Usuario", user);
+    if (!user?.id_empresa) return;
+    
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/usuarios?id_empresa=${user.id_empresa}`, {
-        headers: {
-          Authorization: `Bearer ${user.token}`, // Asegurarse de que el token esté presente
-        },
-      });
+      const response = await fetch(`/api/usuarios?id_empresa=${user.id_empresa}`);
       if (response.ok) {
         const data = await response.json();
-        setUsuarios(data);
+        setUsuarios(data); // Cambiar de setRoles a setUsuarios
       } else {
-        const error = await response.json();
-        toast.error(error.message || "No se pudieron cargar los usuarios");
+        toast.error("No se pudieron cargar los usuarios");
       }
     } catch (error) {
       console.error("Error al cargar usuarios:", error);
-      toast.error("Error al cargar usuarios");
+      toast.error("Error al cargar los usuarios");
     } finally {
       setIsLoading(false);
     }
+
+
+    // if (!user?.id_empresa || !user?.token) {
+    //   toast.error("Token no proporcionado o empresa no definida");
+    //   return;
+    // }
+
+    // setIsLoading(true);
+    // try {
+    //   const response = await fetch(`/api/usuarios?id_empresa=${user.id_empresa}`, {
+    //     headers: {
+    //       Authorization: `Bearer ${user.token}`, // Asegurarse de que el token esté presente
+    //     },
+    //   });
+    //   if (response.ok) {
+    //     const data = await response.json();
+    //     setUsuarios(data.map((usuario: any) => ({
+    //       ...usuario,
+    //       rol_nombre: usuario.rol?.nombre || "-", // Mapear el nombre del rol
+    //     })));
+    //   } else {
+    //     const error = await response.json();
+    //     toast.error(error.message || "No se pudieron cargar los usuarios");
+    //   }
+    // } catch (error) {
+    //   console.error("Error al cargar usuarios:", error);
+    //   toast.error("Error al cargar usuarios");
+    // } finally {
+    //   setIsLoading(false);
+    // }
   };
 
   // const fetchRoles = async () => {
@@ -196,7 +220,7 @@ function GestionUsuarios() {
       };
 
       const url = isEditing
-        ? `/api/usuarios/${usuario.id_usuario}?id_empresa=${user.id_empresa}`
+        ? `/api/usuarios?id_empresa=${user.id_empresa}` // Cambiar a /api/usuarios
         : `/api/usuarios?id_empresa=${user.id_empresa}`;
       const method = isEditing ? "PUT" : "POST";
 
@@ -216,7 +240,8 @@ function GestionUsuarios() {
         resetForm();
       } else {
         const error = await response.json();
-        throw new Error(error.message || "Error al guardar usuario");
+        toast.error(error.message || `Error ${response.status}: ${response.statusText}`);
+        return;
       }
     } catch (error: any) {
       toast.error(error.message || "Error al guardar usuario");
@@ -393,23 +418,25 @@ function GestionUsuarios() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nombre</TableHead>
+              <TableHead>Nombre Completo</TableHead>
               <TableHead>Usuario</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Celular</TableHead>
               <TableHead>Rol</TableHead>
+              <TableHead>Fecha Creado</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10">
+                <TableCell colSpan={7} className="text-center py-10">
                   Cargando usuarios...
                 </TableCell>
               </TableRow>
             ) : usuarios.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center py-10">
+                <TableCell colSpan={7} className="text-center py-10">
                   No hay usuarios registrados
                 </TableCell>
               </TableRow>
@@ -419,7 +446,9 @@ function GestionUsuarios() {
                   <TableCell>{user.nombre_completo}</TableCell>
                   <TableCell>{user.usuario}</TableCell>
                   <TableCell>{user.email || "-"}</TableCell>
-                  <TableCell>{user.rol?.nombre || "-"}</TableCell>
+                  <TableCell>{user.celular || "-"}</TableCell>
+                  <TableCell>{user.rol?.nombre}</TableCell>
+                  <TableCell>{user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(user)}>
@@ -456,6 +485,8 @@ function GestionRolesPermisos() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [roleToDelete, setRoleToDelete] = useState<number | null>(null);
 
   useEffect(() => {
     if (user?.id_empresa) {
@@ -511,7 +542,7 @@ function GestionRolesPermisos() {
     if (!user?.id_empresa) return;
     
     try {
-      const response = await fetch(`/api/roles/${id}/permisos?id_empresa=${user.id_empresa}`);
+      const response = await fetch(`/api/rol/${id}/permisos?id_empresa=${user.id_empresa}`);
       if (response.ok) {
         const data = await response.json();
         setRolPermisos(data.map((p: { id_permiso: number }) => p.id_permiso));
@@ -546,19 +577,21 @@ function GestionRolesPermisos() {
     try {
       // Asegurar que el id_empresa sea el del usuario logueado
       const rolData = {
-        ...rol,
-        id_empresa: user.id_empresa
+        id_rol: rol.id_rol, // Asegurarse de incluir el ID del rol
+        nombre: rol.nombre.trim(), // Validar que el nombre no tenga espacios innecesarios
+        descripcion: rol.descripcion.trim(), // Validar que la descripción no tenga espacios innecesarios
+        id_empresa: user.id_empresa,
       };
 
       const url = isEditing 
-        ? `/api/roles/${rol.id_rol}?id_empresa=${user.id_empresa}` 
-        : `/api/roles?id_empresa=${user.id_empresa}`;
+        ? `/api/rol?id_empresa=${user.id_empresa}` // Cambiar a un único endpoint
+        : `/api/rol?id_empresa=${user.id_empresa}`;
       const method = isEditing ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(rolData)
+        body: JSON.stringify(rolData),
       });
 
       if (response.ok) {
@@ -577,37 +610,47 @@ function GestionRolesPermisos() {
 
   const handleEdit = (role: Rol) => {
     setRol({
-      ...role,
+      id_rol: role.id_rol,
+      nombre: role.nombre,
+      descripcion: role.descripcion,
+      id_empresa: role.id_empresa,
     });
     setIsEditing(true);
     setDialogOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
-    if (!user?.id_empresa) {
-      toast.error("No se pudo determinar la empresa del usuario");
+  const handleDelete = async () => {
+    if (!user?.id_empresa || roleToDelete === null) {
+      toast.error("No se pudo determinar la empresa del usuario o el rol a eliminar");
       return;
     }
 
-    if (confirm('¿Está seguro de eliminar este rol?')) {
-      try {
-        const response = await fetch(`/api/roles/${id}?id_empresa=${user.id_empresa}`, {
-          method: 'DELETE'
-        });
+    console.log("Role to delete:", roleToDelete); // Depuración para verificar el ID del rol
+    console.log("User empresa ID:", user.id_empresa); // Depuración para verificar el ID de la empresa
 
-        if (response.ok) {
-          toast.success("Rol eliminado correctamente");
-          fetchRoles();
-          if (selectedRol?.id_rol === id) {
-            setSelectedRol(null);
-          }
-        } else {
-          const error = await response.json();
-          throw new Error(error.message || 'Error al eliminar rol');
+    const url = `/api/rol/${roleToDelete}`;
+    console.log("DELETE URL:", url); // Depuración para verificar la URL
+
+    try {
+      const response = await fetch(url, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast.success("Rol eliminado correctamente");
+        fetchRoles();
+        if (selectedRol?.id_rol === roleToDelete) {
+          setSelectedRol(null);
         }
-      } catch (error: any) {
-        toast.error(error.message || "Error al eliminar rol");
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || 'Error al eliminar rol');
       }
+    } catch (error: any) {
+      toast.error(error.message || "Error al eliminar rol");
+    } finally {
+      setDeleteDialogOpen(false);
+      setRoleToDelete(null);
     }
   };
 
@@ -621,7 +664,7 @@ function GestionRolesPermisos() {
 
     try {
       const method = checked ? 'POST' : 'DELETE';
-      const url = `/api/roles/${selectedRol.id_rol}/permisos/${id_permiso}?id_empresa=${user.id_empresa}`;
+      const url = `/api/rol/${selectedRol.id_rol}/permisos/${id_permiso}?id_empresa=${user.id_empresa}`;
 
       const response = await fetch(url, { method });
 
@@ -737,7 +780,8 @@ function GestionRolesPermisos() {
                   </Button>
                   <Button variant="ghost" size="sm" onClick={(e) => {
                     e.stopPropagation();
-                    handleDelete(role.id_rol);
+                    setRoleToDelete(role.id_rol);
+                    setDeleteDialogOpen(true);
                   }}>
                     <Trash2 className="h-4 w-4 text-red-500" />
                   </Button>
@@ -783,6 +827,25 @@ function GestionRolesPermisos() {
           </div>
         )}
       </div>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro de que desea eliminar este rol? Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

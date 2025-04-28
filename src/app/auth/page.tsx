@@ -1,105 +1,86 @@
-"use client"
+"use client";
 
-import type React from "react"
+import { useEffect, useState } from "react";
+import { signIn, getSession } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "react-toastify";
+import Link from "next/link";
+import { Loader2 } from "lucide-react";
 
-import { useEffect, useState } from "react"
-import { signIn, getSession, useSession } from "next-auth/react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { toast } from "react-toastify"
-import Link from "next/link"
-import { Loader2 } from "lucide-react"
-
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
-  const [usuario, setUsuario] = useState("")
-  const [contrasena, setContrasena] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState("")
+  const [usuario, setUsuario] = useState("");
+  const [contrasena, setContrasena] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const router = useRouter()
-  const searchParams = useSearchParams()
-  const { data: session, status } = useSession()
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Obtener la URL de callback si existe
-  const callbackUrl = searchParams?.get("callbackUrl") || "/admin/dashboard"
+  const callbackUrl = searchParams?.get("callbackUrl") || "/admin/dashboard";
 
   useEffect(() => {
-    document.title = "Iniciar Sesión"
-    
-    // Verificar si ya estamos autenticados
-    if (status === "authenticated" && session) {
-      console.log("Usuario ya autenticado:", session.user)
-      toast.info("Ya has iniciado sesión")
-      router.push("/admin/dashboard")
-    }
-  }, [status, session, router])
+    document.title = "Iniciar Sesión";
 
-  // Mostrar información de depuración en desarrollo
-  useEffect(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.log("Estado de autenticación:", status)
-      console.log("URL de callback:", callbackUrl)
-      
-      // Verificar cookies en el navegador
-      console.log("Cookies disponibles:", document.cookie)
+    // Verificar si ya hay un token en las cookies
+    const token = document.cookie.split("; ").find((row) => row.startsWith("next-auth.session-token="));
+    if (token) {
+      toast.info("Ya has iniciado sesión");
+      router.push("/admin/dashboard");
+    } else {
+      // Verificar si hay una sesión activa
+      getSession().then((session) => {
+        if (session) {
+          toast.info("Ya has iniciado sesión");
+          router.push("/admin/dashboard");
+        }
+      });
     }
-  }, [status, callbackUrl])
-
-  useEffect(() => {
-    if (status === "authenticated" && session) {
-      console.log("Usuario autenticado:", session.user);
-
-      // Redirigir según el rol del usuario
-      if (session.user.id_rol === 1) { // Ejemplo: rol ADMINISTRADOR
-        router.push("/admin/dashboard");
-      } else {
-        router.push("/"); // Redirigir a la página pública
-      }
-    }
-  }, [status, session, router]);
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError("")
+    e.preventDefault();
+    setLoading(true);
+    setError("");
 
     try {
-    const result = await signIn("credentials", {
-      usuario,
-      contrasena,
+      const result = await signIn("credentials", {
+        usuario,
+        contrasena,
         redirect: false,
-        callbackUrl
-    })
+        callbackUrl,
+      });
 
-      console.log("Resultado de signIn:", result)
+      console.log("Resultado de signIn:", result);
 
-    if (result?.error) {
-        setError(result.error)
-        toast.error(result.error || "Error al iniciar sesión")
+      if (result?.error) {
+        setError(result.error);
+        toast.error(result.error || "Error al iniciar sesión");
       } else if (result?.ok) {
         // Verificar si la sesión se creó correctamente
-        const session = await getSession()
-        console.log("✅ Usuario autenticado:", session?.user)
-        
+        const session = await getSession();
+        console.log("✅ Usuario autenticado:", session?.user);
+
         if (session) {
-          toast.success("Inicio de sesión exitoso 🎉")
-          router.push(callbackUrl)
+          toast.success("Inicio de sesión exitoso 🎉");
+          router.push(callbackUrl);
         } else {
-          console.error("La sesión no se creó correctamente")
-          toast.error("Error al iniciar sesión: la sesión no se creó correctamente")
+          console.error("La sesión no se creó correctamente");
+          toast.error("Error al iniciar sesión: la sesión no se creó correctamente");
         }
       }
     } catch (err) {
-      console.error("Error durante el inicio de sesión:", err)
-      toast.error("Error inesperado durante el inicio de sesión")
+      console.error("Error durante el inicio de sesión:", err);
+      toast.error("Error inesperado durante el inicio de sesión");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted p-4">
@@ -165,6 +146,6 @@ export default function LoginPage() {
         <p className="text-center text-sm text-muted-foreground">Brickapp © 2025 - Versión 1.0</p>
       </div>
     </div>
-  )
+  );
 }
 

@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Configurar la URL y los headers con el token
-    const url = `https://api.apis.net.pe/v2/reniec/dni/full?numero=${dni}`;
+    const url = `https://api.apis.net.pe/v2/reniec/dni?numero=${dni}`;
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${process.env.RENIEC_API_TOKEN}`,

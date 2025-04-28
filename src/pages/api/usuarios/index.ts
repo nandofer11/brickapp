@@ -1,42 +1,51 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import jwt from "jsonwebtoken";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]";
+import { usuarioService } from "@/lib/services/UsuarioService";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { authorization } = req.headers;
+  const session = await getServerSession(req, res, authOptions);
 
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Token no proporcionado" });
+  if (!session) {
+    return res.status(401).json({ error: "No autorizado" });
   }
 
-  const token = authorization.split(" ")[1];
+  const id_empresa = session.user?.id_empresa; // Obtener id_empresa desde la sesión
 
-  try {
-    jwt.verify(token, process.env.JWT_SECRET || "default_secret"); // Verificar el token
-  } catch (error) {
-    return res.status(401).json({ error: "Token inválido" });
+  if (!id_empresa) {
+    return res.status(400).json({ error: "id_empresa no disponible en la sesión" });
   }
 
   switch (req.method) {
     case "GET": {
-      const { id_empresa } = req.query;
+      const { id } = req.query;
 
-      if (!id_empresa) {
-        return res.status(400).json({ error: "id_empresa es requerido" });
+      try {
+        if (id) {
+          const usuario = await usuarioService.getUsuarioById(Number(id), id_empresa);
+          return res.status(200).json(usuario);
+        } else {
+          const usuarios = await usuarioService.getAllUsuarios(id_empresa);
+          return res.status(200).json(usuarios);
+        }
+      } catch (error) {
+        return res.status(500).json({ error: "Error al obtener usuarios" });
       }
-
-      // Lógica para obtener usuarios
-      return res.status(200).json({ message: "Usuarios obtenidos correctamente" });
     }
 
     case "POST": {
-      const { nombre, email, rol, id_empresa } = req.body;
+      const { nombre, email, rol } = req.body;
 
-      if (!nombre || !email || !rol || !id_empresa) {
+      if (!nombre || !email || !rol) {
         return res.status(400).json({ error: "Todos los campos son requeridos" });
       }
 
-      // Lógica para crear un usuario
-      return res.status(201).json({ message: "Usuario creado correctamente" });
+      try {
+        const nuevoUsuario = await usuarioService.createUsuario({ nombre, email, rol, id_empresa });
+        return res.status(201).json(nuevoUsuario);
+      } catch (error) {
+        return res.status(500).json({ error: "Error al crear usuario" });
+      }
     }
 
     case "PUT": {
@@ -46,8 +55,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: "Todos los campos son requeridos" });
       }
 
-      // Lógica para actualizar un usuario
-      return res.status(200).json({ message: "Usuario actualizado correctamente" });
+      try {
+        const usuarioActualizado = await usuarioService.updateUsuario(Number(id), id_empresa, { nombre, email, rol });
+        return res.status(200).json(usuarioActualizado);
+      } catch (error) {
+        return res.status(500).json({ error: "Error al actualizar usuario" });
+      }
     }
 
     case "DELETE": {
@@ -57,8 +70,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(400).json({ error: "id es requerido" });
       }
 
-      // Lógica para eliminar un usuario
-      return res.status(200).json({ message: "Usuario eliminado correctamente" });
+      try {
+        await usuarioService.deleteUsuario(Number(id), id_empresa);
+        return res.status(200).json({ message: "Usuario eliminado correctamente" });
+      } catch (error) {
+        return res.status(500).json({ error: "Error al eliminar usuario" });
+      }
     }
 
     default:
