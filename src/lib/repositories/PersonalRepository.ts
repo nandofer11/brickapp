@@ -16,12 +16,22 @@ class PersonalRepository extends BaseRepository {
     // }
 
     async createPersonal(data: any) {
-        return this.create({ data });
+        console.log("Datos enviados a Prisma:", data);
+
+        // Convertir campos de tipo DateTime a objetos Date
+        if (data.fecha_nacimiento) {
+            data.fecha_nacimiento = new Date(data.fecha_nacimiento);
+        }
+        if (data.fecha_ingreso) {
+            data.fecha_ingreso = new Date(data.fecha_ingreso);
+        }
+
+        return prisma.personal.create({ data });
     }
 
-    // async updatePersonal(id_personal: number, data: Partial<Personal>): Promise<Personal> {
-    //     return prisma.personal.update({ where: { id_personal }, data });
-    // }
+    async updatePersonal(id_personal: number, id_empresa: number, data: any) {
+        return this.update(id_personal, id_empresa, data);
+    }
 
     // async deletePersonal(id_personal: number): Promise<Personal> {
     //     return prisma.personal.delete({ where: { id_personal } });

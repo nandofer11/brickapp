@@ -16,13 +16,13 @@ class PersonalService {
 //     return this.repository.findByDni(dni);
 //   }
 
-  async create(data: any) {
+  async createPersonal(data: any) {
     return await personalRepository.createPersonal(data);
   }
 
-//   async update(id_personal: number, data: Partial<Personal>): Promise<Personal> {
-//     return this.repository.update(id_personal, data);
-//   }
+  async updatePersonal(id_personal: number, id_empresa: number, data: any) {
+    return await personalRepository.updatePersonal(id_personal, id_empresa, data);
+  }
 
 //   async delete(id_personal: number): Promise<Personal> {
 //     return this.repository.delete(id_personal);

@@ -148,13 +148,20 @@ export default function PersonalPage() {
         body: JSON.stringify(dataToSend),
       })
 
-      if (!res.ok) throw new Error("Error en la operación")
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}))
+        throw new Error(errorData.message || "Error en la operación")
+      }
 
       toast.success("Personal registrado con éxito.")
       setShowModal(false)
       fetchPersonal()
     } catch (error) {
-      toast.error("Error al guardar los datos.")
+      if (error instanceof Error) {
+        toast.error(error.message)
+      } else {
+        toast.error("Error desconocido al guardar los datos.")
+      }
     }
   }
 

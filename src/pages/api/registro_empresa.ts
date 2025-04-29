@@ -52,31 +52,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
       });
 
-      // 3. Crear permisos predeterminados
-      const permisos = ["VER_USUARIOS", "EDITAR_USUARIOS", "ELIMINAR_USUARIOS"];
-      const permisosCreados = await Promise.all(
-        permisos.map((permiso) =>
-          prisma.permiso.create({
-            data: {
-              nombre: permiso,
-              descripcion: `Permiso para ${permiso.toLowerCase().replace("_", " ")}`,
-              id_empresa: nuevaEmpresa.id_empresa
-            }
-          })
-        )
-      );
+      // // 3. Crear permisos predeterminados
+      // const permisos = ["VER_USUARIOS", "EDITAR_USUARIOS", "ELIMINAR_USUARIOS"];
+      // const permisosCreados = await Promise.all(
+      //   permisos.map((permiso) =>
+      //     prisma.permiso.create({
+      //       data: {
+      //         nombre: permiso,
+      //         descripcion: `Permiso para ${permiso.toLowerCase().replace("_", " ")}`,
+      //         id_empresa: nuevaEmpresa.id_empresa
+      //       }
+      //     })
+      //   )
+      // );
 
-      // 4. Asignar permisos al rol ADMIN
-      await Promise.all(
-        permisosCreados.map((permiso) =>
-          prisma.rol_permiso.create({
-            data: {
-              id_rol: rolAdmin.id_rol,
-              id_permiso: permiso.id_permiso
-            }
-          })
-        )
-      );
+      // // 4. Asignar permisos al rol ADMIN
+      // await Promise.all(
+      //   permisosCreados.map((permiso) =>
+      //     prisma.rol_permiso.create({
+      //       data: {
+      //         id_rol: rolAdmin.id_rol,
+      //         id_permiso: permiso.id_permiso
+      //       }
+      //     })
+      //   )
+      // );
 
       // 5. Hashear contraseña
       const hashedPassword = await hash(contrasena, 10);
