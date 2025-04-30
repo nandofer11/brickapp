@@ -24,9 +24,9 @@ class PersonalService {
     return await personalRepository.updatePersonal(id_personal, id_empresa, data);
   }
 
-//   async delete(id_personal: number): Promise<Personal> {
-//     return this.repository.delete(id_personal);
-//   }
+  async deletePersonal(id_personal: number, id_empresa: number) {
+    return await personalRepository.deletePersonal(id_personal, id_empresa);
+  }
 }
 
 export default new PersonalService();

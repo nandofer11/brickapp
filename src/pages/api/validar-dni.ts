@@ -9,20 +9,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { dni } = req.body;
+    console.log('Datos recibidos:', req.body);
+    const { dni, id_empresa } = req.body;
 
     // Validar que el DNI tenga 8 dígitos
     if (!dni || dni.length !== 8) {
       return res.status(400).json({ message: 'El DNI debe tener 8 dígitos.' });
     }
 
-    // Verificar si el DNI ya está registrado en la BD
+    if (!id_empresa) {
+      return res.status(400).json({ message: 'El ID de la empresa es obligatorio.' });
+    }
+
+    // Verificar si el DNI ya está registrado en la misma empresa
     const personalExistente = await prisma.personal.findFirst({
-      where: { dni }
+      where: {
+        dni,
+        id_empresa
+      }
     });
-    
+
     if (personalExistente) {
-      return res.status(400).json({ message: 'El DNI ya está registrado en la base de datos.' });
+      return res.status(400).json({ message: 'El DNI ya está registrado en la base de datos para esta empresa.' });
     }
 
     // Configurar la URL y los headers con el token

@@ -133,19 +133,27 @@ export default function PersonalPage() {
     }
 
     try {
-      const method = currentPersonal.id_personal ? "PUT" : "POST"
+      const method = currentPersonal.id_personal ? "PUT" : "POST";
 
-      // Si el pago diario reducido está vacío, enviar null en lugar de una cadena vacía
-      const dataToSend = {
+      // Formatear fechas al formato ISO-8601 con hora
+      const formattedData = {
         ...currentPersonal,
-        pago_diario_reducido: currentPersonal.pago_diario_reducido ? currentPersonal.pago_diario_reducido : null,
+        fecha_nacimiento: currentPersonal.fecha_nacimiento
+          ? new Date(currentPersonal.fecha_nacimiento).toISOString()
+          : null,
+        fecha_ingreso: currentPersonal.fecha_ingreso
+          ? new Date(currentPersonal.fecha_ingreso).toISOString()
+          : null,
+        pago_diario_reducido: currentPersonal.pago_diario_reducido || null,
         id_empresa: id_empresa,
-      }
+      };
+
+      console.log("Datos a enviar:", formattedData);
 
       const res = await fetch("/api/personal", {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(dataToSend),
+        body: JSON.stringify(formattedData),
       })
 
       if (!res.ok) {
@@ -153,7 +161,9 @@ export default function PersonalPage() {
         throw new Error(errorData.message || "Error en la operación")
       }
 
-      toast.success("Personal registrado con éxito.")
+      toast.success("Personal registrado con éxito.", {
+        className: "bg-green-500 text-white", // Clase personalizada
+      })
       setShowModal(false)
       fetchPersonal()
     } catch (error) {
@@ -184,7 +194,7 @@ export default function PersonalPage() {
   const validateDNI = async () => {
     if (!currentPersonal?.dni) {
       toast.error("Ingrese un DNI");
-      setCurrentPersonal((prev) => ({ ...prev!, dni: "" }));
+      setCurrentPersonal((prev) => ({ ...prev!, dni: ""}));
       return;
     }
 
@@ -199,7 +209,7 @@ export default function PersonalPage() {
       const res = await fetch("/api/validar-dni", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dni: currentPersonal.dni }),
+        body: JSON.stringify({ dni: currentPersonal.dni , id_empresa: currentPersonal.id_empresa }),
       });
 
       if (!res.ok) {
@@ -316,8 +326,8 @@ export default function PersonalPage() {
                         <TableHead>Dirección</TableHead>
                         <TableHead>Celular</TableHead>
                         <TableHead>Pago Diario</TableHead>
-                        <TableHead>Pago Reducido</TableHead>
-                        <TableHead>Fecha Ingreso</TableHead>
+                        <TableHead>Pago Red.</TableHead>
+                        <TableHead>F. Ingreso</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
@@ -348,8 +358,12 @@ export default function PersonalPage() {
                                 variant="outline"
                                 size="icon"
                                 onClick={() => {
-                                  setCurrentPersonal(p)
-                                  setShowModal(true)
+                                  setCurrentPersonal({
+                                    ...p,
+                                    fecha_nacimiento: p.fecha_nacimiento ? p.fecha_nacimiento.split("T")[0] : "",
+                                    fecha_ingreso: p.fecha_ingreso ? p.fecha_ingreso.split("T")[0] : "",
+                                  });
+                                  setShowModal(true);
                                 }}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -360,8 +374,8 @@ export default function PersonalPage() {
                                 size="icon"
                                 className="text-destructive hover:text-destructive"
                                 onClick={() => {
-                                  setDeleteId(p.id_personal)
-                                  setShowConfirmModal(true)
+                                  setDeleteId(p.id_personal);
+                                  setShowConfirmModal(true);
                                 }}
                               >
                                 <Trash2 className="h-4 w-4" />

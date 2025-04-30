@@ -128,6 +128,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const personal = await PersonalService.getAllByEmpresa(id_empresa);
       return res.status(200).json(personal);
     }
+
+    if (req.method === "DELETE") {
+      const { id_personal } = req.query;
+
+      if (!id_personal) {
+        return res.status(400).json({ message: "El ID del personal es obligatorio para eliminar." });
+      }
+
+      // Eliminar el personal
+      await PersonalService.deletePersonal(Number(id_personal), id_empresa);
+      return res.status(204).end(); // No content
+    }
+
   } catch (error: any) {
     console.error("Error:", error);
     return res.status(500).json({ error: error.message });

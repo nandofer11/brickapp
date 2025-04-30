@@ -11,9 +11,14 @@ class PersonalRepository extends BaseRepository {
         return this.findAllByEmpresa(id_empresa);
     }
 
-    // async findByDni(dni: string) {
-    //     return prisma.personal.findUnique({ where: { dni } });
-    // }
+    async findByDniAndEmpresa(dni: string, id_empresa: number) {
+        return prisma.personal.findFirst({
+            where: {
+                dni,
+                id_empresa,
+            },
+        });
+    }
 
     async createPersonal(data: any) {
         console.log("Datos enviados a Prisma:", data);
@@ -33,9 +38,14 @@ class PersonalRepository extends BaseRepository {
         return this.update(id_personal, id_empresa, data);
     }
 
-    // async deletePersonal(id_personal: number): Promise<Personal> {
-    //     return prisma.personal.delete({ where: { id_personal } });
-    // }
+    async deletePersonal(id_personal: number, id_empresa: number) {
+        return await prisma.personal.deleteMany({
+          where: {
+            id_personal,
+            id_empresa,
+          },
+        });
+      }
 }
 
 export default PersonalRepository;
