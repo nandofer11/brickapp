@@ -41,13 +41,15 @@ interface Horno {
   prefijo: string
   nombre: string
   cantidad_humeadores: number
-  cantidad_quemadores: string
+  cantidad_quemadores: number
+  id_empresa: number
 }
 
 interface CargoCocion {
   id_cargo_coccion: number
   nombre_cargo: string
   costo_cargo: number
+  id_empresa: number
 }
 
 interface SemanaLaboral {
@@ -78,6 +80,7 @@ interface Coccion {
   hora_inicio_quema: string
   Horno?: Horno
   SemanaLaboral?: SemanaLaboral
+  id_empresa: number
 }
 
 interface CoccionOperador {
@@ -136,7 +139,7 @@ export default function CoccionPage() {
     fetchHornos()
     fetchCargos()
     fetchCocciones()
-    fetchSemanas()
+    // fetchSemanas()
     fetchPersonal()
   }, [])
 
@@ -157,23 +160,43 @@ export default function CoccionPage() {
 
   const handleSaveHorno = async () => {
     try {
-      const method = currentHorno.id_horno ? "PUT" : "POST"
+      const method = currentHorno.id_horno ? "PUT" : "POST";
+
+      // Filtrar los campos necesarios
+      const { id_horno, prefijo, nombre, cantidad_humeadores, cantidad_quemadores } = currentHorno;
+
       const res = await fetch("/api/horno", {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(currentHorno),
-      })
+        body: JSON.stringify({ id_horno, prefijo, nombre, cantidad_humeadores, cantidad_quemadores }),
+      });
 
-      if (!res.ok) throw new Error("Error al guardar horno")
+      if (!res.ok) {
+        const errorData = await res.json();
 
-      toast.success(currentHorno.id_horno ? "Horno actualizado" : "Horno creado")
-      setShowHornoModal(false)
-      fetchHornos()
+        // Detectar error por prefijo duplicado (código 409 del backend)
+        if (res.status === 409 && errorData.message === "El prefijo ya existe") {
+          toast.error("El prefijo ya está en uso. Por favor ingrese otro.");
+          setCurrentHorno({ ...currentHorno, prefijo: "" });
+          setTimeout(() => {
+            document.getElementById("prefijo")?.focus();
+          }, 100);
+          return;
+        }
+
+        throw new Error(errorData.message || "Error al guardar horno");
+      }
+
+      toast.success(currentHorno.id_horno ? "Horno actualizado" : "Horno creado");
+      setShowHornoModal(false);
+      setCurrentHorno({}); // Limpiar el formulario
+      fetchHornos(); // Volver a cargar los datos
     } catch (error) {
-      toast.error("Error al guardar horno")
-      console.error(error)
+      toast.error("Error al guardar horno");
+      console.error(error);
     }
-  }
+  };
+
 
   const handleDeleteHorno = async () => {
     if (!deleteHornoId) return
@@ -187,7 +210,7 @@ export default function CoccionPage() {
 
       toast.success("Horno eliminado")
       setShowDeleteHornoDialog(false)
-      fetchHornos()
+      fetchHornos(); // Volver a cargar los datos
     } catch (error) {
       toast.error("Error al eliminar horno")
       console.error(error)
@@ -249,19 +272,19 @@ export default function CoccionPage() {
   }
 
   // Funciones para semanas laborales
-  const fetchSemanas = async () => {
-    try {
-      setLoadingSemanas(true)
-      const res = await fetch("/api/semana_laboral")
-      const data = await res.json()
-      setSemanas(data)
-    } catch (error) {
-      toast.error("Error al cargar semanas laborales")
-      console.error(error)
-    } finally {
-      setLoadingSemanas(false)
-    }
-  }
+  // const fetchSemanas = async () => {
+  //   try {
+  //     setLoadingSemanas(true)
+  //     const res = await fetch("/api/semana_laboral")
+  //     const data = await res.json()
+  //     setSemanas(data)
+  //   } catch (error) {
+  //     toast.error("Error al cargar semanas laborales")
+  //     console.error(error)
+  //   } finally {
+  //     setLoadingSemanas(false)
+  //   }
+  // }
 
   // Funciones para personal
   const fetchPersonal = async () => {
@@ -408,7 +431,7 @@ export default function CoccionPage() {
 
   const handleOperadorChange = (index: number, field: string, value: any) => {
     const newOperadores = [...currentOperadores]
-    ;(newOperadores[index] as any)[field] = value
+      ; (newOperadores[index] as any)[field] = value
     setCurrentOperadores(newOperadores)
   }
 
@@ -428,387 +451,76 @@ export default function CoccionPage() {
           <CardTitle className="text-2xl font-bold">Gestión de Cocción</CardTitle>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="coccion" className="flex items-center gap-2">
-                <Flame className="h-4 w-4" /> Cocción
-              </TabsTrigger>
-              <TabsTrigger value="cargos" className="flex items-center gap-2">
-                <Users className="h-4 w-4" /> Cargos
-              </TabsTrigger>
-              <TabsTrigger value="hornos" className="flex items-center gap-2">
-                <Home className="h-4 w-4" /> Hornos
-              </TabsTrigger>
-            </TabsList>
+          <p className="mb-4 text-muted-foreground">
+            En este módulo puede gestionar las cocciones, cargos y hornos de manera eficiente.
+          </p>
+          <div className="flex gap-4 mb-6">
+            <Button
+              onClick={() => {
+                setCurrentCoccion({
+                  fecha_encendido: new Date().toISOString().split("T")[0],
+                  estado: "Programado",
+                });
+                setCurrentOperadores([]);
+                setShowCoccionModal(true);
+              }}
+              className="cursor-pointer"
+            >
+              Nueva Cocción
+            </Button>
+            <Button
+              onClick={() => setShowCargoModal(true)}
+              className="cursor-pointer"
+            >
+              Cargos
+            </Button>
+            <Button
+              onClick={() => setShowHornoModal(true)}
+              className="cursor-pointer"
+            >
+              Hornos
+            </Button>
+          </div>
 
-            {/* Tab de Cocción */}
-            <TabsContent value="coccion" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <Button
-                  onClick={() => {
-                    setCurrentCoccion({
-                      fecha_encendido: new Date().toISOString().split("T")[0],
-                      estado: "Programado",
-                    })
-                    setCurrentOperadores([])
-                    setShowCoccionModal(true)
-                  }}
-                  className="cursor-pointer"
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Nueva Cocción
-                </Button>
-              </div>
-
-              {loadingCocciones ? (
-                <div className="flex justify-center items-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-2">Cargando datos...</span>
-                </div>
-              ) : cocciones.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No hay cocciones registradas.</div>
-              ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Horno</TableHead>
-                        <TableHead>Semana</TableHead>
-                        <TableHead>Fecha Encendido</TableHead>
-                        <TableHead>Hora Inicio</TableHead>
-                        <TableHead>Fecha Apagado</TableHead>
-                        <TableHead>Hora Fin</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Humeada</TableHead>
-                        <TableHead>Quema</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    {/* <TableBody>
-                      {cocciones.map((coccion) => (
-                        <TableRow key={coccion.id_coccion}>
-                          <TableCell>{coccion.Horno?.nombre || "-"}</TableCell>
-                          <TableCell>
-                            {coccion.SemanaLaboral
-                              ? `${formatDate(coccion.SemanaLaboral.fecha_inicio)} - ${formatDate(coccion.SemanaLaboral.fecha_fin)}`
-                              : "-"}
-                          </TableCell>
-                          <TableCell>{formatDate(coccion.fecha_encendido)}</TableCell>
-                          <TableCell>{coccion.hora_inicio || "-"}</TableCell>
-                          <TableCell>{coccion.fecha_apagado ? formatDate(coccion.fecha_apagado) : "-"}</TableCell>
-                          <TableCell>{coccion.hora_fin || "-"}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                coccion.estado === "Finalizado"
-                                  ? "default"
-                                  : coccion.estado === "En Proceso"
-                                    ? "secondary"
-                                    : "outline"
-                              }
-                            >
-                              {coccion.estado}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {coccion.humeada ? (
-                              <Badge variant="default">Sí</Badge>
-                            ) : (
-                              <Badge variant="outline">No</Badge>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {coccion.quema ? <Badge variant="default">Sí</Badge> : <Badge variant="outline">No</Badge>}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => {
-                                  fetchOperadores(coccion.id_coccion)
-                                  setShowOperadoresModal(true)
-                                }}
-                                title="Gestionar Operadores"
-                              >
-                                <Users className="h-4 w-4" />
-                                <span className="sr-only">Operadores</span>
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => {
-                                  setCurrentCoccion(coccion)
-                                  setShowCoccionModal(true)
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Editar</span>
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  setDeleteCoccionId(coccion.id_coccion)
-                                  setShowDeleteCoccionDialog(true)
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Eliminar</span>
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody> */}
-                  </Table>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Tab de Cargos */}
-            <TabsContent value="cargos" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <Button
-                  onClick={() => {
-                    setCurrentCargo({})
-                    setShowCargoModal(true)
-                  }}
-                  className="cursor-pointer"
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cargo
-                </Button>
-              </div>
-
-              {loadingCargos ? (
-                <div className="flex justify-center items-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-2">Cargando datos...</span>
-                </div>
-              ) : cargos.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No hay cargos registrados.</div>
-              ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nombre del Cargo</TableHead>
-                        <TableHead>Costo</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {cargos.map((cargo) => (
-                        <TableRow key={cargo.id_cargo_coccion}>
-                          <TableCell>{cargo.nombre_cargo}</TableCell>
-                          <TableCell>S/. {cargo.costo_cargo.toFixed(2)}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => {
-                                  setCurrentCargo(cargo)
-                                  setShowCargoModal(true)
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Editar</span>
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  setDeleteCargoId(cargo.id_cargo_coccion)
-                                  setShowDeleteCargoDialog(true)
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Eliminar</span>
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </TabsContent>
-
-            {/* Tab de Hornos */}
-            <TabsContent value="hornos" className="space-y-4">
-              <div className="flex justify-between items-center">
-                <Button
-                  onClick={() => {
-                    setCurrentHorno({})
-                    setShowHornoModal(true)
-                  }}
-                  className="cursor-pointer"
-                >
-                  <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Horno
-                </Button>
-              </div>
-
-              {loadingHornos ? (
-                <div className="flex justify-center items-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <span className="ml-2">Cargando datos...</span>
-                </div>
-              ) : hornos.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">No hay hornos registrados.</div>
-              ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Prefijo</TableHead>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Humeadores</TableHead>
-                        <TableHead>Quemadores</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {hornos.map((horno) => (
-                        <TableRow key={horno.id_horno}>
-                          <TableCell>{horno.prefijo}</TableCell>
-                          <TableCell>{horno.nombre}</TableCell>
-                          <TableCell>{horno.cantidad_humeadores || "-"}</TableCell>
-                          <TableCell>{horno.cantidad_quemadores || "-"}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => {
-                                  setCurrentHorno(horno)
-                                  setShowHornoModal(true)
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Editar</span>
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  setDeleteHornoId(horno.id_horno)
-                                  setShowDeleteHornoDialog(true)
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Eliminar</span>
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+          {loadingCocciones ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2">Cargando datos...</span>
+            </div>
+          ) : cocciones.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">No hay cocciones registradas.</div>
+          ) : (
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Horno</TableHead>
+                    <TableHead>Semana</TableHead>
+                    <TableHead>Fecha Encendido</TableHead>
+                    <TableHead>Hora Inicio</TableHead>
+                    <TableHead>Fecha Apagado</TableHead>
+                    <TableHead>Hora Fin</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Humeada</TableHead>
+                    <TableHead>Quema</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                {/* ...existing code for rendering table rows... */}
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Modal de Horno */}
-      <Dialog open={showHornoModal} onOpenChange={setShowHornoModal}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{currentHorno.id_horno ? "Editar Horno" : "Nuevo Horno"}</DialogTitle>
-            <DialogDescription>Complete los datos del horno y presione guardar.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="prefijo">Prefijo</Label>
-                <Input
-                  id="prefijo"
-                  value={currentHorno.prefijo || ""}
-                  onChange={(e) => setCurrentHorno({ ...currentHorno, prefijo: e.target.value })}
-                  maxLength={5}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input
-                  id="nombre"
-                  value={currentHorno.nombre || ""}
-                  onChange={(e) => setCurrentHorno({ ...currentHorno, nombre: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="humeadores">Cantidad de Humeadores</Label>
-                <Input
-                  id="humeadores"
-                  type="number"
-                  value={currentHorno.cantidad_humeadores || ""}
-                  onChange={(e) => setCurrentHorno({ ...currentHorno, cantidad_humeadores: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="quemadores">Cantidad de Quemadores</Label>
-                <Input
-                  id="quemadores"
-                  value={currentHorno.cantidad_quemadores || ""}
-                  onChange={(e) => setCurrentHorno({ ...currentHorno, cantidad_quemadores: e.target.value })}
-                />
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowHornoModal(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveHorno}>Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal de Cargo */}
-      <Dialog open={showCargoModal} onOpenChange={setShowCargoModal}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>{currentCargo.id_cargo_coccion ? "Editar Cargo" : "Nuevo Cargo"}</DialogTitle>
-            <DialogDescription>Complete los datos del cargo y presione guardar.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="nombre_cargo">Nombre del Cargo</Label>
-              <Input
-                id="nombre_cargo"
-                value={currentCargo.nombre_cargo || ""}
-                onChange={(e) => setCurrentCargo({ ...currentCargo, nombre_cargo: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="costo_cargo">Costo del Cargo (S/.)</Label>
-              <Input
-                id="costo_cargo"
-                type="number"
-                step="0.01"
-                value={currentCargo.costo_cargo || ""}
-                onChange={(e) => setCurrentCargo({ ...currentCargo, costo_cargo: Number(e.target.value) })}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCargoModal(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveCargo}>Guardar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Modal de Cocción */}
-      <Dialog open={showCoccionModal} onOpenChange={setShowCoccionModal}>
+      <Dialog
+        open={showCoccionModal}
+        onOpenChange={(isOpen) => {
+          setShowCoccionModal(isOpen);
+          if (!isOpen) setCurrentCoccion({}); // Limpiar el formulario al cerrar
+        }}
+      >
         <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
             <DialogTitle>{currentCoccion.id_coccion ? "Editar Cocción" : "Nueva Cocción"}</DialogTitle>
@@ -1042,113 +754,217 @@ export default function CoccionPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Operadores */}
-      <Dialog open={showOperadoresModal} onOpenChange={setShowOperadoresModal}>
-        <DialogContent className="sm:max-w-[700px]">
+
+      {/* Modal de Cargos */}
+      <Dialog
+        open={showCargoModal}
+        onOpenChange={(isOpen) => {
+          setShowCargoModal(isOpen);
+          if (!isOpen) setCurrentCargo({}); // Limpiar el formulario al cerrar
+        }}
+      >
+        <DialogContent className="sm:max-w-[800px]">
           <DialogHeader>
-            <DialogTitle>Gestionar Operadores</DialogTitle>
-            <DialogDescription>Asigne personal a los diferentes cargos de esta cocción.</DialogDescription>
+            <DialogTitle>Gestión de Cargos</DialogTitle>
+            <DialogDescription>Administre los cargos de cocción.</DialogDescription>
           </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            {loadingOperadores ? (
-              <div className="flex justify-center items-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <span className="ml-2">Cargando operadores...</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            {/* Columna 1: Formulario de Cargos */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="nombre_cargo">Nombre del Cargo</Label>
+                <Input
+                  id="nombre_cargo"
+                  value={currentCargo.nombre_cargo || ""}
+                  onChange={(e) => setCurrentCargo({ ...currentCargo, nombre_cargo: e.target.value })}
+                />
               </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium">Operadores</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddOperador}>
-                    <PlusCircle className="h-4 w-4 mr-2" /> Agregar Operador
-                  </Button>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="costo_cargo">Costo del Cargo (S/.)</Label>
+                <Input
+                  id="costo_cargo"
+                  type="number"
+                  step="0.01"
+                  value={currentCargo.costo_cargo || ""}
+                  onChange={(e) => setCurrentCargo({ ...currentCargo, costo_cargo: Number(e.target.value) })}
+                />
+              </div>
+              <Button onClick={handleSaveCargo}>Guardar Cargo</Button>
+            </div>
 
-                {currentOperadores.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No hay operadores asignados.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {currentOperadores.map((operador, index) => (
-                      <div key={index} className="flex items-end gap-2 border p-3 rounded-md">
-                        <div className="flex-1 space-y-2">
-                          <Label>Personal</Label>
-                          <Select
-                            value={operador.personal_id_personal?.toString() || ""}
-                            onValueChange={(value) =>
-                              handleOperadorChange(index, "personal_id_personal", Number(value))
-                            }
+            {/* Columna 2: Tabla de Cargos */}
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre del Cargo</TableHead>
+                    <TableHead>Costo</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cargos.map((cargo) => (
+                    <TableRow key={cargo.id_cargo_coccion}>
+                      <TableCell>{cargo.nombre_cargo}</TableCell>
+                      <TableCell>S/. {cargo.costo_cargo.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setCurrentCargo(cargo);
+                              setShowCargoModal(true);
+                            }}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar personal" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {personal.map((p) => (
-                                <SelectItem key={p.id_personal} value={p.id_personal.toString()}>
-                                  {p.nombre_completo}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex-1 space-y-2">
-                          <Label>Cargo</Label>
-                          <Select
-                            value={operador.cargo_coccion_id_cargo_coccion?.toString() || ""}
-                            onValueChange={(value) =>
-                              handleOperadorChange(index, "cargo_coccion_id_cargo_coccion", Number(value))
-                            }
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              setDeleteCargoId(cargo.id_cargo_coccion);
+                              setShowDeleteCargoDialog(true);
+                            }}
                           >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar cargo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {cargos.map((c) => (
-                                <SelectItem key={c.id_cargo_coccion} value={c.id_cargo_coccion.toString()}>
-                                  {c.nombre_cargo}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveOperador(index)}
-                          className="text-destructive"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowOperadoresModal(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveOperadores}>Guardar</Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Diálogo de confirmación para eliminar horno */}
-      <AlertDialog open={showDeleteHornoDialog} onOpenChange={setShowDeleteHornoDialog}>
+      {/* Modal de Hornos */}
+      <Dialog
+        open={showHornoModal}
+        onOpenChange={(isOpen) => {
+          setShowHornoModal(isOpen);
+          if (!isOpen) setCurrentHorno({}); // Limpiar el formulario al cerrar
+        }}
+      >
+        <DialogContent className="sm:max-w-[800px]">
+          <DialogHeader>
+            <DialogTitle>Gestión de Hornos</DialogTitle>
+            <DialogDescription>Administre los hornos registrados.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            {/* Columna 1: Formulario de Hornos */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="prefijo">Prefijo</Label>
+                  <Input
+                    id="prefijo"
+                    value={currentHorno.prefijo || ""}
+                    onChange={(e) => setCurrentHorno({ ...currentHorno, prefijo: e.target.value })}
+                    maxLength={5}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nombre">Nombre</Label>
+                  <Input
+                    id="nombre"
+                    value={currentHorno.nombre || ""}
+                    onChange={(e) => setCurrentHorno({ ...currentHorno, nombre: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="humeadores">Cantidad de Humeadores</Label>
+                  <Input
+                    id="humeadores"
+                    type="number"
+                    value={currentHorno.cantidad_humeadores || ""}
+                    onChange={(e) => setCurrentHorno({ ...currentHorno, cantidad_humeadores: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="quemadores">Cantidad de Quemadores</Label>
+                  <Input
+                    id="quemadores"
+                    type="number"
+                    value={currentHorno.cantidad_quemadores || ""}
+                    onChange={(e) => setCurrentHorno({ ...currentHorno, cantidad_quemadores: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <Button onClick={handleSaveHorno}>Guardar Horno</Button>
+            </div>
+
+            {/* Columna 2: Tabla de Hornos */}
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Prefijo</TableHead>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Humeadores</TableHead>
+                    <TableHead>Quemadores</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {hornos.map((horno) => (
+                    <TableRow key={horno.id_horno}>
+                      <TableCell>{horno.prefijo}</TableCell>
+                      <TableCell>{horno.nombre}</TableCell>
+                      <TableCell>{horno.cantidad_humeadores || "-"}</TableCell>
+                      <TableCell>{horno.cantidad_quemadores || "-"}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setCurrentHorno(horno);
+                              setShowHornoModal(true);
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              setDeleteHornoId(horno.id_horno);
+                              setShowDeleteHornoDialog(true);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogos de confirmación */}
+      {/* Diálogo de confirmación para eliminar cocción  */}
+      <AlertDialog open={showDeleteCoccionDialog} onOpenChange={setShowDeleteCoccionDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar este horno? Esta acción no se puede deshacer.
+              ¿Está seguro de que desea eliminar esta cocción? Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteHorno} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction onClick={handleDeleteCoccion} className="bg-destructive text-destructive-foreground">
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1173,23 +989,24 @@ export default function CoccionPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Diálogo de confirmación para eliminar cocción */}
-      <AlertDialog open={showDeleteCoccionDialog} onOpenChange={setShowDeleteCoccionDialog}>
+      {/* Diálogo de confirmación para eliminar horno */}
+      <AlertDialog open={showDeleteHornoDialog} onOpenChange={setShowDeleteHornoDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Está seguro de que desea eliminar esta cocción? Esta acción no se puede deshacer.
+              ¿Está seguro de que desea eliminar este horno? Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteCoccion} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction onClick={handleDeleteHorno} className="bg-destructive text-destructive-foreground">
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   )
 }

@@ -8,14 +8,6 @@ class PersonalService {
     return await personalRepository.getAllByEmpresa(id_empresa);
   }
 
-//   async getById(id_personal: number): Promise<Personal | null> {
-//     return this.repository.findById(id_personal);
-//   }
-
-//   async getByDni(dni: string): Promise<Personal | null> {
-//     return this.repository.findByDni(dni);
-//   }
-
   async createPersonal(data: any) {
     return await personalRepository.createPersonal(data);
   }

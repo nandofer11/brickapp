@@ -7,25 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model almacen {
-  id_almacen     Int             @id @default(autoincrement())
-  codigo_almacen String          @unique(map: "codigo_almacen_UNIQUE") @db.VarChar(45)
-  nombre_almacen String          @db.VarChar(45)
-  compra         compra[]
-  stock_almacen  stock_almacen[]
-}
-
 model asistencia {
   id_asistencia     Int               @id @default(autoincrement())
   fecha             DateTime          @db.Date
   id_personal       Int
-  id_semana_trabajo Int
+  id_semana_laboral Int
   estado            asistencia_estado
+  created_at        DateTime          @default(now()) @db.DateTime(0)
+  updated_at        DateTime          @default(now()) @db.DateTime(0)
   personal          personal          @relation(fields: [id_personal], references: [id_personal], onDelete: Cascade, map: "asistencia_ibfk_5")
-  semana_trabajo    semana_trabajo    @relation(fields: [id_semana_trabajo], references: [id_semana_trabajo], onDelete: NoAction, map: "asistencia_ibfk_6")
+  semana_laboral    semana_laboral    @relation(fields: [id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, map: "asistencia_ibfk_6")
 
   @@index([id_personal], map: "asistencia_ibfk_5")
-  @@index([id_semana_trabajo], map: "id_semana_trabajo")
+  @@index([id_semana_laboral], map: "id_semana_laboral")
 }
 
 model caja {
@@ -43,16 +37,16 @@ model caja {
 }
 
 model caja_semanal {
-  id_caja_semanal Int          @id @default(autoincrement())
+  id_caja_semanal Int      @id @default(autoincrement())
   id_caja         Int
-  fecha_inicio    DateTime     @db.Date
-  fecha_fin       DateTime     @db.Date
-  saldo_apertura  Decimal      @db.Decimal(10, 2)
-  saldo_cierre    Decimal?     @db.Decimal(10, 2)
-  total_ingresos  Decimal?     @default(0.00) @db.Decimal(10, 2)
-  total_egresos   Decimal?     @default(0.00) @db.Decimal(10, 2)
-  estado          Int          @db.TinyInt
-  caja            caja         @relation(fields: [id_caja], references: [id_caja], onDelete: Cascade, map: "fk_id_caja_caja_semanal")
+  fecha_inicio    DateTime @db.Date
+  fecha_fin       DateTime @db.Date
+  saldo_apertura  Decimal  @db.Decimal(10, 2)
+  saldo_cierre    Decimal? @db.Decimal(10, 2)
+  total_ingresos  Decimal? @default(0.00) @db.Decimal(10, 2)
+  total_egresos   Decimal? @default(0.00) @db.Decimal(10, 2)
+  estado          Int      @db.TinyInt
+  caja            caja     @relation(fields: [id_caja], references: [id_caja], onDelete: Cascade, map: "fk_id_caja_caja_semanal")
 
   @@index([id_caja], map: "fk_id_caja_caja_semanal_idx")
 }
@@ -61,12 +55,18 @@ model cargo_coccion {
   id_cargo_coccion Int                @id @default(autoincrement())
   nombre_cargo     String             @db.VarChar(45)
   costo_cargo      Decimal            @db.Decimal(6, 2)
-  coccion_operador coccion_operador[]
+  created_at       DateTime           @default(now()) @db.DateTime(0)
+  updated_at       DateTime           @default(now()) @db.DateTime(0)
+  id_empresa       Int
+  empresa          empresa            @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_cargo_coccion_empresa")
+  coccion_personal coccion_personal[]
+
+  @@index([id_empresa], map: "FK_cargo_coccion_empresa_idx")
 }
 
 model coccion {
   id_coccion                       Int                @id @default(autoincrement())
-  semana_trabajo_id_semana_trabajo Int?
+  semana_laboral_id_semana_laboral Int?
   fecha_encendido                  DateTime           @db.Date
   hora_inicio                      DateTime?          @db.Time(0)
   fecha_apagado                    DateTime?          @db.Date
@@ -77,64 +77,18 @@ model coccion {
   humeada                          Boolean?           @default(false)
   quema                            Boolean?           @default(false)
   hora_inicio_quema                DateTime?          @db.Time(0)
+  created_at                       DateTime           @default(now()) @db.DateTime(0)
+  updated_at                       DateTime           @default(now()) @db.DateTime(0)
+  id_empresa                       Int
+  empresa                          empresa            @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_coccion_empresa")
   horno                            horno              @relation(fields: [horno_id_horno], references: [id_horno], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_horno1")
-  semana_trabajo                   semana_trabajo?    @relation(fields: [semana_trabajo_id_semana_trabajo], references: [id_semana_trabajo], onDelete: NoAction, onUpdate: NoAction, map: "fk_semana_trabajo_id_semana_trabajo")
-  coccion_operador                 coccion_operador[]
+  semana_laboral                   semana_laboral?    @relation(fields: [semana_laboral_id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, onUpdate: NoAction, map: "fk_semana_trabajo_id_semana_trabajo")
+  coccion_personal                 coccion_personal[]
   consumo_material                 consumo_material[]
-  registro_sensor                  registro_sensor[]
 
   @@index([horno_id_horno], map: "fk_coccion_horno1_idx")
-  @@index([semana_trabajo_id_semana_trabajo], map: "fk_semana_trabajo_id_semana_trabajo_idx")
-}
-
-model coccion_operador {
-  id_coccion_operador            Int           @id @default(autoincrement())
-  coccion_id_coccion             Int
-  personal_id_personal           Int
-  cargo_coccion_id_cargo_coccion Int
-  cargo_coccion                  cargo_coccion @relation(fields: [cargo_coccion_id_cargo_coccion], references: [id_cargo_coccion], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_operador_cargo_coccion1")
-  coccion                        coccion       @relation(fields: [coccion_id_coccion], references: [id_coccion], onDelete: Cascade, map: "fk_coccion_operador_coccion1")
-  personal                       personal      @relation(fields: [personal_id_personal], references: [id_personal], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_operador_personal1")
-
-  @@index([cargo_coccion_id_cargo_coccion], map: "fk_coccion_operador_cargo_coccion1_idx")
-  @@index([coccion_id_coccion], map: "fk_coccion_operador_coccion1_idx")
-  @@index([personal_id_personal], map: "fk_coccion_operador_personal1_idx")
-}
-
-model compra {
-  id_compra              Int              @id @default(autoincrement())
-  fecha_compra           DateTime         @db.Date
-  estado_pago            String           @db.VarChar(45)
-  destino_quema          Boolean?
-  almacen_id_almacen     Int?
-  proveedor_id_proveedor Int
-  almacen                almacen?         @relation(fields: [almacen_id_almacen], references: [id_almacen], onDelete: NoAction, onUpdate: NoAction, map: "fk_compra_almacen1")
-  proveedor              proveedor        @relation(fields: [proveedor_id_proveedor], references: [id_proveedor], onDelete: NoAction, onUpdate: NoAction, map: "fk_compra_proveedor1")
-  compra_detalle         compra_detalle[]
-
-  @@index([almacen_id_almacen], map: "fk_compra_almacen1_idx")
-  @@index([proveedor_id_proveedor], map: "fk_compra_proveedor1_idx")
-}
-
-model compra_detalle {
-  id_compra_detalle      Int      @id @default(autoincrement())
-  cantidad               Int
-  precio_unitario_compra Decimal  @db.Decimal(5, 2)
-  id_compra              Int
-  id_material            Int
-  material               material @relation(fields: [id_material], references: [id_material], onDelete: NoAction, onUpdate: NoAction, map: "fk_proveedor_detalle_compra_material")
-  compra                 compra   @relation(fields: [id_compra], references: [id_compra], onDelete: Cascade, map: "fk_proveedor_detalle_compra_material_compra_material")
-
-  @@index([id_compra], map: "fk_proveedor_detalle_compra_material_compra_material_idx")
-  @@index([id_material], map: "fk_proveedor_detalle_compra_material_material_idx")
-}
-
-model comprobante {
-  id_comprobante Int          @id @default(autoincrement())
-  documento      String       @db.VarChar(45)
-  serie          String?      @db.VarChar(45)
-  numero         String?      @db.VarChar(45)
-  fecha_emision  String?      @db.VarChar(45)
+  @@index([semana_laboral_id_semana_laboral], map: "fk_semana_trabajo_id_semana_trabajo_idx")
+  @@index([id_empresa], map: "FK_coccion_empresa_idx")
 }
 
 model consumo_material {
@@ -154,22 +108,29 @@ model consumo_material {
 }
 
 model empresa {
-  id_empresa     Int              @id @default(autoincrement())
-  razon_social   String           @db.VarChar(150)
-  ruc            String           @unique(map: "ruc_UNIQUE") @db.VarChar(11)
-  ciudad         String?          @db.VarChar(45)
-  direccion      String?          @db.VarChar(45)
-  telefono       String?          @db.VarChar(45)
-  email          String?          @db.VarChar(45)
-  web            String?          @db.VarChar(45)
-  logo           String?          @db.VarChar(45)
-  created_at     DateTime         @default(now()) @db.DateTime(0)
-  updated_at     DateTime         @default(now()) @db.DateTime(0)
-  caja           caja[]
-  personal       personal[]
-  semana_trabajo semana_trabajo[]
-  usuario        usuario[]
-  rol            rol[]
+  id_empresa             Int                     @id @default(autoincrement())
+  razon_social           String                  @db.VarChar(150)
+  ruc                    String                  @unique(map: "ruc_UNIQUE") @db.VarChar(11)
+  ciudad                 String?                 @db.VarChar(45)
+  direccion              String?                 @db.VarChar(250)
+  telefono               String?                 @db.VarChar(45)
+  email                  String?                 @db.VarChar(45)
+  web                    String?                 @db.VarChar(45)
+  logo                   String?                 @db.VarChar(45)
+  created_at             DateTime                @default(now()) @db.DateTime(0)
+  updated_at             DateTime                @default(now()) @db.DateTime(0)
+  caja                   caja[]
+  cargo_coccion          cargo_coccion[]
+  cliente                cliente[]
+  coccion                coccion[]
+  horno                  horno[]
+  numeracion_comprobante numeracion_comprobante?
+  personal               personal[]
+  producto               producto[]
+  rol                    rol[]
+  semana_laboral         semana_laboral[]
+  usuario                usuario[]
+  venta                  venta[]
 }
 
 model horno {
@@ -177,22 +138,30 @@ model horno {
   prefijo             String    @unique(map: "prefijo_UNIQUE") @db.VarChar(5)
   nombre              String    @db.VarChar(45)
   cantidad_humeadores Int?
-  cantidad_quemadores String?   @db.VarChar(45)
+  cantidad_quemadores Int?
+  created_at          DateTime  @default(now()) @db.DateTime(0)
+  updated_at          DateTime  @default(now()) @db.DateTime(0)
+  id_empresa          Int
   coccion             coccion[]
+  empresa             empresa   @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_horno_empresa")
+
+  @@index([id_empresa], map: "FK_horno_empresa_idx")
 }
 
 model material {
-  id_material      Int                @id @default(autoincrement())
-  nombre           String             @db.VarChar(45)
-  presentacion     String             @db.VarChar(45)
-  compra_detalle   compra_detalle[]
-  consumo_material consumo_material[]
-  stock_almacen    stock_almacen[]
+  id_material             Int                       @id @default(autoincrement())
+  nombre                  String                    @db.VarChar(45)
+  unidad_medida           String                    @db.VarChar(45)
+  descripcion             String?                   @db.VarChar(100)
+  created_at              DateTime                  @default(now()) @db.DateTime(0)
+  updated_at              DateTime                  @default(now()) @db.DateTime(0)
+  consumo_material        consumo_material[]
+  detalle_compra_material detalle_compra_material[]
 }
 
 model personal {
   id_personal          Int                @id @default(autoincrement())
-  dni                  String             @unique(map: "dni") @db.VarChar(8)
+  dni                  String             @db.VarChar(8)
   nombre_completo      String             @db.VarChar(45)
   fecha_nacimiento     DateTime           @db.Date
   ciudad               String             @db.VarChar(45)
@@ -203,8 +172,10 @@ model personal {
   fecha_ingreso        DateTime           @db.Date
   estado               Int
   id_empresa           Int
+  created_at           DateTime           @default(now()) @db.DateTime(0)
+  updated_at           DateTime           @default(now()) @db.DateTime(0)
   asistencia           asistencia[]
-  coccion_operador     coccion_operador[]
+  coccion_personal     coccion_personal[]
   consumo_material     consumo_material[]
   empresa              empresa            @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "personal_ibfk_1")
 
@@ -212,75 +183,31 @@ model personal {
 }
 
 model proveedor {
-  id_proveedor   Int      @id @default(autoincrement())
-  tipo_documento String   @db.VarChar(45)
-  nro_documento  String   @unique(map: "nro_documento_UNIQUE") @db.VarChar(11)
-  nombre         String   @db.VarChar(45)
-  ciudad         String   @db.VarChar(45)
-  telefono       String?  @db.VarChar(45)
-  celular        String?  @db.VarChar(9)
-  email          String?  @db.VarChar(45)
-  compra         compra[]
-}
-
-model registro_sensor {
-  id_registro_coccion Int      @id @default(autoincrement())
-  fecha               DateTime @db.Date
-  hora                DateTime @db.Time(0)
-  temperatura         Int?
-  coccion_id_coccion  Int?
-  sensor_id_sensor    Int?
-  coccion             coccion? @relation(fields: [coccion_id_coccion], references: [id_coccion], onDelete: Cascade, map: "fk_registro_coccion_coccion1")
-  sensor              sensor?  @relation(fields: [sensor_id_sensor], references: [id_sensor_temperatura], onDelete: Cascade, map: "fk_registro_coccion_sensor_temperatura1")
-
-  @@index([coccion_id_coccion], map: "fk_registro_coccion_coccion1_idx")
-  @@index([sensor_id_sensor], map: "fk_registro_coccion_sensor_temperatura1_idx")
+  id_proveedor    Int               @id @default(autoincrement())
+  tipo_documento  String            @db.VarChar(45)
+  nro_documento   String            @unique(map: "nro_documento_UNIQUE") @db.VarChar(11)
+  nombre          String            @db.VarChar(45)
+  ciudad          String            @db.VarChar(45)
+  telefono        String?           @db.VarChar(45)
+  celular         String?           @db.VarChar(9)
+  email           String?           @db.VarChar(45)
+  created_at      DateTime          @default(now()) @db.DateTime(0)
+  updated_at      DateTime          @default(now()) @db.DateTime(0)
+  compra_material compra_material[]
 }
 
 model rol {
-  id_rol        Int          @id @default(autoincrement())
-  id_empresa    Int
-  nombre        String       @db.VarChar(45)
-  descripcion   String?      @db.VarChar(200)
-  created_at    DateTime     @default(now()) @db.DateTime(0)
-  updated_at    DateTime     @default(now()) @db.DateTime(0)
-  usuario       usuario[]
-  empresa       empresa      @relation(fields: [id_empresa], references: [id_empresa], onDelete: Cascade, map: "FK_rol_empresa")
-  rol_permiso   rol_permiso[]
+  id_rol      Int           @id @default(autoincrement())
+  id_empresa  Int
+  nombre      String        @db.VarChar(45)
+  descripcion String?       @db.VarChar(200)
+  created_at  DateTime      @default(now()) @db.DateTime(0)
+  updated_at  DateTime      @default(now()) @db.DateTime(0)
+  empresa     empresa       @relation(fields: [id_empresa], references: [id_empresa], onDelete: Cascade, onUpdate: NoAction, map: "FK_rol_empresa")
+  rol_permiso rol_permiso[]
+  usuario     usuario[]
 
   @@index([id_empresa], map: "FK_rol_empresa_idx")
-}
-
-model semana_trabajo {
-  id_semana_trabajo Int          @id @default(autoincrement())
-  fecha_inicio      DateTime     @db.Date
-  fecha_fin         DateTime     @db.Date
-  estado            Int          @db.TinyInt
-  id_empresa        Int
-  asistencia        asistencia[]
-  coccion           coccion[]
-  empresa           empresa      @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "semana_trabajo_ibfk_1")
-
-  @@index([id_empresa], map: "id_empresa_semana_trabajo_empresa_idx")
-}
-
-model sensor {
-  id_sensor_temperatura Int               @id @default(autoincrement())
-  nombre                String            @db.VarChar(45)
-  tipo                  String            @db.VarChar(45)
-  registro_sensor       registro_sensor[]
-}
-
-model stock_almacen {
-  id_stock_almacen     Int      @id @default(autoincrement())
-  cantidad_actual      String   @db.VarChar(45)
-  material_id_material Int
-  almacen_id_almacen   Int
-  almacen              almacen  @relation(fields: [almacen_id_almacen], references: [id_almacen], onDelete: NoAction, onUpdate: NoAction, map: "fk_material_almacen_almacen1")
-  material             material @relation(fields: [material_id_material], references: [id_material], onDelete: NoAction, onUpdate: NoAction, map: "fk_material_almacen_material1")
-
-  @@index([almacen_id_almacen], map: "fk_material_almacen_almacen1_idx")
-  @@index([material_id_material], map: "fk_material_almacen_material1_idx")
 }
 
 model tarjeta_bancaria {
@@ -295,40 +222,263 @@ model tarjeta_bancaria {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model usuario {
-  id_usuario      Int          @id @default(autoincrement())
-  nombre_completo String       @db.VarChar(255)
-  usuario         String       @unique(map: "usuario_UNIQUE") @db.VarChar(255)
-  contrasena      String       @db.VarChar(255)
-  email           String?      @db.VarChar(255)
-  celular         String?      @db.VarChar(255)
+  id_usuario      Int         @id @default(autoincrement())
+  nombre_completo String      @db.VarChar(255)
+  usuario         String      @unique(map: "usuario_UNIQUE") @db.VarChar(255)
+  contrasena      String      @db.VarChar(255)
+  email           String?     @db.VarChar(255)
+  celular         String?     @db.VarChar(255)
   id_rol          Int
   id_empresa      Int
-  created_at      DateTime     @default(now()) @db.DateTime(0)
-  updated_at      DateTime     @default(now()) @db.DateTime(0)
-  rol             rol          @relation(fields: [id_rol], references: [id_rol], onUpdate: Cascade, map: "usuario_ibfk_63")
-  empresa         empresa      @relation(fields: [id_empresa], references: [id_empresa], onUpdate: Cascade, map: "usuario_ibfk_64")
+  created_at      DateTime    @default(now()) @db.DateTime(0)
+  updated_at      DateTime    @default(now()) @db.DateTime(0)
+  auditoria       auditoria[]
+  rol             rol         @relation(fields: [id_rol], references: [id_rol], onDelete: NoAction, map: "usuario_ibfk_63")
+  empresa         empresa     @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "usuario_ibfk_64")
+  venta           venta[]
+
   @@index([id_rol], map: "id_rol")
   @@index([id_empresa], map: "id_empresa")
 }
 
 model permiso {
-  id_permiso   Int           @id @default(autoincrement())
-  nombre       String        @unique(map: "nombre_UNIQUE") @db.VarChar(45)
-  descripcion  String?       @db.VarChar(250)
-  created_at   DateTime      @default(now()) @db.DateTime(0)
-  updated_at   DateTime      @default(now()) @db.DateTime(0)
-  rol_permiso  rol_permiso[]
+  id_permiso  Int           @id @default(autoincrement())
+  nombre      String        @unique(map: "nombre_UNIQUE") @db.VarChar(45)
+  descripcion String?       @db.VarChar(250)
+  created_at  DateTime      @default(now()) @db.DateTime(0)
+  updated_at  DateTime      @default(now()) @db.DateTime(0)
+  rol_permiso rol_permiso[]
 }
 
 model rol_permiso {
-  id_rol      Int
-  id_permiso  Int
-  activo      Int?          @db.TinyInt
-  rol         rol           @relation(fields: [id_rol], references: [id_rol], onDelete: Cascade, map: "FK_rol_rol_permiso")
-  permiso     permiso       @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade, map: "FK_permiso_rol_permiso")
+  id_rol     Int     @default(autoincrement())
+  id_permiso Int
+  activo     Int?    @db.TinyInt
+  permiso    permiso @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade, onUpdate: NoAction, map: "FK_permiso_rol_permiso")
+  rol        rol     @relation(fields: [id_rol], references: [id_rol], onDelete: Cascade, onUpdate: NoAction, map: "FK_rol_rol_permiso")
 
   @@id([id_rol, id_permiso])
   @@index([id_permiso], map: "FK_permiso_rol_permiso_idx")
+}
+
+model auditoria {
+  id_auditoria         Int       @id @default(autoincrement())
+  id_usuario           Int
+  accion               String    @db.VarChar(45)
+  tabla_afectada       String    @db.VarChar(100)
+  id_registro_afectado Int
+  fecha                DateTime? @db.Timestamp(0)
+  usuario              usuario   @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "id_usuario")
+
+  @@index([id_usuario], map: "id_usuario_idx")
+}
+
+model categoria {
+  id_categoria Int        @id @default(autoincrement())
+  nombre       String     @db.VarChar(45)
+  descripcion  String?    @db.VarChar(150)
+  created_at   DateTime   @default(now()) @db.DateTime(0)
+  updated_at   DateTime   @default(now()) @db.DateTime(0)
+  producto     producto[]
+}
+
+model cliente {
+  id_cliente        Int       @id @default(autoincrement())
+  tipo_cliente      String    @db.VarChar(45)
+  dni               String?   @db.VarChar(8)
+  ruc               String?   @db.VarChar(11)
+  nombres_apellidos String?   @db.VarChar(150)
+  razon_social      String?   @db.VarChar(150)
+  direccion         String?   @db.MediumText
+  celular           String?   @db.VarChar(9)
+  correo            String?   @db.VarChar(150)
+  id_empresa        Int
+  created_at        DateTime? @default(now()) @db.Timestamp(0)
+  ultima_compra     DateTime? @db.Timestamp(0)
+  empresa           empresa   @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_cliente_empresa")
+  venta             venta[]
+
+  @@index([id_empresa], map: "FK_cliente_empresa_idx")
+}
+
+model coccion_personal {
+  id_coccion_personal            Int           @id @default(autoincrement())
+  coccion_id_coccion             Int
+  personal_id_personal           Int
+  cargo_coccion_id_cargo_coccion Int
+  created_at                     DateTime      @default(now()) @db.DateTime(0)
+  updated_at                     DateTime      @default(now()) @db.DateTime(0)
+  cargo_coccion                  cargo_coccion @relation(fields: [cargo_coccion_id_cargo_coccion], references: [id_cargo_coccion], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_personal_cargo_coccion1")
+  coccion                        coccion       @relation(fields: [coccion_id_coccion], references: [id_coccion], onDelete: Cascade, map: "fk_coccion_personal_coccion1")
+  personal                       personal      @relation(fields: [personal_id_personal], references: [id_personal], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_personal_personal1")
+
+  @@index([cargo_coccion_id_cargo_coccion], map: "fk_coccion_personal_cargo_coccion1_idx")
+  @@index([coccion_id_coccion], map: "fk_coccion_personal_coccion1_idx")
+  @@index([personal_id_personal], map: "fk_coccion_personal_personal1_idx")
+}
+
+model compra_material {
+  id_compra_material      Int                       @id @default(autoincrement())
+  id_proveedor            Int
+  fecha_compra            DateTime                  @db.Date
+  total                   Decimal                   @db.Decimal(10, 2)
+  estado_pago             String                    @db.VarChar(45)
+  observacion             String?                   @db.Text
+  created_at              DateTime                  @default(now()) @db.DateTime(0)
+  updated_at              DateTime                  @default(now()) @db.DateTime(0)
+  proveedor               proveedor                 @relation(fields: [id_proveedor], references: [id_proveedor], onDelete: NoAction, onUpdate: NoAction, map: "fk_compra_proveedor1")
+  detalle_compra_material detalle_compra_material[]
+  pago_compra_material    pago_compra_material[]
+
+  @@index([id_proveedor], map: "fk_compra_proveedor1_idx")
+}
+
+model comprobante_venta {
+  id_comprobante_venta Int       @id @default(autoincrement())
+  id_venta             Int
+  tipo_comprobante     String    @db.VarChar(45)
+  serie                String?   @db.VarChar(10)
+  numero               String?   @db.VarChar(10)
+  fecha_emision        DateTime? @default(now()) @db.Timestamp(0)
+  razon_social         String?   @db.VarChar(150)
+  ruc                  String?   @db.VarChar(11)
+  direccion            String?   @db.VarChar(150)
+  venta                venta     @relation(fields: [id_venta], references: [id_venta], onDelete: NoAction, onUpdate: NoAction, map: "FK_venta_comprobante_venta")
+
+  @@index([id_venta], map: "FK_venta_comprobante_venta_idx")
+}
+
+model detalle_compra_material {
+  id_detalle_compra  Int             @id @default(autoincrement())
+  id_compra_material Int
+  id_material        Int
+  cantidad           Int
+  precio_unitario    Decimal         @db.Decimal(5, 2)
+  subtotal           Decimal         @db.Decimal(10, 2)
+  observacion        String?         @db.VarChar(150)
+  material           material        @relation(fields: [id_material], references: [id_material], onDelete: NoAction, onUpdate: NoAction, map: "fk_proveedor_detalle_compra_material")
+  compra_material    compra_material @relation(fields: [id_compra_material], references: [id_compra_material], onDelete: Cascade, map: "fk_proveedor_detalle_compra_material_compra_material")
+
+  @@index([id_compra_material], map: "fk_proveedor_detalle_compra_material_compra_material_idx")
+  @@index([id_material], map: "fk_proveedor_detalle_compra_material_material_idx")
+}
+
+model detalle_venta {
+  id_detalle_venta Int      @id @default(autoincrement())
+  id_venta         Int
+  id_producto      Int
+  cantidad         Int
+  precio_unitario  Decimal  @db.Decimal(10, 2)
+  subtotal         Decimal? @db.Decimal(10, 2)
+  producto         producto @relation(fields: [id_producto], references: [id_producto], onDelete: NoAction, onUpdate: NoAction, map: "FK_producto_detalle_venta")
+  venta            venta    @relation(fields: [id_venta], references: [id_venta], onDelete: NoAction, onUpdate: NoAction, map: "FK_venta_detalle_venta")
+
+  @@index([id_producto], map: "FK_producto_detalle_venta_idx")
+  @@index([id_venta], map: "FK_venta_detalle_venta_idx")
+}
+
+model entrega_venta {
+  id_entrega_venta   Int       @id @default(autoincrement())
+  id_venta           Int
+  fecha              DateTime? @default(now()) @db.Timestamp(0)
+  cantidad_entregada Int       @map("cantidad entregada")
+  lugar_carga        String?   @db.VarChar(45)
+  observaciones      String?   @db.Text
+  venta              venta     @relation(fields: [id_venta], references: [id_venta], onDelete: NoAction, onUpdate: NoAction, map: "FK_venta_entrega_venta")
+
+  @@index([id_venta], map: "FK_venta_entrega_venta_idx")
+}
+
+model numeracion_comprobante {
+  id_numeracion_comprobante Int     @id @default(autoincrement())
+  id_empresa                Int     @unique(map: "id_empresa_UNIQUE")
+  tipo_comprobante          String  @unique(map: "tipo_comprobante_UNIQUE") @db.VarChar(45)
+  serie                     String  @unique(map: "serie_UNIQUE") @db.VarChar(45)
+  numero_actual             String  @db.VarChar(45)
+  empresa                   empresa @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_numeracion_comprobante")
+}
+
+model pago_compra_material {
+  id_pago_compra_material Int             @id @default(autoincrement())
+  id_compra_material      Int
+  fecha_pago              DateTime        @db.Date
+  monto_pagado            Decimal         @db.Decimal(10, 2)
+  metodo_pago             String          @db.VarChar(20)
+  observacion             String?         @db.VarChar(150)
+  created_at              DateTime        @default(now()) @db.DateTime(0)
+  compra_material         compra_material @relation(fields: [id_compra_material], references: [id_compra_material], onDelete: Cascade, map: "FK_pago_compra_material")
+
+  @@index([id_compra_material], map: "FK_pago_compra_material_idx")
+}
+
+model producto {
+  id_producto     Int             @id @default(autoincrement())
+  id_categoria    Int?
+  id_empresa      Int?
+  nombre          String          @db.VarChar(45)
+  precio_unitario Decimal         @db.Decimal(10, 2)
+  peso            Decimal?        @db.Decimal(10, 2)
+  dimensiones     String?         @db.VarChar(45)
+  estado          Int?            @default(1) @db.TinyInt
+  descripcion     String?         @db.Text
+  detalle_venta   detalle_venta[]
+  categoria       categoria?      @relation(fields: [id_categoria], references: [id_categoria], onDelete: NoAction, onUpdate: NoAction, map: "FK_categoria_producto")
+  empresa         empresa?        @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_producto")
+
+  @@index([id_categoria], map: "FK_categoria_producto_idx")
+  @@index([id_empresa], map: "FK_empresa_producto_idx")
+}
+
+model semana_laboral {
+  id_semana_laboral Int          @id @default(autoincrement())
+  fecha_inicio      DateTime     @db.Date
+  fecha_fin         DateTime     @db.Date
+  estado            Int          @db.TinyInt
+  id_empresa        Int
+  created_at        DateTime     @default(now()) @db.DateTime(0)
+  updated_at        DateTime     @default(now()) @db.DateTime(0)
+  asistencia        asistencia[]
+  coccion           coccion[]
+  empresa           empresa      @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "semana_laboral_ibfk_1")
+
+  @@index([id_empresa], map: "id_empresa_semana_trabajo_empresa_idx")
+}
+
+model servicio_venta {
+  id_servicio_venta Int      @id @default(autoincrement())
+  id_venta          Int
+  requiere_flete    Int?     @default(0) @db.TinyInt
+  requiere_descarga Int?     @default(0) @db.TinyInt
+  direccion_entrega String?  @db.VarChar(150)
+  costo_flete       Decimal? @db.Decimal(10, 2)
+  costo_descarga    Decimal? @db.Decimal(10, 2)
+  venta             venta    @relation(fields: [id_venta], references: [id_venta], onDelete: NoAction, onUpdate: NoAction, map: "FK_venta_servicio_venta")
+
+  @@index([id_venta], map: "FK_venta_servicio_venta_idx")
+}
+
+model venta {
+  id_venta          Int                 @id @default(autoincrement())
+  id_cliente        Int
+  id_usuario        Int
+  id_empresa        Int
+  fecha_venta       DateTime            @db.Date
+  forma_pago        String              @db.VarChar(45)
+  estado_pago       String              @db.VarChar(45)
+  estado_entrega    String              @db.VarChar(45)
+  total             Decimal             @db.Decimal(10, 2)
+  observaciones     String?             @db.Text
+  comprobante_venta comprobante_venta[]
+  detalle_venta     detalle_venta[]
+  entrega_venta     entrega_venta[]
+  servicio_venta    servicio_venta[]
+  cliente           cliente             @relation(fields: [id_cliente], references: [id_cliente], onDelete: NoAction, onUpdate: NoAction, map: "FK_cliente_venta")
+  empresa           empresa             @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_venta")
+  usuario           usuario             @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "FK_usuario_venta")
+
+  @@index([id_cliente], map: "FK_cliente_idx")
+  @@index([id_empresa], map: "FK_empresa_venta_idx")
+  @@index([id_usuario], map: "FK_usuario_idx")
 }
 
 enum asistencia_estado {

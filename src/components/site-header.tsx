@@ -1,29 +1,19 @@
 "use client"
 
 import { SidebarIcon } from "lucide-react"
-
-import { SearchForm } from "@/components/search-form"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { useSidebar } from "@/components/ui/sidebar"
 import { Label } from "@/components/ui/label"
 import { useSession } from "next-auth/react"
 
-import {ModeToggle} from '@/components/mode-toggle'
+import { ModeToggle } from '@/components/mode-toggle'
 
 
 export function SiteHeader() {
   const { toggleSidebar } = useSidebar()
-    const { data: session } = useSession()
-    const razon_social = session?.user?.razon_social;
+  const { data: session } = useSession()
+  const razon_social = session?.user?.razon_social;
 
 
   return (
@@ -38,22 +28,10 @@ export function SiteHeader() {
           <SidebarIcon />
         </Button>
         <Separator orientation="vertical" className="mr-2 h-4" />
-        {/* <Breadcrumb className="hidden sm:block">
-          <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbLink href="#">
-                Building Your Application
-              </BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator />
-            <BreadcrumbItem>
-              <BreadcrumbPage>Data Fetching</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb> */}
-<Label>Empresa:</Label>
-<Label>{razon_social}</Label>
-        <SearchForm className="w-full sm:ml-auto sm:w-auto" />
+
+        <Label>Empresa:</Label>
+        <Label>{razon_social}</Label>
+        {/* <SearchForm className="w-full sm:ml-auto sm:w-auto" /> */}
         <ModeToggle></ModeToggle>
       </div>
     </header>
