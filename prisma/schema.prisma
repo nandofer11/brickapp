@@ -58,10 +58,13 @@ model cargo_coccion {
   created_at       DateTime           @default(now()) @db.DateTime(0)
   updated_at       DateTime           @default(now()) @db.DateTime(0)
   id_empresa       Int
+  id_horno         Int
+  horno            horno              @relation(fields: [id_horno], references: [id_horno], onDelete: NoAction, onUpdate: NoAction, map: "FK_cargo_coccion_horno")
   empresa          empresa            @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_cargo_coccion_empresa")
   coccion_personal coccion_personal[]
 
   @@index([id_empresa], map: "FK_cargo_coccion_empresa_idx")
+  @@index([id_horno], map: "FK_cargo_coccion_horno_idx")
 }
 
 model coccion {

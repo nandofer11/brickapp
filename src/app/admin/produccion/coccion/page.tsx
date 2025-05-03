@@ -50,6 +50,7 @@ interface CargoCocion {
   nombre_cargo: string
   costo_cargo: number
   id_empresa: number
+  id_horno?: number
 }
 
 interface SemanaLaboral {
@@ -188,7 +189,7 @@ export default function CoccionPage() {
       }
 
       toast.success(currentHorno.id_horno ? "Horno actualizado" : "Horno creado");
-      setShowHornoModal(false);
+      // setShowHornoModal(false);
       setCurrentHorno({}); // Limpiar el formulario
       fetchHornos(); // Volver a cargar los datos
     } catch (error) {
@@ -221,7 +222,7 @@ export default function CoccionPage() {
   const fetchCargos = async () => {
     try {
       setLoadingCargos(true)
-      const res = await fetch("/api/cargo-coccion")
+      const res = await fetch("/api/cargo_coccion")
       const data = await res.json()
       setCargos(data)
     } catch (error) {
@@ -234,29 +235,31 @@ export default function CoccionPage() {
 
   const handleSaveCargo = async () => {
     try {
-      const method = currentCargo.id_cargo_coccion ? "PUT" : "POST"
-      const res = await fetch("/api/cargo-coccion", {
+      const method = currentCargo.id_cargo_coccion ? "PUT" : "POST";
+      const { id_cargo_coccion, id_empresa = session?.user?.id_empresa, nombre_cargo, costo_cargo, id_horno } = currentCargo;
+
+      const res = await fetch("/api/cargo_coccion", {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(currentCargo),
-      })
+        body: JSON.stringify({ id_cargo_coccion, id_empresa, nombre_cargo, costo_cargo, id_horno }),
+      });
 
-      if (!res.ok) throw new Error("Error al guardar cargo")
+      if (!res.ok) throw new Error("Error al guardar cargo");
 
-      toast.success(currentCargo.id_cargo_coccion ? "Cargo actualizado" : "Cargo creado")
-      setShowCargoModal(false)
-      fetchCargos()
+      toast.success(currentCargo.id_cargo_coccion ? "Cargo actualizado" : "Cargo creado");
+      setCurrentCargo({}); // Limpiar el formulario
+      fetchCargos();
     } catch (error) {
-      toast.error("Error al guardar cargo")
-      console.error(error)
+      toast.error("Error al guardar cargo");
+      console.error(error);
     }
-  }
+  };
 
   const handleDeleteCargo = async () => {
     if (!deleteCargoId) return
 
     try {
-      const res = await fetch(`/api/cargo-coccion?id_cargo_coccion=${deleteCargoId}`, {
+      const res = await fetch(`/api/cargo_coccion?id_cargo_coccion=${deleteCargoId}`, {
         method: "DELETE",
       })
 
@@ -768,9 +771,29 @@ export default function CoccionPage() {
             <DialogTitle>Gestión de Cargos</DialogTitle>
             <DialogDescription>Administre los cargos de cocción.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-4">
             {/* Columna 1: Formulario de Cargos */}
-            <div className="space-y-4">
+            <div className="space-y-4 md:col-span-1">
+              <div className="space-y-2">
+                <Label htmlFor="horno">Horno</Label>
+                <Select
+                  value={currentCargo.id_horno?.toString() || ""} // Cambiar a id_horno
+                  onValueChange={(value) =>
+                    setCurrentCargo({ ...currentCargo, id_horno: Number(value) }) // Actualizar id_horno
+                  }
+                >
+                  <SelectTrigger id="horno">
+                    <SelectValue placeholder="Seleccionar horno" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {hornos.map((horno) => (
+                      <SelectItem key={horno.id_horno} value={horno.id_horno.toString()}>
+                        {horno.prefijo} - {horno.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="nombre_cargo">Nombre del Cargo</Label>
                 <Input
@@ -793,47 +816,54 @@ export default function CoccionPage() {
             </div>
 
             {/* Columna 2: Tabla de Cargos */}
-            <div className="rounded-md border overflow-x-auto">
+            <div className="rounded-md border overflow-x-auto md:col-span-2">
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Prefijo del Horno</TableHead>
+                    <TableHead>Nombre del Horno</TableHead>
                     <TableHead>Nombre del Cargo</TableHead>
                     <TableHead>Costo</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {cargos.map((cargo) => (
-                    <TableRow key={cargo.id_cargo_coccion}>
-                      <TableCell>{cargo.nombre_cargo}</TableCell>
-                      <TableCell>S/. {cargo.costo_cargo.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                              setCurrentCargo(cargo);
-                              setShowCargoModal(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => {
-                              setDeleteCargoId(cargo.id_cargo_coccion);
-                              setShowDeleteCargoDialog(true);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {cargos.map((cargo) => {
+                    const horno = hornos.find((h) => h.id_horno === cargo.id_horno);
+                    return (
+                      <TableRow key={cargo.id_cargo_coccion}>
+                        <TableCell>{horno?.prefijo || "-"}</TableCell>
+                        <TableCell>{horno?.nombre || "-"}</TableCell>
+                        <TableCell>{cargo.nombre_cargo}</TableCell>
+                        <TableCell>S/. {Number(cargo.costo_cargo).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                setCurrentCargo(cargo);
+                                setShowCargoModal(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => {
+                                setDeleteCargoId(cargo.id_cargo_coccion);
+                                setShowDeleteCargoDialog(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
