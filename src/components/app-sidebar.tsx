@@ -40,13 +40,11 @@ const data = {
       title: "Dashboard",
       url: "/admin/dashboard",
       icon: PieChart,
-      items: [],
     },
     {
       title: "Venta",
       url: "/admin/venta",
       icon: PieChart,
-      items: [],
     },
     {
       title: "Gestión",
@@ -133,7 +131,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
+            <SidebarMenuButton asChild>
               <a href="#">
                 <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <Command className="size-4" />
