@@ -34,13 +34,6 @@ export class CargoCoccionRepository extends BaseRepository {
     });
   }
 
-  async update(id_cargo_coccion: number, id_empresa:number, data: any) {
-    return prisma.cargo_coccion.update({
-      where: { id_cargo_coccion, id_empresa },
-      data: data,
-    });
-  }
-
   async delete(id_cargo_coccion: number, id_empresa: number) {
     return prisma.cargo_coccion.delete({
       where: { id_cargo_coccion, id_empresa },

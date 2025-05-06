@@ -39,7 +39,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (status === "loading") return <p className="text-center mt-4">Cargando sesión...</p>;
   if (!session) return null;
 
-  const user = session.user as CustomUser;
+  // const user = session.user as CustomUser;
 
   // return (
   //   <div className="d-flex vh-100">
