@@ -46,11 +46,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(201).json(newSemanaLaboral);
 
       case "PUT":
-        if (!req.query.id) {
-          return res.status(400).json({ error: "ID es requerido para actualizar." });
+        // Obtener el ID de la URL o del body
+        const idToUpdate = req.query.id 
+          ? parseInt(req.query.id as string, 10)
+          : req.body.id_semana_laboral;
+
+        if (!idToUpdate) {
+          return res.status(400).json({ 
+            error: "ID es requerido para actualizar. Debe proporcionarse en la URL (/api/semana_laboral/19) o en el body (id_semana_laboral)" 
+          });
         }
 
-        const idToUpdate = parseInt(req.query.id as string, 10);
         const updatedSemanaLaboral = await SemanaLaboralService.updateSemanaLaboral(idToUpdate, req.body);
         return res.status(200).json(updatedSemanaLaboral);
 
