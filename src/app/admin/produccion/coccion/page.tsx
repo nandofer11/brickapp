@@ -34,6 +34,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
+import { formatDateString, formatDateRange, toISODateString } from '@/lib/utils/dates'
 
 // Interfaces
 interface Horno {
@@ -54,7 +55,7 @@ interface CargoCocion {
 }
 
 interface SemanaLaboral {
-  id_semana_trabajo: number
+  id_semana_laboral: number // Cambiar de id_semana_trabajo a id_semana_laboral
   fecha_inicio: string
   fecha_fin: string
   estado: number
@@ -139,9 +140,17 @@ export default function CoccionPage() {
     document.title = "Gestión de Cocción"
     fetchHornos()
     fetchCargos()
-    fetchCocciones()
-    // fetchSemanas()
+    fetchSemanas()
     fetchPersonal()
+
+    // Establecer fecha y hora actual
+    const now = new Date();
+    setCurrentCoccion(prev => ({
+      ...prev,
+      fecha_encendido: toISODateString(now),
+      hora_inicio: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      estado: "Programado"
+    }));
   }, [])
 
   // Funciones para hornos
@@ -275,19 +284,30 @@ export default function CoccionPage() {
   }
 
   // Funciones para semanas laborales
-  // const fetchSemanas = async () => {
-  //   try {
-  //     setLoadingSemanas(true)
-  //     const res = await fetch("/api/semana_laboral")
-  //     const data = await res.json()
-  //     setSemanas(data)
-  //   } catch (error) {
-  //     toast.error("Error al cargar semanas laborales")
-  //     console.error(error)
-  //   } finally {
-  //     setLoadingSemanas(false)
-  //   }
-  // }
+  const fetchSemanas = async () => {
+    try {
+      setLoadingSemanas(true);
+      const res = await fetch("/api/semana_laboral");
+      const data = await res.json();
+      
+      // Asegurarnos de que las fechas se procesen correctamente
+      const semanasFormateadas = data
+        .filter((s: SemanaLaboral | null) => s && s.estado === 1)
+        .map((semana: SemanaLaboral) => ({
+          ...semana,
+          fecha_inicio: semana.fecha_inicio.split('T')[0], // Mantener solo la fecha
+          fecha_fin: semana.fecha_fin.split('T')[0], // Mantener solo la fecha
+        }));
+      
+      setSemanas(semanasFormateadas);
+    } catch (error) {
+      toast.error("Error al cargar semanas laborales");
+      console.error(error);
+      setSemanas([]);
+    } finally {
+      setLoadingSemanas(false);
+    }
+  };
 
   // Funciones para personal
   const fetchPersonal = async () => {
@@ -305,55 +325,90 @@ export default function CoccionPage() {
   }
 
   // Funciones para cocción
-  const fetchCocciones = async () => {
-    try {
-      setLoadingCocciones(true)
-      const res = await fetch("/api/coccion")
-      const data = await res.json()
-      setCocciones(data)
-    } catch (error) {
-      toast.error("Error al cargar cocciones")
-      console.error(error)
-    } finally {
-      setLoadingCocciones(false)
-    }
-  }
+  // const fetchCocciones = async () => {
+  //   try {
+  //     setLoadingCocciones(true)
+  //     const res = await fetch("/api/coccion")
+  //     const data = await res.json()
+  //     setCocciones(data)
+  //   } catch (error) {
+  //     toast.error("Error al cargar cocciones")
+  //     console.error(error)
+  //   } finally {
+  //     setLoadingCocciones(false)
+  //   }
+  // }
 
   const handleSaveCoccion = async () => {
     try {
-      const method = currentCoccion.id_coccion ? "PUT" : "POST"
-      const res = await fetch("/api/coccion", {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(currentCoccion),
-      })
+      // Obtener los IDs seleccionados
+      const semanaId = currentCoccion.semana_trabajo_id_semana_trabajo;
+      const hornoId = currentCoccion.horno_id_horno;
 
-      if (!res.ok) throw new Error("Error al guardar cocción")
+      console.log('Valores actuales:', {
+        semanaId,
+        hornoId,
+        currentCoccion
+      });
 
-      const data = await res.json()
-      toast.success(currentCoccion.id_coccion ? "Cocción actualizada" : "Cocción creada")
-
-      // Si es una nueva cocción y tenemos operadores, los guardamos
-      if (!currentCoccion.id_coccion && currentOperadores.length > 0) {
-        const operadoresData = currentOperadores.map((op) => ({
-          ...op,
-          coccion_id_coccion: data.id_coccion,
-        }))
-
-        await fetch("/api/coccion-operador", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(operadoresData),
-        })
+      // Validar que los IDs existan y sean válidos
+      if (!semanaId) {
+        toast.error("Debe seleccionar una semana laboral");
+        return;
       }
 
-      setShowCoccionModal(false)
-      fetchCocciones()
+      if (!hornoId) {
+        toast.error("Debe seleccionar un horno");
+        return;
+      }
+
+      // Verificar que haya al menos un operador seleccionado
+      if (currentOperadores.length === 0) {
+        toast.error("Debe seleccionar al menos un operador");
+        return;
+      }
+
+      // Preparar datos para enviar al backend
+      const coccionData = {
+        coccion: {
+          semana_trabajo_id_semana_trabajo: semanaId,
+          fecha_encendido: currentCoccion.fecha_encendido,
+          estado: "Programado",
+          horno_id_horno: hornoId,
+          humeada: false,
+          quema: false,
+          id_empresa: session?.user?.id_empresa
+        },
+        operadores: currentOperadores.map(op => ({
+          personal_id_personal: op.personal_id_personal,
+          cargo_coccion_id_cargo_coccion: op.cargo_coccion_id_cargo_coccion
+        }))
+      };
+
+      console.log('Datos a enviar:', {
+        semanaId,
+        hornoId,
+        coccionData
+      });
+
+      // Guardar la cocción
+      const res = await fetch("/api/coccion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(coccionData),
+      });
+
+      if (!res.ok) throw new Error("Error al guardar cocción");
+
+      toast.success("Cocción creada exitosamente");
+      setShowCoccionModal(false);
+      setCurrentCoccion({});
+      setCurrentOperadores([]);
     } catch (error) {
-      toast.error("Error al guardar cocción")
-      console.error(error)
+      console.error(error);
+      toast.error("Error al guardar la cocción");
     }
-  }
+  };
 
   const handleDeleteCoccion = async () => {
     if (!deleteCoccionId) return
@@ -367,7 +422,7 @@ export default function CoccionPage() {
 
       toast.success("Cocción eliminada")
       setShowDeleteCoccionDialog(false)
-      fetchCocciones()
+      // fetchCocciones()
     } catch (error) {
       toast.error("Error al eliminar cocción")
       console.error(error)
@@ -438,13 +493,67 @@ export default function CoccionPage() {
     setCurrentOperadores(newOperadores)
   }
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return ""
-    try {
-      return format(parseISO(dateString), "dd/MM/yyyy", { locale: es })
-    } catch (error) {
-      return dateString
+  const handleHornoChange = (value: string) => {
+    const hornoId = Number(value);
+    const hornoSelected = hornos.find(h => h.id_horno === hornoId);
+    
+    setCurrentCoccion({
+      ...currentCoccion,
+      horno_id_horno: hornoId,
+    });
+    
+    // Limpiar los operadores al cambiar de horno
+    setCurrentOperadores([]);
+  };
+
+  const handleCargoChange = (personalId: number, cargoId: number) => {
+    const hornoSeleccionado = hornos.find(h => h.id_horno === currentCoccion.horno_id_horno);
+    if (!hornoSeleccionado) return;
+
+    const cargo = cargos.find(c => c.id_cargo_coccion === cargoId);
+    if (!cargo) return;
+
+    // Contar cuántos operadores hay de cada tipo
+    const operadoresActuales = currentOperadores.reduce((acc, op) => {
+      const cargoOp = cargos.find(c => c.id_cargo_coccion === op.cargo_coccion_id_cargo_coccion);
+      if (cargoOp) {
+        acc[cargoOp.nombre_cargo] = (acc[cargoOp.nombre_cargo] || 0) + 1;
+      }
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Verificar límites según el tipo de cargo
+    if (cargo.nombre_cargo.toLowerCase().includes('humeador')) {
+      if ((operadoresActuales['Humeador'] || 0) >= hornoSeleccionado.cantidad_humeadores) {
+        toast.error(`Ya se han asignado todos los humeadores necesarios (${hornoSeleccionado.cantidad_humeadores})`);
+        return;
+      }
+    } else if (cargo.nombre_cargo.toLowerCase().includes('quemador')) {
+      if ((operadoresActuales['Quemador'] || 0) >= hornoSeleccionado.cantidad_quemadores) {
+        toast.error(`Ya se han asignado todos los quemadores necesarios (${hornoSeleccionado.cantidad_quemadores})`);
+        return;
+      }
     }
+
+    // Actualizar el operador
+    const newOperadores = [...currentOperadores];
+    const index = newOperadores.findIndex(op => op.personal_id_personal === personalId);
+    if (index >= 0) {
+      newOperadores[index].cargo_coccion_id_cargo_coccion = cargoId;
+    } else {
+      newOperadores.push({
+        personal_id_personal: personalId,
+        cargo_coccion_id_cargo_coccion: cargoId
+      });
+    }
+    setCurrentOperadores(newOperadores);
+  };
+
+  const formatDate = formatDateString
+
+  // Añadir esta función helper para formatear fechas
+  const formatSemanaLabel = (fecha_inicio: string, fecha_fin: string) => {
+    return formatDateRange(fecha_inicio, fecha_fin)
   }
 
   return (
@@ -461,7 +570,7 @@ export default function CoccionPage() {
             <Button
               onClick={() => {
                 setCurrentCoccion({
-                  fecha_encendido: new Date().toISOString().split("T")[0],
+                  fecha_encendido: toISODateString(new Date()),
                   estado: "Programado",
                 });
                 setCurrentOperadores([]);
@@ -524,229 +633,184 @@ export default function CoccionPage() {
           if (!isOpen) setCurrentCoccion({}); // Limpiar el formulario al cerrar
         }}
       >
-        <DialogContent className="sm:max-w-[700px]">
+        <DialogContent className="sm:max-w-[900px]">
           <DialogHeader>
             <DialogTitle>{currentCoccion.id_coccion ? "Editar Cocción" : "Nueva Cocción"}</DialogTitle>
             <DialogDescription>Complete los datos de la cocción y presione guardar.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-6">
+            {/* Columna izquierda: Datos de cocción */}
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="semana">Semana Laboral</Label>
                 <Select
-                  value={currentCoccion.semana_trabajo_id_semana_trabajo?.toString() || ""}
-                  onValueChange={(value) =>
-                    setCurrentCoccion({
-                      ...currentCoccion,
-                      semana_trabajo_id_semana_trabajo: Number(value),
-                    })
-                  }
+                  value={currentCoccion.semana_trabajo_id_semana_trabajo ? 
+                    String(currentCoccion.semana_trabajo_id_semana_trabajo) : undefined}
+                  onValueChange={(value) => {
+                    const semanaId = Number(value);
+                    setCurrentCoccion(prev => ({
+                      ...prev,
+                      semana_trabajo_id_semana_trabajo: semanaId
+                    }));
+                  }}
                 >
-                  <SelectTrigger id="semana">
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Seleccionar semana" />
                   </SelectTrigger>
                   <SelectContent>
                     {semanas.map((semana) => (
-                      <SelectItem key={semana.id_semana_trabajo} value={semana.id_semana_trabajo.toString()}>
-                        {formatDate(semana.fecha_inicio)} - {formatDate(semana.fecha_fin)}
+                      <SelectItem 
+                        key={semana.id_semana_laboral} // Cambiar de id_semana_trabajo a id_semana_laboral
+                        value={String(semana.id_semana_laboral)} // Cambiar de id_semana_trabajo a id_semana_laboral
+                      >
+                        {formatSemanaLabel(semana.fecha_inicio, semana.fecha_fin)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="horno">Horno</Label>
-                <Select
-                  value={currentCoccion.horno_id_horno?.toString() || ""}
-                  onValueChange={(value) =>
-                    setCurrentCoccion({
-                      ...currentCoccion,
-                      horno_id_horno: Number(value),
-                    })
-                  }
-                >
-                  <SelectTrigger id="horno">
-                    <SelectValue placeholder="Seleccionar horno" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hornos.map((horno) => (
-                      <SelectItem key={horno.id_horno} value={horno.id_horno.toString()}>
-                        {horno.prefijo} - {horno.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fecha_encendido">Fecha de Encendido</Label>
-                <Input
-                  id="fecha_encendido"
-                  type="date"
-                  value={currentCoccion.fecha_encendido || ""}
-                  onChange={(e) => setCurrentCoccion({ ...currentCoccion, fecha_encendido: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hora_inicio">Hora de Inicio</Label>
-                <Input
-                  id="hora_inicio"
-                  type="time"
-                  value={currentCoccion.hora_inicio || ""}
-                  onChange={(e) => setCurrentCoccion({ ...currentCoccion, hora_inicio: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fecha_apagado">Fecha de Apagado</Label>
-                <Input
-                  id="fecha_apagado"
-                  type="date"
-                  value={currentCoccion.fecha_apagado || ""}
-                  onChange={(e) => setCurrentCoccion({ ...currentCoccion, fecha_apagado: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hora_fin">Hora de Fin</Label>
-                <Input
-                  id="hora_fin"
-                  type="time"
-                  value={currentCoccion.hora_fin || ""}
-                  onChange={(e) => setCurrentCoccion({ ...currentCoccion, hora_fin: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="humedad_inicial">Humedad Inicial (%)</Label>
-                <Input
-                  id="humedad_inicial"
-                  type="number"
-                  value={currentCoccion.humedad_inicial || ""}
-                  onChange={(e) => setCurrentCoccion({ ...currentCoccion, humedad_inicial: Number(e.target.value) })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="estado">Estado</Label>
-                <Select
-                  value={currentCoccion.estado || ""}
-                  onValueChange={(value) => setCurrentCoccion({ ...currentCoccion, estado: value })}
-                >
-                  <SelectTrigger id="estado">
-                    <SelectValue placeholder="Seleccionar estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Programado">Programado</SelectItem>
-                    <SelectItem value="En Proceso">En Proceso</SelectItem>
-                    <SelectItem value="Finalizado">Finalizado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hora_inicio_quema">Hora Inicio Quema</Label>
-                <Input
-                  id="hora_inicio_quema"
-                  type="time"
-                  value={currentCoccion.hora_inicio_quema || ""}
-                  onChange={(e) => setCurrentCoccion({ ...currentCoccion, hora_inicio_quema: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="humeada"
-                  checked={currentCoccion.humeada || false}
-                  onCheckedChange={(checked) => setCurrentCoccion({ ...currentCoccion, humeada: checked === true })}
-                />
-                <Label htmlFor="humeada">Humeada</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="quema"
-                  checked={currentCoccion.quema || false}
-                  onCheckedChange={(checked) => setCurrentCoccion({ ...currentCoccion, quema: checked === true })}
-                />
-                <Label htmlFor="quema">Quema</Label>
-              </div>
-            </div>
-
-            {!currentCoccion.id_coccion && (
-              <div className="space-y-4 border-t pt-4">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-medium">Operadores</h3>
-                  <Button type="button" variant="outline" size="sm" onClick={handleAddOperador}>
-                    <PlusCircle className="h-4 w-4 mr-2" /> Agregar Operador
-                  </Button>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="horno">Horno</Label>
+                  <Select
+                    value={String(currentCoccion.horno_id_horno || "")}
+                    onValueChange={handleHornoChange}
+                  >
+                    <SelectTrigger id="horno">
+                      <SelectValue placeholder="Seleccionar horno" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hornos.map((horno) => (
+                        <SelectItem key={horno.id_horno} value={String(horno.id_horno)}>
+                          {horno.prefijo} - {horno.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                
+                <div className="space-y-2">
+                  <Label>Humeadores</Label>
+                  <div className="h-10 px-3 py-2 border rounded-md bg-muted">
+                    {hornos.find(h => h.id_horno === currentCoccion.horno_id_horno)?.cantidad_humeadores || '-'}
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>Quemadores</Label>
+                  <div className="h-10 px-3 py-2 border rounded-md bg-muted">
+                    {hornos.find(h => h.id_horno === currentCoccion.horno_id_horno)?.cantidad_quemadores || '-'}
+                  </div>
+                </div>
+              </div>
 
-                {currentOperadores.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No hay operadores asignados.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {currentOperadores.map((operador, index) => (
-                      <div key={index} className="flex items-end gap-2 border p-3 rounded-md">
-                        <div className="flex-1 space-y-2">
-                          <Label>Personal</Label>
-                          <Select
-                            value={operador.personal_id_personal?.toString() || ""}
-                            onValueChange={(value) =>
-                              handleOperadorChange(index, "personal_id_personal", Number(value))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar personal" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {personal.map((p) => (
-                                <SelectItem key={p.id_personal} value={p.id_personal.toString()}>
-                                  {p.nombre_completo}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="flex-1 space-y-2">
-                          <Label>Cargo</Label>
-                          <Select
-                            value={operador.cargo_coccion_id_cargo_coccion?.toString() || ""}
-                            onValueChange={(value) =>
-                              handleOperadorChange(index, "cargo_coccion_id_cargo_coccion", Number(value))
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccionar cargo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {cargos.map((c) => (
-                                <SelectItem key={c.id_cargo_coccion} value={c.id_cargo_coccion.toString()}>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fecha_encendido">Fecha de Encendido</Label>
+                  <Input
+                    id="fecha_encendido"
+                    type="date"
+                    value={currentCoccion.fecha_encendido || ""}
+                    onChange={(e) => setCurrentCoccion({ ...currentCoccion, fecha_encendido: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hora_inicio">Hora de Inicio</Label>
+                  <Input
+                    id="hora_inicio"
+                    type="time"
+                    value={currentCoccion.hora_inicio || ""}
+                    onChange={(e) => setCurrentCoccion({ ...currentCoccion, hora_inicio: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fecha_apagado">Fecha de Apagado</Label>
+                  <Input
+                    id="fecha_apagado"
+                    type="date"
+                    value={currentCoccion.fecha_apagado || ""}
+                    onChange={(e) => setCurrentCoccion({ ...currentCoccion, fecha_apagado: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hora_fin">Hora de Fin</Label>
+                  <Input
+                    id="hora_fin"
+                    type="time"
+                    value={currentCoccion.hora_fin || ""}
+                    onChange={(e) => setCurrentCoccion({ ...currentCoccion, hora_fin: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="humedad_inicial">Humedad Inicial (%)</Label>
+                  <Input
+                    id="humedad_inicial"
+                    type="number"
+                    value={currentCoccion.humedad_inicial || ""}
+                    onChange={(e) => setCurrentCoccion({ ...currentCoccion, humedad_inicial: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="estado">Estado</Label>
+                  <Select
+                    value={currentCoccion.estado || ""}
+                    onValueChange={(value) => setCurrentCoccion({ ...currentCoccion, estado: value })}
+                  >
+                    <SelectTrigger id="estado">
+                      <SelectValue placeholder="Seleccionar estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Programado">Programado</SelectItem>
+                      <SelectItem value="En Proceso">En Proceso</SelectItem>
+                      <SelectItem value="Finalizado">Finalizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Columna derecha: Operadores */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Operadores</h3>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {personal.map((persona) => {
+                  const operadorActual = currentOperadores.find(op => op.personal_id_personal === persona.id_personal);
+                  return (
+                    <div key={persona.id_personal} className="flex gap-2 items-center border p-3 rounded-md">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{persona.nombre_completo}</p>
+                      </div>
+                      <div className="w-[200px]">
+                        <Select
+                          value={operadorActual?.cargo_coccion_id_cargo_coccion?.toString() || ""}
+                          onValueChange={(value) => handleCargoChange(persona.id_personal, Number(value))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar cargo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {cargos
+                              .filter(c => c.id_horno === currentCoccion.horno_id_horno)
+                              .map((c) => (
+                                <SelectItem key={c.id_cargo_coccion} value={String(c.id_cargo_coccion)}>
                                   {c.nombre_cargo}
                                 </SelectItem>
                               ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveOperador(index)}
-                          className="text-destructive"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
+                          </SelectContent>
+                        </Select>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCoccionModal(false)}>

@@ -195,7 +195,7 @@ export default function Page() {
       }
 
       toast.success(isEditing ? 'Semana actualizada exitosamente' : 'Semana creada exitosamente');
-      handleModalClose();
+      // handleModalClose();
       await fetchSemanasLaborales();
 
     } catch (error: any) {
@@ -214,7 +214,7 @@ export default function Page() {
       }
 
       toast.success('Semana eliminada exitosamente');
-      setShowDeleteModal(false);
+      // setShowDeleteModal(false);
       await fetchSemanasLaborales();
     } catch (error: any) {
       toast.error(error.message || 'Error al eliminar la semana');
