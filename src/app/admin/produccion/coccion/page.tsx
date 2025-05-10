@@ -35,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { formatDateString, formatDateRange, toISODateString } from '@/lib/utils/dates'
+import { Separator } from "@/components/ui/separator"
 
 // Interfaces
 interface Horno {
@@ -69,7 +70,8 @@ interface Personal {
 
 interface Coccion {
   id_coccion: number
-  semana_trabajo_id_semana_trabajo: number
+  semana_trabajo_id_semana_trabajo?: number  // Hacer opcional
+  semana_laboral_id_semana_laboral?: number  // Agregar esta propiedad
   fecha_encendido: string
   hora_inicio: string
   fecha_apagado: string
@@ -80,8 +82,19 @@ interface Coccion {
   humeada: boolean
   quema: boolean
   hora_inicio_quema: string
-  Horno?: Horno
-  SemanaLaboral?: SemanaLaboral
+  horno?: {
+    id_horno: number
+    prefijo: string
+    nombre: string
+    cantidad_humeadores: number
+    cantidad_quemadores: number
+  }
+  semana_laboral?: {
+    id_semana_laboral: number
+    fecha_inicio: string
+    fecha_fin: string
+    estado: number
+  }
   id_empresa: number
 }
 
@@ -90,8 +103,8 @@ interface CoccionOperador {
   coccion_id_coccion: number
   personal_id_personal: number
   cargo_coccion_id_cargo_coccion: number
-  Personal?: Personal
-  CargoCocion?: CargoCocion
+  Personal: Personal
+  CargoCocion: CargoCocion
 }
 
 export default function CoccionPage() {
@@ -135,6 +148,11 @@ export default function CoccionPage() {
   const [loadingPersonal, setLoadingPersonal] = useState(true)
   const [selectedCoccionId, setSelectedCoccionId] = useState<number | null>(null)
 
+  // Agregar estado para el modal de visualización
+  const [showViewModal, setShowViewModal] = useState(false)
+  const [selectedCoccion, setSelectedCoccion] = useState<Coccion | null>(null)
+  const [coccionOperadores, setCoccionOperadores] = useState<CoccionOperador[]>([])
+
   // Cargar datos iniciales
   useEffect(() => {
     document.title = "Gestión de Cocción"
@@ -142,6 +160,7 @@ export default function CoccionPage() {
     fetchCargos()
     fetchSemanas()
     fetchPersonal()
+    fetchCocciones() // Agregar esta línea
 
     // Establecer fecha y hora actual
     const now = new Date();
@@ -325,19 +344,19 @@ export default function CoccionPage() {
   }
 
   // Funciones para cocción
-  // const fetchCocciones = async () => {
-  //   try {
-  //     setLoadingCocciones(true)
-  //     const res = await fetch("/api/coccion")
-  //     const data = await res.json()
-  //     setCocciones(data)
-  //   } catch (error) {
-  //     toast.error("Error al cargar cocciones")
-  //     console.error(error)
-  //   } finally {
-  //     setLoadingCocciones(false)
-  //   }
-  // }
+  const fetchCocciones = async () => {
+    try {
+      setLoadingCocciones(true)
+      const res = await fetch("/api/coccion?include_relations=true")
+      let data = await res.json()
+      setCocciones(data)
+    } catch (error) {
+      toast.error("Error al cargar cocciones")
+      console.error(error)
+    } finally {
+      setLoadingCocciones(false)
+    }
+  }
 
   const handleSaveCoccion = async () => {
     try {
@@ -422,7 +441,7 @@ export default function CoccionPage() {
 
       toast.success("Cocción eliminada")
       setShowDeleteCoccionDialog(false)
-      // fetchCocciones()
+      fetchCocciones()
     } catch (error) {
       toast.error("Error al eliminar cocción")
       console.error(error)
@@ -433,7 +452,7 @@ export default function CoccionPage() {
   const fetchOperadores = async (coccionId: number) => {
     try {
       setLoadingOperadores(true)
-      const res = await fetch(`/api/coccion-operador?coccion_id_coccion=${coccionId}`)
+      const res = await fetch(`/api/coccion_personal?coccion_id_coccion=${coccionId}`)
       const data = await res.json()
       setOperadores(data)
       setSelectedCoccionId(coccionId)
@@ -549,6 +568,41 @@ export default function CoccionPage() {
     setCurrentOperadores(newOperadores);
   };
 
+  const loadCoccionOperadores = async (coccionId: number) => {
+    try {
+      setLoadingOperadores(true)
+      // Usar el endpoint de cocción
+      const res = await fetch(`/api/coccion?id_coccion=${coccionId}&include_personal=true`)
+      
+      if (!res.ok) {
+        throw new Error(`Error ${res.status}: ${res.statusText}`)
+      }
+  
+      const data = await res.json()
+      
+      // Verificar si hay operadores en la respuesta
+      const operadores = data.coccion_personal || []
+      
+      // Mapear los datos asegurándose de que las relaciones existan
+      setCoccionOperadores(operadores.map((op: any) => ({
+        id_coccion_operador: op.id_coccion_personal,
+        coccion_id_coccion: coccionId,
+        personal_id_personal: op.personal_id_personal,
+        cargo_coccion_id_cargo_coccion: op.cargo_coccion_id_cargo_coccion,
+        Personal: op.personal || {},
+        CargoCocion: op.cargo_coccion || {}
+      })))
+
+      console.log('Operadores cargados:', operadores)
+    } catch (error) {
+      console.error('Error al cargar operadores:', error)
+      toast.error("Error al cargar operadores de la cocción")
+      setCoccionOperadores([])
+    } finally {
+      setLoadingOperadores(false)
+    }
+  }
+
   const formatDate = formatDateString
 
   // Añadir esta función helper para formatear fechas
@@ -606,19 +660,89 @@ export default function CoccionPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Horno</TableHead>
+                    <TableHead>ID</TableHead>
                     <TableHead>Semana</TableHead>
+                    <TableHead>Horno</TableHead>
                     <TableHead>Fecha Encendido</TableHead>
                     <TableHead>Hora Inicio</TableHead>
-                    <TableHead>Fecha Apagado</TableHead>
-                    <TableHead>Hora Fin</TableHead>
+                    <TableHead>Humedad</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Humeada</TableHead>
                     <TableHead>Quema</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
-                {/* ...existing code for rendering table rows... */}
+                <TableBody>
+                  {cocciones.map((coccion) => (
+                    <TableRow key={coccion.id_coccion}>
+                      <TableCell>{coccion.id_coccion}</TableCell>
+                      <TableCell>
+                        {coccion.semana_laboral ? 
+                          formatSemanaLabel(coccion.semana_laboral.fecha_inicio, coccion.semana_laboral.fecha_fin) : 
+                          `${coccion.semana_laboral_id_semana_laboral || coccion.semana_trabajo_id_semana_trabajo}`}
+                      </TableCell>
+                      <TableCell>{coccion.horno?.nombre || 'Horno no asignado'}</TableCell>
+                      <TableCell>{formatDate(coccion.fecha_encendido)}</TableCell>
+                      <TableCell>{coccion.hora_inicio || '-'}</TableCell>
+                      <TableCell>{coccion.humedad_inicial || '-'}%</TableCell>
+                      <TableCell>
+                        <Badge variant={
+                          coccion.estado === "Finalizado" ? "destructive" :
+                          coccion.estado === "En Proceso" ? "default" :
+                          "secondary"
+                        }>
+                          {coccion.estado}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={coccion.humeada ? "default" : "outline"}>
+                          {coccion.humeada ? "Sí" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={coccion.quema ? "default" : "outline"}>
+                          {coccion.quema ? "Sí" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={async () => {
+                              setSelectedCoccion(coccion)
+                              await loadCoccionOperadores(coccion.id_coccion)
+                              setShowViewModal(true)
+                            }}
+                          >
+                            <Users className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setCurrentCoccion(coccion)
+                              setShowCoccionModal(true)
+                            }}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              setDeleteCoccionId(coccion.id_coccion)
+                              setShowDeleteCoccionDialog(true)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
               </Table>
             </div>
           )}
@@ -1022,7 +1146,7 @@ export default function CoccionPage() {
                               setShowHornoModal(true);
                             }}
                           >
-                            <Pencil className="h-4 w-4" />
+                              <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="outline"
@@ -1100,6 +1224,103 @@ export default function CoccionPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Agregar el modal de visualización */}
+      <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Detalles de la Cocción</DialogTitle>
+          </DialogHeader>
+          {selectedCoccion && (
+            <div className="space-y-6">
+              {/* Información detallada de la cocción */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Horno</Label>
+                  <div className="text-lg font-medium">
+                    {selectedCoccion.horno?.nombre || 'Horno no asignado'}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Semana</Label>
+                  <div className="text-lg font-medium">
+                    {selectedCoccion.semana_laboral ? 
+                      formatSemanaLabel(selectedCoccion.semana_laboral.fecha_inicio, selectedCoccion.semana_laboral.fecha_fin) : 
+                      '-'}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Estado</Label>
+                  <Badge variant={
+                    selectedCoccion.estado === "Finalizado" ? "destructive" :
+                    selectedCoccion.estado === "En Proceso" ? "default" :
+                    "secondary"
+                  } className="text-base">
+                    {selectedCoccion.estado}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Fecha de Inicio</Label>
+                  <div className="text-lg font-medium">
+                    {formatDate(selectedCoccion.fecha_encendido)}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Hora de Inicio</Label>
+                  <div className="text-lg font-medium">
+                    {selectedCoccion.hora_inicio || '-'}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Humedad Inicial</Label>
+                  <div className="text-lg font-medium">
+                    {selectedCoccion.humedad_inicial ? `${selectedCoccion.humedad_inicial}%` : '-'}
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+
+              {/* Tabla de operadores */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Personal Asignado</h3>
+                {loadingOperadores ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : coccionOperadores.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    No hay personal asignado a esta cocción.
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nombre</TableHead>
+                        <TableHead>Cargo</TableHead>
+                        <TableHead>Costo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {coccionOperadores.map((operador) => (
+                        <TableRow key={operador.id_coccion_operador || `${operador.coccion_id_coccion}-${operador.personal_id_personal}`}>
+                          <TableCell>{operador.Personal?.nombre_completo || 'No asignado'}</TableCell>
+                          <TableCell>{operador.CargoCocion?.nombre_cargo || 'No asignado'}</TableCell>
+                          <TableCell>
+                            {operador.CargoCocion?.costo_cargo 
+                              ? `S/. ${Number(operador.CargoCocion.costo_cargo).toFixed(2)}` 
+                              : '-'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
     </div>
   )

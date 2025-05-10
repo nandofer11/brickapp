@@ -1,26 +1,53 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { CoccionService } from "@/lib/services/CoccionService";
 import { CoccionPersonalService } from "@/lib/services/CoccionPersonalService";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 const coccionService = new CoccionService();
 const coccionOperadorService = new CoccionPersonalService();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  switch (req.method) {
-    case "GET":
+  const { method, query } = req;
+
+  switch (method) {
+    case 'GET':
       try {
-        const { id } = req.query;
-        if (id) {
-          const coccion = await coccionService.findById(Number(id));
-          return coccion 
-            ? res.status(200).json(coccion)
-            : res.status(404).json({ message: "Cocción no encontrada" });
+        const { id_coccion, include_relations, include_personal } = query;
+        let result;
+
+        if (id_coccion) {
+          // Obtener una cocción específica con sus operadores
+          result = await prisma.coccion.findUnique({
+            where: { id_coccion: Number(id_coccion) },
+            include: {
+              horno: true,
+              semana_laboral: true,
+              coccion_personal: include_personal ? {
+                include: {
+                  personal: true,
+                  cargo_coccion: true
+                }
+              } : false
+            }
+          });
+        } else {
+          // Obtener todas las cocciones con relaciones si se solicita
+          result = await prisma.coccion.findMany({
+            include: include_relations ? {
+              horno: true,
+              semana_laboral: true
+            } : undefined
+          });
         }
-        const cocciones = await coccionService.findAllByEmpresa(Number(req.query.id_empresa));
-        return res.status(200).json(cocciones);
-      } catch (error: any) {
-        return res.status(500).json({ message: error.message });
+
+        res.status(200).json(result);
+      } catch (error) {
+        console.error('Error en GET /api/coccion:', error);
+        res.status(500).json({ error: 'Error al obtener datos de cocción' });
       }
+      break;
 
     case "POST":
       try {

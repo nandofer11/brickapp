@@ -6,8 +6,16 @@ const coccionRepository = new CoccionRepository();
 
 export class CoccionService {
 
-  async findAllByEmpresa(id_empresa: number) {
-    return await coccionRepository.findAllByEmpresa(id_empresa);
+  async findAllByEmpresa(idEmpresa: number) {
+    console.log('Consultando cocciones para empresa:', idEmpresa);
+    return await prisma.coccion.findMany({
+      where: {
+        id_empresa: idEmpresa
+      },
+      orderBy: {
+        id_coccion: 'desc'
+      }
+    });
   }
 
   async findById(id: number){
