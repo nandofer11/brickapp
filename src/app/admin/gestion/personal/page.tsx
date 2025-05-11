@@ -100,39 +100,68 @@ export default function PersonalPage() {
   const handleSave = async () => {
     if (!currentPersonal) return
 
-    // Validar que los campos requeridos no estén vacíos
-    const requiredFields = [
-      { field: "dni", message: "El DNI es obligatorio" },
-      { field: "nombre_completo", message: "El nombre completo es obligatorio" },
-      { field: "ciudad", message: "La ciudad es obligatoria" },
-      { field: "fecha_nacimiento", message: "La fecha de nacimiento es obligatoria" },
-      { field: "pago_diario_normal", message: "El pago diario normal es obligatorio" },
-      { field: "fecha_ingreso", message: "La fecha de ingreso es obligatoria" },
-      { field: "estado", message: "Debe seleccionar un estado" },
-    ]
-
-    for (const { field, message } of requiredFields) {
-      const value = (currentPersonal as any)[field]
-
-      if (value === undefined || value === null || value.toString().trim() === "") {
-        toast.error("Error en la validación.")
-        return
-      }
-    }
-
-    // Validar DNI
-    if (currentPersonal.dni?.length !== 8 || isNaN(Number(currentPersonal.dni))) {
-      toast.error("El Dni debe tener 8 dígitos.")
-      return
-    }
-
-    // Validar Celular
-    if (currentPersonal.celular && (currentPersonal.celular.length !== 9 || isNaN(Number(currentPersonal.celular)))) {
-      toast.error("El celular debe tener 9 dígitos numéricos.")
-      return
-    }
-
     try {
+      // 1. Validar DNI vacío
+      if (!currentPersonal.dni?.trim()) {
+        toast.error("El DNI es obligatorio");
+        setCurrentPersonal(prev => ({ ...prev!, dni: "" }));
+        document.getElementById("dni")?.focus();
+        return;
+      }
+
+      // 2. Validar DNI 8 dígitos
+      if (currentPersonal.dni.length !== 8 || isNaN(Number(currentPersonal.dni))) {
+        toast.error("El DNI debe tener 8 dígitos numéricos");
+        setCurrentPersonal(prev => ({ ...prev!, dni: "" }));
+        document.getElementById("dni")?.focus();
+        return;
+      }
+
+      // 3. Validar nombre completo
+      if (!currentPersonal.nombre_completo?.trim()) {
+        toast.error("El nombre completo es obligatorio");
+        document.getElementById("nombre")?.focus();
+        return;
+      }
+
+      // 4. Validar fecha de nacimiento
+      if (!currentPersonal.fecha_nacimiento) {
+        toast.error("La fecha de nacimiento es obligatoria");
+        document.getElementById("fecha_nacimiento")?.focus();
+        return;
+      }
+
+      // 5. Validar ciudad
+      if (!currentPersonal.ciudad?.trim()) {
+        toast.error("La ciudad es obligatoria");
+        setCurrentPersonal(prev => ({ ...prev!, ciudad: "" }));
+        document.getElementById("ciudad")?.focus();
+        return;
+      }
+
+      // 6. Validar pago diario normal
+      if (!currentPersonal.pago_diario_normal || currentPersonal.pago_diario_normal <= 0) {
+        toast.error("El pago diario normal debe ser mayor a 0");
+        setCurrentPersonal(prev => ({ ...prev!, pago_diario_normal: undefined }));
+        document.getElementById("pago_normal")?.focus();
+        return;
+      }
+
+      // 7. Validar fecha de ingreso
+      if (!currentPersonal.fecha_ingreso) {
+        toast.error("La fecha de ingreso es obligatoria");
+        document.getElementById("fecha_ingreso")?.focus();
+        return;
+      }
+
+      // 8. Validar estado
+      if (currentPersonal.estado === undefined || currentPersonal.estado === null) {
+        toast.error("Debe seleccionar un estado");
+        document.getElementById("estado")?.focus();
+        return;
+      }
+
+      // Si pasa todas las validaciones, continuar con el guardado
       const method = currentPersonal.id_personal ? "PUT" : "POST";
 
       // Formatear fechas al formato ISO-8601 con hora

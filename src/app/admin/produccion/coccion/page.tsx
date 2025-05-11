@@ -189,6 +189,35 @@ export default function CoccionPage() {
 
   const handleSaveHorno = async () => {
     try {
+      // Validaciones
+      if (!currentHorno.prefijo?.trim()) {
+        toast.error("El prefijo es obligatorio");
+        setCurrentHorno({ ...currentHorno, prefijo: "" });
+        document.getElementById("prefijo")?.focus();
+        return;
+      }
+
+      if (!currentHorno.nombre?.trim()) {
+        toast.error("El nombre es obligatorio");
+        setCurrentHorno({ ...currentHorno, nombre: "" });
+        document.getElementById("nombre")?.focus();
+        return;
+      }
+
+      if (!currentHorno.cantidad_humeadores || isNaN(Number(currentHorno.cantidad_humeadores))) {
+        toast.error("La cantidad de humeadores debe ser un número válido");
+        setCurrentHorno({ ...currentHorno, cantidad_humeadores: undefined });
+        document.getElementById("humeadores")?.focus();
+        return;
+      }
+
+      if (!currentHorno.cantidad_quemadores || isNaN(Number(currentHorno.cantidad_quemadores))) {
+        toast.error("La cantidad de quemadores debe ser un número válido");
+        setCurrentHorno({ ...currentHorno, cantidad_quemadores: undefined });
+        document.getElementById("quemadores")?.focus();
+        return;
+      }
+
       const method = currentHorno.id_horno ? "PUT" : "POST";
 
       // Filtrar los campos necesarios
@@ -263,6 +292,27 @@ export default function CoccionPage() {
 
   const handleSaveCargo = async () => {
     try {
+      // Validaciones
+      if (!currentCargo.id_horno) {
+        toast.error("Debe seleccionar un horno");
+        document.getElementById("horno")?.focus();
+        return;
+      }
+
+      if (!currentCargo.nombre_cargo?.trim()) {
+        toast.error("El nombre del cargo es obligatorio");
+        setCurrentCargo({ ...currentCargo, nombre_cargo: "" });
+        document.getElementById("nombre_cargo")?.focus();
+        return;
+      }
+
+      if (!currentCargo.costo_cargo || isNaN(Number(currentCargo.costo_cargo))) {
+        toast.error("El costo del cargo es obligatorio y debe ser un número válido");
+        setCurrentCargo({ ...currentCargo, costo_cargo: undefined });
+        document.getElementById("costo_cargo")?.focus();
+        return;
+      }
+
       const method = currentCargo.id_cargo_coccion ? "PUT" : "POST";
       const { id_cargo_coccion, id_empresa = session?.user?.id_empresa, nombre_cargo, costo_cargo, id_horno } = currentCargo;
 
