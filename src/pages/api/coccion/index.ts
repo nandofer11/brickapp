@@ -15,39 +15,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     case 'GET':
       try {
         const { id_coccion, include_relations, include_personal } = query;
-        let result;
 
-        if (id_coccion) {
-          // Obtener una cocción específica con sus operadores
-          result = await prisma.coccion.findUnique({
-            where: { id_coccion: Number(id_coccion) },
-            include: {
-              horno: true,
-              semana_laboral: true,
-              coccion_personal: include_personal ? {
-                include: {
-                  personal: true,
-                  cargo_coccion: true
-                }
-              } : false
-            }
-          });
-        } else {
-          // Obtener todas las cocciones con relaciones si se solicita
-          result = await prisma.coccion.findMany({
-            include: include_relations ? {
-              horno: true,
-              semana_laboral: true
-            } : undefined
-          });
+        // Si se solicita operadores específicamente
+        if (id_coccion && include_personal === 'true') {
+          const operadores = await coccionService.getOperadoresByCoccion(Number(id_coccion));
+          return res.status(200).json(operadores);
         }
 
-        res.status(200).json(result);
+        // Si se solicita cocción con relaciones
+        if (id_coccion && include_relations === 'true') {
+          const data = await coccionService.findByIdComplete(Number(id_coccion));
+          return res.status(200).json(data);
+        }
+
+        // Si solo se solicita la cocción
+        if (id_coccion) {
+          const coccion = await coccionService.findById(Number(id_coccion));
+          return res.status(200).json(coccion);
+        }
+
+        // Listar todas las cocciones
+        const cocciones = await coccionService.findAllByEmpresa(req.query.id_empresa as unknown as number);
+        return res.status(200).json(cocciones);
       } catch (error) {
-        console.error('Error en GET /api/coccion:', error);
-        res.status(500).json({ error: 'Error al obtener datos de cocción' });
+        console.error('Error en GET coccion:', error);
+        return res.status(500).json({ message: 'Error al obtener datos' });
       }
-      break;
 
     case "POST":
       try {
@@ -77,8 +70,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     case "PUT":
       try {
-        const { id } = req.query;
-        const { coccion, operadores } = req.body;
+        const { where, coccion, operadores } = req.body;
+        // Convertir id_coccion a número y validar
+        const id_coccion = Number(where?.id_coccion);
+        if (!id_coccion || isNaN(id_coccion)) {
+          res.status(400).json({ message: "id_coccion es requerido y debe ser un número válido" });
+          return;
+        }
 
         // Validar campos obligatorios de cocción
         if (!coccion.semana_trabajo_id_semana_trabajo || 
@@ -112,18 +110,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
         }
 
-        const coccionActualizada = await coccionService.updateCoccion(Number(id), coccionData);
-        
-        if (operadores?.length) {
-          await coccionOperadorService.deleteCoccionPersonal(Number(id));
-          await coccionOperadorService.createManyCoccionPersonal(operadores.map((op: any) => ({
-            personal_id_personal: op.personal_id_personal,
-            cargo_coccion_id_cargo_coccion: op.cargo_coccion_id_cargo_coccion,
-            coccion_id_coccion: Number(id)
-          })));
-        }
-        
-        return res.status(200).json(coccionActualizada);
+        // Eliminar id_coccion del objeto coccion antes de actualizar
+        const { id_coccion: _, ...coccionSinId } = coccion || {};
+
+        // Llama al servicio con el objeto limpio
+        const result = await coccionService.updateCoccionCompleta(id_coccion, coccionSinId, operadores);
+
+        res.status(200).json(result);
+        return;
       } catch (error: any) {
         return res.status(500).json({ message: error.message });
       }

@@ -360,93 +360,93 @@ export default function CoccionPage() {
 
   const handleSaveCoccion = async () => {
     try {
-      // Obtener los IDs seleccionados
-      const semanaId = currentCoccion.semana_trabajo_id_semana_trabajo;
-      const hornoId = currentCoccion.horno_id_horno;
-
-      console.log('Valores actuales:', {
-        semanaId,
-        hornoId,
-        currentCoccion
-      });
-
-      // Validar que los IDs existan y sean válidos
-      if (!semanaId) {
-        toast.error("Debe seleccionar una semana laboral");
+      // Validaciones básicas
+      if (!currentCoccion.semana_trabajo_id_semana_trabajo || 
+          !currentCoccion.horno_id_horno || 
+          !currentCoccion.fecha_encendido) {
+        toast.error("Los campos semana, horno y fecha de encendido son obligatorios");
         return;
       }
-
-      if (!hornoId) {
-        toast.error("Debe seleccionar un horno");
-        return;
-      }
-
-      // Verificar que haya al menos un operador seleccionado
+  
       if (currentOperadores.length === 0) {
         toast.error("Debe seleccionar al menos un operador");
         return;
       }
-
-      // Preparar datos para enviar al backend
-      const coccionData = {
+  
+      // Preparar datos para enviar
+      const requestData = {
+        ...(currentCoccion.id_coccion ? { // Solo incluir para actualización
+          where: {
+            id_coccion: currentCoccion.id_coccion
+          }
+        } : {}),
         coccion: {
-          semana_trabajo_id_semana_trabajo: semanaId,
+          ...(currentCoccion.id_coccion && { id_coccion: currentCoccion.id_coccion }), // Incluir ID solo en actualización
+          semana_trabajo_id_semana_trabajo: Number(currentCoccion.semana_trabajo_id_semana_trabajo),
           fecha_encendido: currentCoccion.fecha_encendido,
-          estado: "Programado",
-          horno_id_horno: hornoId,
-          humeada: false,
-          quema: false,
+          hora_inicio: currentCoccion.hora_inicio || null,
+          fecha_apagado: currentCoccion.fecha_apagado || null,
+          hora_fin: currentCoccion.hora_fin || null,
+          humedad_inicial: currentCoccion.humedad_inicial || null,
+          estado: currentCoccion.estado || "Programado",
+          horno_id_horno: Number(currentCoccion.horno_id_horno),
+          humeada: currentCoccion.humeada || false,
+          quema: currentCoccion.quema || false,
           id_empresa: session?.user?.id_empresa
         },
         operadores: currentOperadores.map(op => ({
-          personal_id_personal: op.personal_id_personal,
-          cargo_coccion_id_cargo_coccion: op.cargo_coccion_id_cargo_coccion
+          personal_id_personal: Number(op.personal_id_personal),
+          cargo_coccion_id_cargo_coccion: Number(op.cargo_coccion_id_cargo_coccion)
         }))
       };
-
-      console.log('Datos a enviar:', {
-        semanaId,
-        hornoId,
-        coccionData
-      });
-
-      // Guardar la cocción
+  
+      console.log('Datos a enviar:', requestData);
+  
       const res = await fetch("/api/coccion", {
-        method: "POST",
+        method: currentCoccion.id_coccion ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(coccionData),
+        body: JSON.stringify(requestData),
       });
-
-      if (!res.ok) throw new Error("Error al guardar cocción");
-
-      toast.success("Cocción creada exitosamente");
+  
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Error al guardar cocción");
+      }
+  
+      toast.success(currentCoccion.id_coccion ? "Cocción actualizada" : "Cocción creada");
       setShowCoccionModal(false);
       setCurrentCoccion({});
       setCurrentOperadores([]);
+      fetchCocciones();
     } catch (error) {
-      console.error(error);
-      toast.error("Error al guardar la cocción");
+      console.error('Error al guardar:', error);
+      toast.error(error instanceof Error ? error.message : "Error al guardar la cocción");
     }
   };
 
   const handleDeleteCoccion = async () => {
-    if (!deleteCoccionId) return
+    if (!deleteCoccionId) return;
 
     try {
+      // Modificar la URL para usar query params en lugar de path params
       const res = await fetch(`/api/coccion?id_coccion=${deleteCoccionId}`, {
         method: "DELETE",
-      })
+      });
 
-      if (!res.ok) throw new Error("Error al eliminar cocción")
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Error al eliminar cocción");
+      }
 
-      toast.success("Cocción eliminada")
-      setShowDeleteCoccionDialog(false)
-      fetchCocciones()
+      toast.success("Cocción eliminada exitosamente");
+      setShowDeleteCoccionDialog(false);
+      setDeleteCoccionId(null);
+      fetchCocciones(); // Recargar la tabla
     } catch (error) {
-      toast.error("Error al eliminar cocción")
-      console.error(error)
+      console.error('Error al eliminar:', error);
+      toast.error("Error al eliminar la cocción");
     }
-  }
+  };
 
   // Funciones para operadores de cocción
   const fetchOperadores = async (coccionId: number) => {
@@ -570,38 +570,33 @@ export default function CoccionPage() {
 
   const loadCoccionOperadores = async (coccionId: number) => {
     try {
-      setLoadingOperadores(true)
-      // Usar el endpoint de cocción
-      const res = await fetch(`/api/coccion?id_coccion=${coccionId}&include_personal=true`)
+      setLoadingOperadores(true);
+      const res = await fetch(`/api/coccion?id_coccion=${coccionId}&include_personal=true`);
       
       if (!res.ok) {
-        throw new Error(`Error ${res.status}: ${res.statusText}`)
+        throw new Error(`Error ${res.status}: ${res.statusText}`);
       }
   
-      const data = await res.json()
+      const operadores = await res.json();
       
-      // Verificar si hay operadores en la respuesta
-      const operadores = data.coccion_personal || []
-      
-      // Mapear los datos asegurándose de que las relaciones existan
+      // Mapear directamente los operadores ya que vienen con las relaciones incluidas
       setCoccionOperadores(operadores.map((op: any) => ({
         id_coccion_operador: op.id_coccion_personal,
-        coccion_id_coccion: coccionId,
+        coccion_id_coccion: op.coccion_id_coccion,
         personal_id_personal: op.personal_id_personal,
         cargo_coccion_id_cargo_coccion: op.cargo_coccion_id_cargo_coccion,
-        Personal: op.personal || {},
-        CargoCocion: op.cargo_coccion || {}
-      })))
+        Personal: op.personal,
+        CargoCocion: op.cargo_coccion
+      })));
 
-      console.log('Operadores cargados:', operadores)
     } catch (error) {
-      console.error('Error al cargar operadores:', error)
-      toast.error("Error al cargar operadores de la cocción")
-      setCoccionOperadores([])
+      console.error('Error al cargar operadores:', error);
+      toast.error("Error al cargar operadores de la cocción");
+      setCoccionOperadores([]);
     } finally {
-      setLoadingOperadores(false)
+      setLoadingOperadores(false);
     }
-  }
+  };
 
   const formatDate = formatDateString
 
@@ -609,6 +604,17 @@ export default function CoccionPage() {
   const formatSemanaLabel = (fecha_inicio: string, fecha_fin: string) => {
     return formatDateRange(fecha_inicio, fecha_fin)
   }
+
+  const loadOperadoresCoccion = async (coccionId: number) => {
+    try {
+      const res = await fetch(`/api/coccion?id_coccion=${coccionId}&include_personal=true`);
+      if (!res.ok) throw new Error('Error al cargar operadores');
+      return await res.json();
+    } catch (error) {
+      console.error('Error:', error);
+      throw error;
+    }
+  };
 
   return (
     <div className="container mx-auto p-4">
@@ -684,12 +690,11 @@ export default function CoccionPage() {
                       <TableCell>{coccion.horno?.nombre || 'Horno no asignado'}</TableCell>
                       <TableCell>{formatDate(coccion.fecha_encendido)}</TableCell>
                       <TableCell>{coccion.hora_inicio || '-'}</TableCell>
-                      <TableCell>{coccion.humedad_inicial || '-'}%</TableCell>
-                      <TableCell>
+                      <TableCell>{coccion.humedad_inicial || '-'}</TableCell>                   <TableCell>
                         <Badge variant={
                           coccion.estado === "Finalizado" ? "destructive" :
-                          coccion.estado === "En Proceso" ? "default" :
-                          "secondary"
+                          coccion.estado === "En Proceso" ? "success" :
+                          "info"
                         }>
                           {coccion.estado}
                         </Badge>
@@ -710,9 +715,14 @@ export default function CoccionPage() {
                             variant="outline"
                             size="icon"
                             onClick={async () => {
-                              setSelectedCoccion(coccion)
-                              await loadCoccionOperadores(coccion.id_coccion)
-                              setShowViewModal(true)
+                              try {
+                                setSelectedCoccion(coccion);
+                                await loadCoccionOperadores(coccion.id_coccion);
+                                setShowViewModal(true);
+                              } catch (error) {
+                                console.error('Error al cargar detalles:', error);
+                                toast.error("Error al cargar detalles de la cocción");
+                              }
                             }}
                           >
                             <Users className="h-4 w-4" />
@@ -720,9 +730,32 @@ export default function CoccionPage() {
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => {
-                              setCurrentCoccion(coccion)
-                              setShowCoccionModal(true)
+                            onClick={async () => {
+                              try {
+                                const operadores = await loadOperadoresCoccion(coccion.id_coccion);
+                                
+                                // Formatear la fecha correctamente para el input date
+                                const fechaEncendido = coccion.fecha_encendido ? 
+                                  coccion.fecha_encendido.split('T')[0] : '';
+                                
+                                // Establecer los operadores actuales
+                                setCurrentOperadores(operadores.map((op: any) => ({
+                                  personal_id_personal: op.personal_id_personal,
+                                  cargo_coccion_id_cargo_coccion: op.cargo_coccion_id_cargo_coccion
+                                })));
+                                
+                                // Establecer la cocción actual con la fecha formateada
+                                setCurrentCoccion({
+                                  ...coccion,
+                                  fecha_encendido: fechaEncendido,
+                                  semana_trabajo_id_semana_trabajo: coccion.semana_laboral_id_semana_laboral 
+                                });
+                                
+                                setShowCoccionModal(true);
+                              } catch (error) {
+                                console.error('Error al cargar datos para editar:', error);
+                                toast.error("Error al cargar los datos para editar");
+                              }
                             }}
                           >
                             <Pencil className="h-4 w-4" />
@@ -760,7 +793,7 @@ export default function CoccionPage() {
         <DialogContent className="sm:max-w-[900px]">
           <DialogHeader>
             <DialogTitle>{currentCoccion.id_coccion ? "Editar Cocción" : "Nueva Cocción"}</DialogTitle>
-            <DialogDescription>Complete los datos de la cocción y presione guardar.</DialogDescription>
+            <DialogDescription>Complete los datos de la cocción y presione {currentCoccion.id_coccion ? "actualizar" : "guardar"}.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-6">
             {/* Columna izquierda: Datos de cocción */}
@@ -913,13 +946,26 @@ export default function CoccionPage() {
                       </div>
                       <div className="w-[200px]">
                         <Select
-                          value={operadorActual?.cargo_coccion_id_cargo_coccion?.toString() || ""}
-                          onValueChange={(value) => handleCargoChange(persona.id_personal, Number(value))}
+                          value={operadorActual?.cargo_coccion_id_cargo_coccion?.toString() || "0"} // Cambiado de "" a "0"
+                          onValueChange={(value) => {
+                            // Si el valor es "0", significa deseleccionar
+                            const numericValue = Number(value);
+                            if (numericValue === 0) {
+                              // Remover el operador si existe
+                              const newOperadores = currentOperadores.filter(
+                                op => op.personal_id_personal !== persona.id_personal
+                              );
+                              setCurrentOperadores(newOperadores);
+                            } else {
+                              handleCargoChange(persona.id_personal, numericValue);
+                            }
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Seleccionar cargo" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="0">Seleccionar cargo</SelectItem> {/* Cambiado de "" a "0" */}
                             {cargos
                               .filter(c => c.id_horno === currentCoccion.horno_id_horno)
                               .map((c) => (
@@ -940,7 +986,9 @@ export default function CoccionPage() {
             <Button variant="outline" onClick={() => setShowCoccionModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveCoccion}>Guardar</Button>
+            <Button onClick={handleSaveCoccion}>
+              {currentCoccion.id_coccion ? "Actualizar" : "Guardar"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1146,7 +1194,7 @@ export default function CoccionPage() {
                               setShowHornoModal(true);
                             }}
                           >
-                              <Pencil className="h-4 w-4" />
+                            <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="outline"
@@ -1225,7 +1273,7 @@ export default function CoccionPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Agregar el modal de visualización */}
+      {/* Modal de visualización */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>
@@ -1253,8 +1301,8 @@ export default function CoccionPage() {
                   <Label className="text-muted-foreground">Estado</Label>
                   <Badge variant={
                     selectedCoccion.estado === "Finalizado" ? "destructive" :
-                    selectedCoccion.estado === "En Proceso" ? "default" :
-                    "secondary"
+                    selectedCoccion.estado === "En Proceso" ? "success" :
+                    "info"
                   } className="text-base">
                     {selectedCoccion.estado}
                   </Badge>
@@ -1321,8 +1369,6 @@ export default function CoccionPage() {
           )}
         </DialogContent>
       </Dialog>
-
     </div>
   )
 }
-
