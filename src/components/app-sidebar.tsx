@@ -63,11 +63,10 @@ const data = {
           title: "Productos",
           url: "/admin/gestion/productos",
         },
-        // {
-        //   title: "Clientes",
-        //   url: "/admin/gestion/clientes",
-        // },
-        
+        {
+          title: "Clientes",
+          url: "/admin/gestion/clientes",
+        },        
       ],
     },
     {

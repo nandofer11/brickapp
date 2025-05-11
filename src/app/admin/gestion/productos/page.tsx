@@ -11,8 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, 
-         AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import {
+    AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 
 interface Categoria {
@@ -40,7 +42,7 @@ export default function ProductosPage() {
     const [loading, setLoading] = useState(true);
     const [productos, setProductos] = useState<Producto[]>([]);
     const [categorias, setCategorias] = useState<Categoria[]>([]);
-    
+
     // Estados para modales y datos
     const [showProductoModal, setShowProductoModal] = useState(false);
     const [showCategoriaModal, setShowCategoriaModal] = useState(false);
@@ -95,7 +97,7 @@ export default function ProductosPage() {
 
             if (!res.ok) throw new Error("Error al guardar categoría");
 
-            toast.success(currentCategoria.id_categoria ? 
+            toast.success(currentCategoria.id_categoria ?
                 "Categoría actualizada" : "Categoría creada");
             setCurrentCategoria({}); // Solo limpiamos el formulario
             fetchCategorias(); // Actualizamos la tabla
@@ -139,9 +141,11 @@ export default function ProductosPage() {
                 precio_unitario: Number(currentProducto.precio_unitario),
                 peso: Number(currentProducto.peso),
                 dimensiones: currentProducto.dimensiones?.trim(),
-                estado: Number(currentProducto.estado || 1),
+                estado: Number(currentProducto.estado), // Convertir boolean a número
                 descripcion: currentProducto.descripcion
             };
+
+            console.log('Datos a enviar:', productoData); // Para debug
 
             const method = currentProducto.id_producto ? "PUT" : "POST";
             const res = await fetch("/api/productos", {
@@ -155,7 +159,7 @@ export default function ProductosPage() {
                 throw new Error(error.message || "Error al guardar producto");
             }
 
-            toast.success(currentProducto.id_producto ? 
+            toast.success(currentProducto.id_producto ?
                 "Producto actualizado" : "Producto creado");
             setShowProductoModal(false);
             setCurrentProducto({});
@@ -167,10 +171,16 @@ export default function ProductosPage() {
     };
 
     const handleEdit = (producto: Producto) => {
+        // Asegurarnos de convertir correctamente los tipos de datos
         setCurrentProducto({
-            ...producto,
-            categoria_id_categoria: producto.categoria?.id_categoria,
-            estado: Boolean(producto.estado)
+            id_producto: producto.id_producto,
+            categoria_id_categoria: producto.categoria.id_categoria,
+            nombre: producto.nombre,
+            descripcion: producto.descripcion || undefined,
+            precio_unitario: Number(producto.precio_unitario),
+            peso: Number(producto.peso),
+            dimensiones: producto.dimensiones,
+            estado: Boolean(producto.estado) // Convertir número a boolean para el select
         });
         setShowProductoModal(true);
     };
@@ -187,7 +197,7 @@ export default function ProductosPage() {
             toast.success(`${deleteType === 'categoria' ? 'Categoría' : 'Producto'} eliminado`);
             setShowDeleteDialog(false);
             setDeleteId(null);
-            
+
             // Si es categoría, solo actualizamos la tabla de categorías y mantenemos el modal abierto
             if (deleteType === 'categoria') {
                 fetchCategorias();
@@ -204,9 +214,12 @@ export default function ProductosPage() {
         <div className="container mx-auto p-4">
             <Card>
                 <CardHeader>
-                    <CardTitle>Gestión de Productos</CardTitle>
+                    <CardTitle className="text-2xl font-bold">Gestión de Productos</CardTitle>
                 </CardHeader>
                 <CardContent>
+                    <p className="mb-4 text-muted-foreground">
+                        En este módulo puede gestionar las categorias y los productos.
+                    </p>
                     <div className="flex gap-4 mb-6">
                         <Button onClick={() => setShowCategoriaModal(true)}>
                             <PlusCircle className="mr-2 h-4 w-4" />
@@ -250,7 +263,7 @@ export default function ProductosPage() {
                                             <TableCell>{producto.peso} Kg</TableCell>
                                             <TableCell>{producto.dimensiones}</TableCell>
                                             <TableCell>
-                                                <Badge variant={producto.estado ? "default" : "destructive"}>
+                                                <Badge variant={producto.estado ? "success" : "destructive"}>
                                                     {producto.estado ? "Disponible" : "No disponible"}
                                                 </Badge>
                                             </TableCell>
@@ -292,7 +305,7 @@ export default function ProductosPage() {
                     <DialogHeader>
                         <DialogTitle>Gestión de Categorías</DialogTitle>
                     </DialogHeader>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6"> {/* Aumentado el gap */}
                         {/* Formulario de Categoría */}
                         <div className="space-y-4 bg-muted p-4 rounded-lg"> {/* Añadido fondo y padding */}
@@ -476,11 +489,11 @@ export default function ProductosPage() {
                             <div className="space-y-2">
                                 <Label htmlFor="estado">Estado</Label>
                                 <Select
-                                    value={currentProducto.estado?.toString()}
+                                    value={String(currentProducto.estado)}
                                     onValueChange={(value) =>
                                         setCurrentProducto({
                                             ...currentProducto,
-                                            estado: value === "true",
+                                            estado: value === "true"
                                         })
                                     }
                                 >
