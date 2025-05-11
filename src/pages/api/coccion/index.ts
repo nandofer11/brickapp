@@ -30,12 +30,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Si solo se solicita la cocción
         if (id_coccion) {
-          const coccion = await coccionService.findById(Number(id_coccion));
+          const coccion = await prisma.coccion.findUnique({
+            where: { id_coccion: Number(id_coccion) },
+            include: {
+              horno: true,
+              semana_laboral: true,
+              coccion_personal: {
+                include: {
+                  personal: true,
+                  cargo_coccion: true
+                }
+              }
+            }
+          });
           return res.status(200).json(coccion);
         }
 
         // Listar todas las cocciones
-        const cocciones = await coccionService.findAllByEmpresa(req.query.id_empresa as unknown as number);
+        const cocciones = await prisma.coccion.findMany({
+          where: {
+            id_empresa: req.query.id_empresa as unknown as number
+          },
+          include: {
+            horno: true,
+            semana_laboral: true
+          },
+          orderBy: {
+            id_coccion: 'desc'
+          }
+        });
         return res.status(200).json(cocciones);
       } catch (error) {
         console.error('Error en GET coccion:', error);
@@ -124,11 +147,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     case "DELETE":
       try {
-        const { id } = req.query;
-        await coccionService.deleteCoccion(Number(id), Number(req.query.id_empresa));
-        return res.status(204).end();
-      } catch (error: any) {
-        return res.status(500).json({ message: error.message });
+        const id_coccion = Number(req.query.id_coccion);
+        
+        if (!id_coccion || isNaN(id_coccion)) {
+            return res.status(400).json({ message: "ID de cocción inválido" });
+        }
+
+        const result = await coccionService.deleteCoccionCompleta(id_coccion);
+        return res.status(200).json(result);
+      } catch (error) {
+        console.error('Error al eliminar:', error);
+        return res.status(500).json({ 
+            message: error instanceof Error ? error.message : "Error al eliminar cocción" 
+        });
       }
 
     default:

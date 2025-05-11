@@ -10,19 +10,39 @@ export class CoccionRepository extends BaseRepository {
     async findAllByEmpresa(id_empresa: number) {
         return prisma.coccion.findMany({
             where: { id_empresa },
-            orderBy: { id_coccion: 'asc' }
+            orderBy: { id_coccion: 'desc' },
+            include: {
+                horno: {
+                    select: {
+                        id_horno: true,
+                        prefijo: true,
+                        nombre: true,
+                        cantidad_humeadores: true,
+                        cantidad_quemadores: true
+                    }
+                },
+                semana_laboral: true
+            }
         });
     }
 
     async findById(id_coccion: number) {
         return prisma.coccion.findUnique({
-            where: { id_coccion }
+            where: { id_coccion },
+            include: {
+                horno: true,
+                semana_laboral: true
+            }
         });
-    };
+    }
 
     async createCoccion(data: Prisma.coccionCreateInput) {
         return prisma.coccion.create({
-            data
+            data,
+            include: {
+                horno: true,
+                semana_laboral: true
+            }
         });
     }
 
@@ -32,6 +52,10 @@ export class CoccionRepository extends BaseRepository {
         return await prisma.coccion.update({
             where: { id_coccion },
             data: dataSinId,
+            include: {
+                horno: true,
+                semana_laboral: true
+            }
         });
     }
 
@@ -60,7 +84,15 @@ export class CoccionRepository extends BaseRepository {
         return await prisma.coccion.findUnique({
             where: { id_coccion },
             include: {
-                horno: true,
+                horno: {
+                    select: {
+                        id_horno: true,
+                        prefijo: true,
+                        nombre: true,
+                        cantidad_humeadores: true,
+                        cantidad_quemadores: true
+                    }
+                },
                 semana_laboral: true,
                 coccion_personal: {
                     include: {
@@ -73,7 +105,10 @@ export class CoccionRepository extends BaseRepository {
     }
 
     async deleteCoccionCompleta(id_coccion: number) {
-        // Usar transacción para eliminar cocción y sus relaciones
+        if (!id_coccion || typeof id_coccion !== "number") {
+            throw new Error("id_coccion es requerido y debe ser un número");
+        }
+
         return await prisma.$transaction(async (prisma) => {
             // Primero eliminar registros de coccion_personal
             await prisma.coccion_personal.deleteMany({
@@ -118,7 +153,17 @@ export class CoccionRepository extends BaseRepository {
             // Actualizar cocción
             const coccionActualizada = await prisma.coccion.update({
                 where: { id_coccion },
-                data: dataToUpdate
+                data: dataToUpdate,
+                include: {
+                    horno: true,
+                    semana_laboral: true,
+                    coccion_personal: {
+                        include: {
+                            personal: true,
+                            cargo_coccion: true
+                        }
+                    }
+                }
             });
 
             // Crear nuevos operadores
@@ -131,7 +176,20 @@ export class CoccionRepository extends BaseRepository {
                 });
             }
 
-            return coccionActualizada;
+            // Retornar cocción actualizada con todas sus relaciones
+            return prisma.coccion.findUnique({
+                where: { id_coccion },
+                include: {
+                    horno: true,
+                    semana_laboral: true,
+                    coccion_personal: {
+                        include: {
+                            personal: true,
+                            cargo_coccion: true
+                        }
+                    }
+                }
+            });
         });
     }
 
