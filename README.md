@@ -1,3 +1,8 @@
+Avance de un proyecto personal:
+
+
+![Captura de pantalla 2025-05-12 121520](https://github.com/user-attachments/assets/d7f04c9a-feee-46a4-9b5e-6208792f1191)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
