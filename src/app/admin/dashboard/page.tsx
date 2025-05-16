@@ -57,11 +57,16 @@ export default function Page() {
     setIsLoading(true);
     try {
       const response = await fetch('/api/semana_laboral');
+      if (!response.ok) {
+        throw new Error('Error al cargar los datos');
+      }
       const data = await response.json();
-      setSemanasLaborales(data);
+      // Asegurarse de que data sea un array
+      setSemanasLaborales(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error al cargar semanas laborales:', error);
       toast.error('Error al cargar semanas laborales');
+      setSemanasLaborales([]); // Asegurarse de tener un array vacío en caso de error
     } finally {
       setIsLoading(false);
     }

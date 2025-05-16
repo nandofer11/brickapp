@@ -6,8 +6,8 @@ import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
-import { PlusCircle, Pencil, Trash2, Check, Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
-import { toast } from "sonner"
+import { AlertTriangle, PlusCircle, Pencil, Trash2, Check, Search, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import { toast } from "react-toastify";
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,6 +48,8 @@ interface Personal {
   fecha_ingreso: string
   estado: number
   id_empresa: number
+  ruc: string | null;
+  razon_social: string | null;
 }
 
 export default function PersonalPage() {
@@ -64,6 +66,7 @@ export default function PersonalPage() {
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [loading, setLoading] = useState<boolean>(true)
   const [validatingDni, setValidatingDni] = useState<boolean>(false)
+  const [validatingRuc, setValidatingRuc] = useState<boolean>(false)
 
   // Paginación
   const [currentPage, setCurrentPage] = useState(1)
@@ -98,111 +101,139 @@ export default function PersonalPage() {
   }
 
   const handleSave = async () => {
-    if (!currentPersonal) return
+    if (!currentPersonal) return;
 
     try {
-      // 1. Validar DNI vacío
+      // Validar DNI
       if (!currentPersonal.dni?.trim()) {
         toast.error("El DNI es obligatorio");
-        setCurrentPersonal(prev => ({ ...prev!, dni: "" }));
         document.getElementById("dni")?.focus();
         return;
       }
 
-      // 2. Validar DNI 8 dígitos
       if (currentPersonal.dni.length !== 8 || isNaN(Number(currentPersonal.dni))) {
         toast.error("El DNI debe tener 8 dígitos numéricos");
-        setCurrentPersonal(prev => ({ ...prev!, dni: "" }));
         document.getElementById("dni")?.focus();
         return;
       }
 
-      // 3. Validar nombre completo
+      // Validar nombre completo
       if (!currentPersonal.nombre_completo?.trim()) {
         toast.error("El nombre completo es obligatorio");
         document.getElementById("nombre")?.focus();
         return;
       }
 
-      // 4. Validar fecha de nacimiento
+      // Si existe RUC, validar que sea correcto y coincida con el nombre
+      if (currentPersonal.ruc?.trim()) {
+        // Validar formato del RUC
+        if (currentPersonal.ruc.length !== 11 || isNaN(Number(currentPersonal.ruc))) {
+          toast.error("El RUC debe tener 11 dígitos numéricos");
+          document.getElementById("ruc")?.focus();
+          return;
+        }
+
+        // Validar que el RUC tenga razón social
+        if (!currentPersonal.razon_social?.trim()) {
+          toast.error("Debe validar el RUC ingresado");
+          document.getElementById("ruc")?.focus();
+          return;
+        }
+
+        // Validar que el nombre del DNI coincida con la razón social del RUC
+        const nombreDNI = currentPersonal.nombre_completo.trim().toLowerCase();
+        const nombreRUC = currentPersonal.razon_social.trim().toLowerCase();
+
+        if (nombreDNI !== nombreRUC) {
+          toast.error("El nombre del DNI no coincide con la razón social del RUC");
+          return;
+        }
+      }
+
+      // Validar ciudad
+      if (!currentPersonal.ciudad?.trim()) {
+        toast.error("La ciudad es obligatoria");
+        document.getElementById("ciudad")?.focus();
+        return;
+      }
+
+      // Validar pago diario
+      if (!currentPersonal.pago_diario_normal || currentPersonal.pago_diario_normal <= 0) {
+        toast.error("El pago diario normal debe ser mayor a 0");
+        document.getElementById("pago_normal")?.focus();
+        return;
+      }
+
+      // Validar fechas
       if (!currentPersonal.fecha_nacimiento) {
         toast.error("La fecha de nacimiento es obligatoria");
         document.getElementById("fecha_nacimiento")?.focus();
         return;
       }
 
-      // 5. Validar ciudad
-      if (!currentPersonal.ciudad?.trim()) {
-        toast.error("La ciudad es obligatoria");
-        setCurrentPersonal(prev => ({ ...prev!, ciudad: "" }));
-        document.getElementById("ciudad")?.focus();
-        return;
-      }
-
-      // 6. Validar pago diario normal
-      if (!currentPersonal.pago_diario_normal || currentPersonal.pago_diario_normal <= 0) {
-        toast.error("El pago diario normal debe ser mayor a 0");
-        setCurrentPersonal(prev => ({ ...prev!, pago_diario_normal: undefined }));
-        document.getElementById("pago_normal")?.focus();
-        return;
-      }
-
-      // 7. Validar fecha de ingreso
       if (!currentPersonal.fecha_ingreso) {
         toast.error("La fecha de ingreso es obligatoria");
         document.getElementById("fecha_ingreso")?.focus();
         return;
       }
 
-      // 8. Validar estado
+      // Validar estado
       if (currentPersonal.estado === undefined || currentPersonal.estado === null) {
-        toast.error("Debe seleccionar un estado");
+        toast.error("El estado es obligatorio");
         document.getElementById("estado")?.focus();
         return;
       }
 
-      // Si pasa todas las validaciones, continuar con el guardado
       const method = currentPersonal.id_personal ? "PUT" : "POST";
 
-      // Formatear fechas al formato ISO-8601 con hora
+      // Verificar DNI duplicado solo para nuevos registros
+      if (method === 'POST') {
+        const existingPersonal = personalList.find(p => p.dni === currentPersonal.dni);
+        if (existingPersonal) {
+          toast.error("Ya existe un personal registrado con este DNI");
+          return;
+        }
+      }
+
       const formattedData = {
         ...currentPersonal,
         fecha_nacimiento: currentPersonal.fecha_nacimiento
-          ? new Date(currentPersonal.fecha_nacimiento).toISOString()
+          ? new Date(currentPersonal.fecha_nacimiento + 'T00:00:00').toISOString()
           : null,
         fecha_ingreso: currentPersonal.fecha_ingreso
-          ? new Date(currentPersonal.fecha_ingreso).toISOString()
+          ? new Date(currentPersonal.fecha_ingreso + 'T00:00:00').toISOString()
           : null,
         pago_diario_reducido: currentPersonal.pago_diario_reducido || null,
         id_empresa: id_empresa,
       };
 
-      console.log("Datos a enviar:", formattedData);
-
       const res = await fetch("/api/personal", {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formattedData),
-      })
+      });
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.message || "Error en la operación")
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Error en la operación");
       }
 
-      toast.success("Personal registrado con éxito.", {
-        className: "bg-green-500 text-white", // Clase personalizada
-      })
-      setShowModal(false)
-      fetchPersonal()
+      toast.success(
+        currentPersonal.id_personal
+          ? "Personal actualizado correctamente"
+          : "Personal registrado correctamente"
+      );
+
+      setShowModal(false);
+      await fetchPersonal();
     } catch (error) {
       if (error instanceof Error) {
-        toast.error(error.message)
+        toast.error(error.message);
       } else {
-        toast.error("Error desconocido al guardar los datos.")
+        toast.error("Error al guardar los datos");
       }
     }
-  }
+  };
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -223,7 +254,7 @@ export default function PersonalPage() {
   const validateDNI = async () => {
     if (!currentPersonal?.dni) {
       toast.error("Ingrese un DNI");
-      setCurrentPersonal((prev) => ({ ...prev!, dni: ""}));
+      setCurrentPersonal((prev) => ({ ...prev!, dni: "" }));
       return;
     }
 
@@ -235,10 +266,13 @@ export default function PersonalPage() {
 
     try {
       setValidatingDni(true);
-      const res = await fetch("/api/validar-dni", {
+      const res = await fetch("/api/validar-identidad", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dni: currentPersonal.dni , id_empresa: currentPersonal.id_empresa }),
+        body: JSON.stringify({
+          tipo: "personal", // <- el modelo al que pertenece
+          numero: currentPersonal.dni,
+        }),
       });
 
       if (!res.ok) {
@@ -249,7 +283,7 @@ export default function PersonalPage() {
       const data = await res.json();
 
       if (data.nombres && data.apellido_paterno && data.apellido_materno) {
-        const nombreCompleto = `${data.nombres} ${data.apellido_paterno} ${data.apellido_materno}`;
+        const nombreCompleto = `${data.apellido_paterno} ${data.apellido_materno} ${data.nombres} `;
         setCurrentPersonal((prev) => ({ ...prev!, nombre_completo: nombreCompleto }));
         toast.success("DNI validado correctamente.");
       } else {
@@ -261,11 +295,80 @@ export default function PersonalPage() {
       if (error instanceof Error) {
         toast.error(error.message);
       } else {
-        toast.error("Error desconocido al validar el DNI.");
+        toast.error("Error desconocido.");
       }
     } finally {
       setValidatingDni(false);
     }
+  }
+
+  const validateRUC = async () => {
+    if (!currentPersonal?.ruc) {
+      toast.error("Ingrese un RUC");
+      setCurrentPersonal((prev) => ({ ...prev!, ruc: "" }));
+      return;
+    }
+
+    if (currentPersonal.ruc.length !== 11 || isNaN(Number(currentPersonal.ruc))) {
+      toast.error("El RUC debe tener 11 dígitos numéricos.");
+      setCurrentPersonal((prev) => ({ ...prev!, ruc: "" }));
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/validar-identidad", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "personal", // <- el modelo al que pertenece el RUC
+          numero: currentPersonal.ruc,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.message || "Error en la validación del RUC");
+      }
+
+      const data = await res.json();
+
+      if (data.razon_social) {
+        setCurrentPersonal((prev) => ({
+          ...prev!,
+          razon_social: data.razon_social,
+        }));
+        toast.success("RUC validado correctamente.");
+      } else {
+        toast.error("RUC no válido o no encontrado.");
+        setCurrentPersonal((prev) => ({ ...prev!, ruc: "" }));
+      }
+    } catch (error) {
+      setCurrentPersonal((prev) => ({ ...prev!, ruc: "" }));
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Error desconocido al validar el RUC.");
+      }
+    }
+  };
+
+  //Llimpiar campos del formulario 
+  const handleClear = () => {
+    setCurrentPersonal({
+      id_empresa: id_empresa,
+      dni: "",
+      nombre_completo: "",
+      fecha_nacimiento: "",
+      ciudad: "",
+      direccion: "",
+      celular: "",
+      pago_diario_normal: 0,
+      pago_diario_reducido: 0,
+      fecha_ingreso: "",
+      estado: 1,
+      ruc: "",
+      razon_social: ""
+    })
   }
 
   const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -285,9 +388,12 @@ export default function PersonalPage() {
 
   const formatDate = (dateString: string) => {
     try {
-      return format(parseISO(dateString), "dd/MM/yyyy", { locale: es })
+      const date = new Date(dateString);
+      // Ajustar a la zona horaria local
+      date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+      return format(date, "dd/MM/yyyy", { locale: es });
     } catch (error) {
-      return dateString
+      return dateString;
     }
   }
 
@@ -308,28 +414,31 @@ export default function PersonalPage() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-2xl font-bold">Gestión de Personal</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Administre el personal de la empresa.
+          </p>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <Button
                 onClick={() => {
                   setCurrentPersonal({ id_empresa: id_empresa })
                   setShowModal(true)
                 }}
-                className="cursor-pointer"
+                className="self-start md:self-auto"
               >
                 <PlusCircle className="mr-2 h-4 w-4" /> Registrar Personal
               </Button>
 
-              <div className="relative w-full max-w-sm">
+              <div className="relative w-full md:w-[350px]">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
                   placeholder="Buscar por DNI o Nombre"
                   value={searchTerm}
                   onChange={handleSearch}
-                  className="pl-8"
+                  className="pl-8 w-full"
                 />
               </div>
             </div>
@@ -344,78 +453,84 @@ export default function PersonalPage() {
               <div className="text-center py-8 text-muted-foreground">No hay registros.</div>
             ) : (
               <>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>DNI</TableHead>
-                        <TableHead>Nombre completo</TableHead>
-                        <TableHead>F. Nac.</TableHead>
-                        <TableHead>Ciudad</TableHead>
-                        <TableHead>Dirección</TableHead>
-                        <TableHead>Celular</TableHead>
-                        <TableHead>Pago Diario</TableHead>
-                        <TableHead>Pago Red.</TableHead>
-                        <TableHead>F. Ingreso</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {currentRecords.map((p) => (
-                        <TableRow key={p.id_personal}>
-                          <TableCell>{p.dni}</TableCell>
-                          <TableCell>{p.nombre_completo}</TableCell>
-                          <TableCell>{formatDate(p.fecha_nacimiento)}</TableCell>
-                          <TableCell>{p.ciudad}</TableCell>
-                          <TableCell>{p.direccion ?? "N/A"}</TableCell>
-                          <TableCell>{p.celular ?? "N/A"}</TableCell>
-                          <TableCell>S/. {p.pago_diario_normal}</TableCell>
-                          <TableCell>{p.pago_diario_reducido ? `S/. ${p.pago_diario_reducido}` : "-"}</TableCell>
-                          <TableCell>{formatDate(p.fecha_ingreso)}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={p.estado === 1 ? "default" : "destructive"}
-                              className={p.estado === 1 ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}
-                            >
-                              {p.estado === 1 ? "Activo" : "Inactivo"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => {
-                                  setCurrentPersonal({
-                                    ...p,
-                                    fecha_nacimiento: p.fecha_nacimiento ? p.fecha_nacimiento.split("T")[0] : "",
-                                    fecha_ingreso: p.fecha_ingreso ? p.fecha_ingreso.split("T")[0] : "",
-                                  });
-                                  setShowModal(true);
-                                }}
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Editar</span>
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  setDeleteId(p.id_personal);
-                                  setShowConfirmModal(true);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Eliminar</span>
-                              </Button>
-                            </div>
-                          </TableCell>
+                <div className="rounded-md border">
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-full">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-24 ">DNI</TableHead>
+                          <TableHead className="w-24 ">RUC</TableHead>
+                          <TableHead className="w-48 ">Nombre completo</TableHead>
+                          <TableHead className="w-28 ">F. Nac.</TableHead>
+                          <TableHead className="w-28 ">Ciudad</TableHead>
+                          <TableHead className="w-40 ">Dirección</TableHead>
+                          <TableHead className="w-28 ">Celular</TableHead>
+                          <TableHead className="w-28 ">Pago Diario</TableHead>
+                          <TableHead className="w-28 ">Pago Red.</TableHead>
+                          <TableHead className="w-28 ">F. Ingreso</TableHead>
+                          <TableHead className="w-24 ">Estado</TableHead>
+                          <TableHead className="w-24 text-right ">Acciones</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {currentRecords.map((p) => (
+                          <TableRow key={p.id_personal}>
+                            <TableCell>{p.dni}</TableCell>
+                            <TableCell>{p.ruc ?? "-"}</TableCell>
+                            <TableCell>{p.nombre_completo}</TableCell>
+                            <TableCell>{formatDate(p.fecha_nacimiento)}</TableCell>
+                            <TableCell>{p.ciudad}</TableCell>
+                            <TableCell>{p.direccion ?? "-"}</TableCell>
+                            <TableCell>{p.celular ?? "-"}</TableCell>
+                            <TableCell>S/. {p.pago_diario_normal}</TableCell>
+                            <TableCell>{p.pago_diario_reducido ? `S/. ${p.pago_diario_reducido}` : "-"}</TableCell>
+                            <TableCell>{formatDate(p.fecha_ingreso)}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={p.estado === 1 ? "default" : "destructive"}
+                                className={p.estado === 1
+                                  ? "bg-green-100 text-green-800 hover:bg-green-100"
+                                  : "bg-red-50 text-red-600 hover:bg-red-50"}
+                              >
+                                {p.estado === 1 ? "Activo" : "Inactivo"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => {
+                                    setCurrentPersonal({
+                                      ...p,
+                                      fecha_nacimiento: p.fecha_nacimiento ? p.fecha_nacimiento.split("T")[0] : "",
+                                      fecha_ingreso: p.fecha_ingreso ? p.fecha_ingreso.split("T")[0] : "",
+                                    });
+                                    setShowModal(true);
+                                  }}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  <span className="sr-only">Editar</span>
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="text-destructive hover:text-destructive"
+                                  onClick={() => {
+                                    setDeleteId(p.id_personal);
+                                    setShowConfirmModal(true);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  <span className="sr-only">Eliminar</span>
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
 
                 {/* Paginación */}
@@ -452,156 +567,235 @@ export default function PersonalPage() {
             <DialogDescription>Complete los datos del personal y presione guardar cuando termine.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid gap-3 py-3"> {/* Reducido de gap-4 py-4 */}
+            {/* Sección DNI y RUC */}
+            <div className="flex flex-col space-y-3"> {/* Reducido de space-y-4 */}
+              {/* Campo DNI y Nombre */}
               <div className="space-y-2">
                 <Label htmlFor="dni">DNI</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col md:flex-row gap-2">
+                  <div className="flex w-full md:w-[200px] gap-2">
+                    <Input
+                      id="dni"
+                      className="w-full"
+                      maxLength={8}
+                      value={currentPersonal?.dni ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "")
+                        setCurrentPersonal({ ...currentPersonal!, dni: value })
+                      }}
+                      disabled={!!currentPersonal?.id_personal}
+                    />
+                    <Button
+                      onClick={validateDNI}
+                      disabled={validatingDni || !!currentPersonal?.id_personal}
+                      size="icon"
+                      className=""
+                    >
+                      {validatingDni ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                   <Input
-                    id="dni"
-                    maxLength={8}
-                    value={currentPersonal?.dni ?? ""}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "")
-                      setCurrentPersonal({ ...currentPersonal!, dni: value })
-                    }}
+                    id="nombre"
+                    className="w-full md:flex-1"
+                    value={currentPersonal?.nombre_completo ?? ""}
+                    disabled
+                    placeholder="Nombre completo"
                   />
-                  <Button onClick={validateDNI} disabled={validatingDni} className="whitespace-nowrap">
-                    {validatingDni ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Check className="h-4 w-4 mr-2" />
-                    )}
-                    Validar
-                  </Button>
                 </div>
               </div>
 
+              {/* Campo RUC y Razón Social */}
               <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre Completo</Label>
-                <Input id="nombre" value={currentPersonal?.nombre_completo ?? ""} disabled />
+                <Label htmlFor="ruc">RUC</Label>
+                <div className="flex flex-col md:flex-row gap-2">
+                  <div className="flex w-full md:w-[200px] gap-2">
+                    <Input
+                      id="ruc"
+                      className="w-full"
+                      maxLength={11}
+                      value={currentPersonal?.ruc ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "")
+                        setCurrentPersonal({ ...currentPersonal!, ruc: value })
+                      }}
+                      disabled={!!currentPersonal?.id_personal && !!currentPersonal?.ruc}
+                    />
+                    <Button
+                      onClick={validateRUC}
+                      size="icon"
+                      disabled={validatingRuc || (!!currentPersonal?.id_personal && !!currentPersonal?.ruc)}
+                      className=""
+                    >
+                      {validatingRuc ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                  <Input
+                    id="razon_social"
+                    className="w-full md:flex-1"
+                    value={currentPersonal?.razon_social ?? ""}
+                    disabled
+                    placeholder="Razón social"
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="ciudad">Ciudad</Label>
-                <Input
-                  id="ciudad"
-                  value={currentPersonal?.ciudad ?? ""}
-                  onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, ciudad: e.target.value }))}
-                />
+            {/* Campos del formulario en dos columnas */}
+            <div className="flex flex-col space-y-3"> {/* Reducido de space-y-4 */}
+              {/* Fila: Ciudad y Dirección */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="ciudad">Ciudad</Label>
+                  <Input
+                    id="ciudad"
+                    value={currentPersonal?.ciudad ?? ""}
+                    onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, ciudad: e.target.value }))}
+                  />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="direccion">Dirección</Label>
+                  <Input
+                    id="direccion"
+                    value={currentPersonal?.direccion ?? ""}
+                    onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, direccion: e.target.value }))}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="direccion">Dirección</Label>
-                <Input
-                  id="direccion"
-                  value={currentPersonal?.direccion ?? ""}
-                  onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, direccion: e.target.value }))}
-                />
+              {/* Fila: Fecha Nacimiento y Celular */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="fecha_nacimiento">Fecha de Nacimiento</Label>
+                  <Input
+                    id="fecha_nacimiento"
+                    type="date"
+                    value={currentPersonal?.fecha_nacimiento ?? ""}
+                    onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, fecha_nacimiento: e.target.value }))}
+                  />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="celular">Celular</Label>
+                  <Input
+                    id="celular"
+                    maxLength={9}
+                    value={currentPersonal?.celular ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "")
+                      setCurrentPersonal((prev) => ({ ...prev!, celular: value }))
+                    }}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="fecha_nacimiento">Fecha de Nacimiento</Label>
-                <Input
-                  id="fecha_nacimiento"
-                  type="date"
-                  value={currentPersonal?.fecha_nacimiento ?? ""}
-                  onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, fecha_nacimiento: e.target.value }))}
-                />
+              {/* Fila: Pagos */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="pago_normal">Pago Diario Normal (S/.)</Label>
+                  <Input
+                    id="pago_normal"
+                    type="number"
+                    value={currentPersonal?.pago_diario_normal ?? ""}
+                    onChange={(e) =>
+                      setCurrentPersonal((prev) => ({ ...prev!, pago_diario_normal: Number(e.target.value) }))
+                    }
+                  />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="pago_reducido">Pago Diario Reducido (S/.)</Label>
+                  <Input
+                    id="pago_reducido"
+                    type="number"
+                    value={currentPersonal?.pago_diario_reducido ?? ""}
+                    onChange={(e) =>
+                      setCurrentPersonal((prev) => ({ ...prev!, pago_diario_reducido: Number(e.target.value) }))
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Fila: Fecha Ingreso y Estado */}
+              <div className="flex flex-col md:flex-row gap-3"> {/* Reducido de gap-4 */}
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="fecha_ingreso">Fecha de Ingreso</Label>
+                  <Input
+                    id="fecha_ingreso"
+                    type="date"
+                    value={currentPersonal?.fecha_ingreso ?? ""}
+                    onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, fecha_ingreso: e.target.value }))}
+                  />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="estado">Estado</Label>
+                  <Select
+                    value={currentPersonal?.estado?.toString() ?? ""}
+                    onValueChange={(value) => setCurrentPersonal((prev) => ({ ...prev!, estado: Number(value) }))}>
+                    <SelectTrigger id="estado" className="w-full h-10"> {/* Añadido w-full y h-10 */}
+                      <SelectValue placeholder="Seleccionar estado" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Activo</SelectItem>
+                      <SelectItem value="0">Inactivo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="celular">Celular</Label>
-                <Input
-                  id="celular"
-                  maxLength={9}
-                  value={currentPersonal?.celular ?? ""}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, "")
-                    setCurrentPersonal((prev) => ({ ...prev!, celular: value }))
-                  }}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="pago_normal">Pago Diario Normal (S/.)</Label>
-                <Input
-                  id="pago_normal"
-                  type="number"
-                  value={currentPersonal?.pago_diario_normal ?? ""}
-                  onChange={(e) =>
-                    setCurrentPersonal((prev) => ({ ...prev!, pago_diario_normal: Number(e.target.value) }))
-                  }
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="pago_reducido">Pago Diario Reducido (S/.)</Label>
-                <Input
-                  id="pago_reducido"
-                  type="number"
-                  value={currentPersonal?.pago_diario_reducido ?? ""}
-                  onChange={(e) =>
-                    setCurrentPersonal((prev) => ({ ...prev!, pago_diario_reducido: Number(e.target.value) }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fecha_ingreso">Fecha de Ingreso</Label>
-                <Input
-                  id="fecha_ingreso"
-                  type="date"
-                  value={currentPersonal?.fecha_ingreso ?? ""}
-                  onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, fecha_ingreso: e.target.value }))}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="estado">Estado</Label>
-                <Select
-                  value={currentPersonal?.estado?.toString() ?? ""}
-                  onValueChange={(value) => setCurrentPersonal((prev) => ({ ...prev!, estado: Number(value) }))}
-                >
-                  <SelectTrigger id="estado">
-                    <SelectValue placeholder="Seleccionar estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">Activo</SelectItem>
-                    <SelectItem value="0">Inactivo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
           </div>
 
           <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => setShowModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave}>Guardar</Button>
+            <Button
+              variant="secondary"
+              onClick={handleClear}
+              disabled={!!currentPersonal?.id_personal} // Deshabilitar en modo edición
+            >
+              Limpiar
+            </Button>
+
+            <Button onClick={handleSave}>
+              {currentPersonal?.id_personal ? "Actualizar" : "Guardar"}
+            </Button>
+
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Confirmación de Eliminación */}
       <AlertDialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Eliminación</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de que deseas eliminar este personal? Esta acción no se puede deshacer.
-            </AlertDialogDescription>
+            <AlertDialogTitle className="bg-red-500 text-white p-3 rounded-t-lg">
+              Confirmar Eliminación
+            </AlertDialogTitle>
+            <div className="flex flex-col items-center gap-4">
+              <AlertTriangle className="h-12 w-12 text-red-500" />
+              <AlertDialogDescription className="text-center text-base">
+                ¿Estás seguro de que deseas eliminar este personal?
+                <p className="text-sm text-muted-foreground mt-1">
+                  Esta acción no se puede deshacer.
+                </p>
+              </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+          <AlertDialogFooter className="flex gap-2">
+            <AlertDialogCancel className="mt-0">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-red-500 text-white hover:bg-red-600"
+            >
               Eliminar
             </AlertDialogAction>
           </AlertDialogFooter>

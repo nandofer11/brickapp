@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { toast } from "sonner"
+import { toast } from "react-toastify"
 import { Edit, Check, X, AlertCircle, Plus, Loader2, NotebookPen, Calendar1 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -29,10 +29,13 @@ interface Personal {
 }
 
 interface Semana {
-  id_semana_trabajo: number
+  id_semana_laboral: number; // Cambiado de id_semana_trabajo
   fecha_inicio: string
   fecha_fin: string
   estado: number
+  id_empresa: number
+  created_at: string
+  updated_at: string
 }
 
 // Modifica la interfaz Asistencia para incluir id_asistencia
@@ -66,8 +69,17 @@ export default function AsistenciaPage() {
 
   useEffect(() => {
     document.title = "Asistencia"
+
+     if (selectedSemana && !modoEdicion) {
+    const selectedWeek = semanas.find(s => s.id_semana_laboral === selectedSemana);
+    if (selectedWeek) {
+      // Establecer la fecha inicial como la fecha de inicio de la semana
+      setSelectedDate(selectedWeek.fecha_inicio.split('T')[0]);
+    }
+  }
+
     fetchInitialData()
-  }, [])
+  }, [selectedSemana, modoEdicion])
 
   const fetchInitialData = async () => {
     setIsLoading(true)
@@ -94,7 +106,7 @@ export default function AsistenciaPage() {
 
       const semanaAbierta = data.find((s: Semana) => s.estado === 1)
       if (semanaAbierta) {
-        setSelectedSemana(semanaAbierta.id_semana_trabajo)
+        setSelectedSemana(semanaAbierta.id_semana_laboral) // Cambiado de id_semana_trabajo
       }
     } catch (error) {
       console.error("Error al cargar semanas:", error)
@@ -113,15 +125,73 @@ export default function AsistenciaPage() {
     }
   }
 
-  // Actualiza la función handleEditAsistencia para guardar también el id_asistencia
-  const handleEditAsistencia = async (fecha: string) => {
-    const fechaCorrecta = new Date(fecha + "T00:00:00-05:00").toISOString().split("T")[0]
-    setSelectedDate(fechaCorrecta)
-    setModoEdicion(true)
-    setModalOpen(true)
-
+  const formatDate = (dateString: string, includeYear = true) => {
     try {
-      const response = await fetch(`/api/asistencia?fecha=${fechaCorrecta}&id_semana_trabajo=${selectedSemana}`)
+      if (!dateString) return '';
+
+      // Convertir la fecha UTC a fecha local de Lima (UTC-5)
+      const date = new Date(dateString);
+      date.setHours(date.getHours() + 5); // Ajustar a UTC-5 (Lima)
+
+      const day = date.getDate().toString().padStart(2, "0");
+      const month = (date.getMonth() + 1).toString().padStart(2, "0");
+      const year = date.getFullYear();
+
+      return includeYear ? `${day}-${month}-${year}` : `${day}-${month}`;
+    } catch (error) {
+      console.error('Error al formatear fecha:', error);
+      return 'Error en fecha';
+    }
+  }
+
+  const getDaysOfWeek = (start: string, end: string) => {
+    try {
+      // Convertir fechas UTC a fechas locales de Lima
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+
+      // Ajustar a UTC-5 (Lima)
+      startDate.setHours(startDate.getHours() + 5);
+      endDate.setHours(endDate.getHours() + 5);
+
+      const days: string[] = [];
+      const currentDate = new Date(startDate);
+
+      while (currentDate <= endDate) {
+        const year = currentDate.getFullYear();
+        const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
+        const day = currentDate.getDate().toString().padStart(2, "0");
+        days.push(`${year}-${month}-${day}`);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      return days;
+    } catch (error) {
+      console.error('Error al obtener días de la semana:', error);
+      return [];
+    }
+  }
+
+  const selectedWeek = semanas.find((s) => s.id_semana_laboral === selectedSemana)
+  const daysOfWeek = selectedWeek ? getDaysOfWeek(selectedWeek.fecha_inicio, selectedWeek.fecha_fin) : []
+
+  // Modificar la función handleEditAsistencia
+  const handleEditAsistencia = async (fecha: string) => {
+    try {
+      if (!selectedSemana) {
+        toast.error("Por favor, seleccione una semana")
+        return
+      }
+
+      const fechaObj = new Date(fecha)
+      const fechaCorrecta = fechaObj.toISOString().split("T")[0]
+
+      setSelectedDate(fechaCorrecta)
+      setModoEdicion(true)
+      setModalOpen(true)
+
+      const response = await fetch(
+        `/api/asistencia?fecha=${fechaCorrecta}&id_semana_laboral=${selectedSemana}`,
+      )
 
       if (!response.ok) throw new Error("Error al obtener asistencia")
 
@@ -149,14 +219,31 @@ export default function AsistenciaPage() {
       return
     }
 
-    const fechaAsistencia = selectedDate || new Date().toISOString().split("T")[0]
+    const selectedWeek = semanas.find(s => s.id_semana_laboral === selectedSemana);
+  if (!selectedWeek) {
+    toast.error("Semana laboral no encontrada");
+    return;
+  }
+
+     if (!selectedDate) {
+    toast.error("Por favor, seleccione una fecha");
+    return;
+  }
+
+  if (!isDateInRange(selectedDate, selectedWeek.fecha_inicio, selectedWeek.fecha_fin)) {
+    toast.error("La fecha seleccionada debe estar dentro del rango de la semana laboral");
+    return;
+  }
+
+    const fechaAsistenciaISO = new Date(selectedDate ?? new Date()).toISOString();
+
 
     // Construye los datos de asistencia según el modo (edición o creación)
     const asistenciaData = Object.entries(selectedAsistencia).map(([id_personal, datos]) => {
       const baseData = {
         id_personal: Number(id_personal),
-        id_semana_trabajo: selectedSemana,
-        fecha: fechaAsistencia,
+        id_semana_laboral: selectedSemana, // Cambiado de id_semana_trabajo
+        fecha: fechaAsistenciaISO,
         estado: datos.estado,
       }
 
@@ -200,32 +287,6 @@ export default function AsistenciaPage() {
     } finally {
       setIsSubmitting(false)
     }
-  }
-
-  const getDaysOfWeek = (start: string, end: string) => {
-    const startDate = new Date(start + "T00:00:00-05:00")
-    const endDate = new Date(end + "T00:00:00-05:00")
-    const days: string[] = []
-
-    while (startDate <= endDate) {
-      const day = startDate.getUTCDate().toString().padStart(2, "0")
-      const month = (startDate.getUTCMonth() + 1).toString().padStart(2, "0")
-      const year = startDate.getUTCFullYear()
-      days.push(`${year}-${month}-${day}`)
-      startDate.setUTCDate(startDate.getUTCDate() + 1)
-    }
-    return days
-  }
-
-  const selectedWeek = semanas.find((s) => s.id_semana_trabajo === selectedSemana)
-  const daysOfWeek = selectedWeek ? getDaysOfWeek(selectedWeek.fecha_inicio, selectedWeek.fecha_fin) : []
-
-  const formatDate = (date: string, includeYear = true) => {
-    const parsedDate = new Date(date + "T00:00:00-05:00")
-    const day = parsedDate.getUTCDate().toString().padStart(2, "0")
-    const month = (parsedDate.getUTCMonth() + 1).toString().padStart(2, "0")
-    const year = parsedDate.getUTCFullYear()
-    return includeYear ? `${day}-${month}-${year}` : `${day}-${month}`
   }
 
   // Actualiza la función handleMarkAll para el nuevo formato de selectedAsistencia
@@ -278,9 +339,44 @@ export default function AsistenciaPage() {
   }
 
   const getDayName = (date: string) => {
-    const parsedDate = new Date(date + "T00:00:00-05:00")
-    const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-    return dayNames[parsedDate.getDay()]
+    try {
+      const dateObj = new Date(date);
+      dateObj.setHours(dateObj.getHours() + 5); // Ajustar a UTC-5 (Lima)
+      const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+      return dayNames[dateObj.getDay()];
+    } catch (error) {
+      console.error('Error al obtener nombre del día:', error);
+      return 'Error';
+    }
+  }
+
+  const getAsistenciaForDate = (id_personal: number, fecha: string) => {
+    // Convertir la fecha de la asistencia a formato YYYY-MM-DD para comparar
+    return asistencia.find((a) => {
+      const asistenciaDate = new Date(a.fecha);
+      const compareDate = new Date(fecha);
+
+      return (
+        a.id_personal === id_personal &&
+        asistenciaDate.getUTCFullYear() === compareDate.getUTCFullYear() &&
+        asistenciaDate.getUTCMonth() === compareDate.getUTCMonth() &&
+        asistenciaDate.getUTCDate() === compareDate.getUTCDate()
+      );
+    })?.estado || "-";
+  }
+
+  // Función para validar fecha en rango
+  const isDateInRange = (date: string, startDate: string, endDate: string): boolean => {
+    const selectedDate = new Date(date);
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    // Resetear las horas para comparar solo fechas
+    selectedDate.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
+
+    return selectedDate >= start && selectedDate <= end;
   }
 
   return (
@@ -300,11 +396,16 @@ export default function AsistenciaPage() {
                 <SelectValue placeholder="Seleccione una semana" />
               </SelectTrigger>
               <SelectContent>
-                {semanas.map((semana) => (
-                  <SelectItem key={semana.id_semana_trabajo} value={semana.id_semana_trabajo.toString()}>
-                    Semana del {formatDate(semana.fecha_inicio)} al {formatDate(semana.fecha_fin)}
-                  </SelectItem>
-                ))}
+                {semanas
+                  .filter(semana => semana?.id_semana_laboral) // Filtrar semanas inválidas
+                  .map((semana) => (
+                    <SelectItem
+                      key={semana.id_semana_laboral}
+                      value={String(semana.id_semana_laboral)}
+                    >
+                      Semana del {formatDate(semana.fecha_inicio)} al {formatDate(semana.fecha_fin)}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -322,6 +423,23 @@ export default function AsistenciaPage() {
         </div>
       ) : (
         <>
+        {/* Leyenda de estados de asistencia */}
+          <div className="flex">
+            <Card className="p-2">
+              <CardContent className="flex gap-4">
+                <div className="flex items-center">
+                  <Check className="h-4 w-4 text-green-600 mr-2" /> Asistencia
+                </div>
+                <div className="flex items-center">
+                  <X className="h-4 w-4 text-red-600 mr-2" /> Faltas
+                </div>
+                <div className="flex items-center">
+                  <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" /> Medio Día
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
           {/* Tabla de Asistencia */}
           <div className="rounded-md border overflow-x-auto">
             <Table>
@@ -368,21 +486,39 @@ export default function AsistenciaPage() {
               </TableHeader>
               <TableBody>
                 {personal.map((p) => {
-                  let totalAsistencias = 0
-                  let totalFaltas = 0
-                  let totalMediosDias = 0
+                  let totalAsistencias = 0;
+                  let totalFaltas = 0;
+                  let totalMediosDias = 0;
 
                   const asistenciaCeldas = daysOfWeek.map((dia) => {
-                    const estado =
-                      asistencia.find((a) => a.id_personal === p.id_personal && a.fecha.endsWith(dia))?.estado || "-"
+                    const estado = getAsistenciaForDate(p.id_personal, dia);
 
-                    if (estado === "A") totalAsistencias++
-                    if (estado === "I") totalFaltas++
-                    if (estado === "M") totalMediosDias++
+                    // Actualizar totales
+                    if (estado === "A") totalAsistencias++;
+                    if (estado === "I") totalFaltas++;
+                    if (estado === "M") totalMediosDias++;
 
                     return (
                       <TableCell key={dia} className="text-center">
                         {getAsistenciaIcon(estado)}
+                        {asistencia.some((a) => {
+                          const asistenciaDate = new Date(a.fecha);
+                          const compareDate = new Date(dia);
+                          return (
+                            asistenciaDate.getUTCFullYear() === compareDate.getUTCFullYear() &&
+                            asistenciaDate.getUTCMonth() === compareDate.getUTCMonth() &&
+                            asistenciaDate.getUTCDate() === compareDate.getUTCDate()
+                          );
+                        }) && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditAsistencia(dia)}
+                              className="ml-2 h-6 w-6"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                          )}
                       </TableCell>
                     )
                   })
@@ -391,7 +527,9 @@ export default function AsistenciaPage() {
                     <TableRow key={p.id_personal}>
                       <TableCell className="font-medium">{p.nombre_completo}</TableCell>
                       {asistenciaCeldas}
-                      <TableCell className="text-center font-bold bg-primary/10">{totalAsistencias}</TableCell>
+                      <TableCell className="text-center font-bold bg-primary/10">
+                        {totalAsistencias}
+                      </TableCell>
                       <TableCell className="text-center font-bold">{totalFaltas}</TableCell>
                       <TableCell className="text-center font-bold">{totalMediosDias}</TableCell>
                     </TableRow>
@@ -401,87 +539,93 @@ export default function AsistenciaPage() {
             </Table>
           </div>
 
-          <div className="flex">
-
-            <Card className="">
-              <CardContent className="flex gap-4">
-                <div className="flex items-center">
-                  <Check className="h-4 w-4 text-green-600 mr-2" /> Asistencia
-                </div>
-                <div className="flex items-center">
-                  <X className="h-4 w-4 text-red-600 mr-2" /> Faltas
-                </div>
-                <div className="flex items-center">
-                  <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" /> Medio Día
-                </div>
-              </CardContent>
-            </Card>
-          </div>
         </>
       )}
 
       {/* Modal de Registro de Asistencia */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{modoEdicion ? "Actualizar Asistencia" : "Registro de Asistencia"}</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-[600px] w-[95%] p-2 sm:p-6 max-h-[90vh]">
+          <DialogHeader className="space-y-2">
+            <DialogTitle className="text-base sm:text-xl">
+              {modoEdicion ? "Actualizar Asistencia" : "Registro de Asistencia"}
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
               {modoEdicion
                 ? "Modifique los estados de asistencia para la fecha seleccionada"
                 : "Seleccione la semana, fecha y registre la asistencia del personal"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-6 py-4">
-            {/* Fila con Selección de Semana y Fecha */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="semana-modal">Seleccionar Semana:</Label>
+          <div className="flex flex-col gap-4 py-2">
+            <div className="grid grid-cols-1 gap-3">
+              {/* Selector de Semana */}
+              <div className="space-y-1.5">
+                <Label htmlFor="semana-modal" className="text-sm">Seleccionar Semana:</Label>
                 <div className="flex items-center gap-2">
                   <Select
                     value={selectedSemana?.toString() || ""}
                     onValueChange={(value) => setSelectedSemana(Number(value))}
                     disabled={modoEdicion}
                   >
-                    <SelectTrigger id="semana-modal" className="flex-1">
+                    <SelectTrigger id="semana-modal" className="w-full text-sm">
                       <SelectValue placeholder="Seleccione..." />
                     </SelectTrigger>
                     <SelectContent>
                       {semanas
-                        .filter((s) => s.estado === 1)
+                        .filter(semana => semana?.id_semana_laboral && semana.estado === 1)
                         .map((semana) => (
-                          <SelectItem key={semana.id_semana_trabajo} value={semana.id_semana_trabajo.toString()}>
+                          <SelectItem
+                            key={semana.id_semana_laboral}
+                            value={String(semana.id_semana_laboral)}
+                            className="text-sm"
+                          >
                             {formatDate(semana.fecha_inicio)} al {formatDate(semana.fecha_fin)}
                           </SelectItem>
                         ))}
                     </SelectContent>
                   </Select>
-                  <Button size="icon" onClick={() => router.push("/admin/dashboard")} disabled={modoEdicion}>
+                  <Button size="icon" onClick={() => router.push("/admin/dashboard")} disabled={modoEdicion} className="shrink-0">
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="fecha">Seleccionar Fecha:</Label>
+              {/* Selector de Fecha */}
+              <div className="space-y-1.5">
+                <Label htmlFor="fecha" className="text-sm">Seleccionar Fecha:</Label>
                 <Input
                   id="fecha"
                   type="date"
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  max={new Date(new Date().setHours(0, 0, 0, 0)).toISOString().split("T")[0]}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    const selectedWeek = semanas.find(s => s.id_semana_laboral === selectedSemana);
+
+                    if (selectedWeek) {
+                      if (isDateInRange(newDate, selectedWeek.fecha_inicio, selectedWeek.fecha_fin)) {
+                        setSelectedDate(newDate);
+                      } else {
+                        toast.error("La fecha seleccionada debe estar dentro del rango de la semana laboral");
+                      }
+                    } else {
+                      toast.error("Seleccione primero una semana laboral");
+                    }
+                  }}
+                  min={selectedSemana ? semanas.find(s => s.id_semana_laboral === selectedSemana)?.fecha_inicio.split('T')[0] : ''}
+                  max={selectedSemana ? semanas.find(s => s.id_semana_laboral === selectedSemana)?.fecha_fin.split('T')[0] : ''}
                   disabled={modoEdicion}
+                  className="w-full text-sm"
                 />
               </div>
             </div>
 
             {/* Radio Buttons para marcar todos */}
-            <div className="space-y-2">
-              <Label>Marcar para todos:</Label>
+            <div className="space-y-1.5">
+              <Label className="text-sm">Marcar para todos:</Label>
               <RadioGroup
                 value={selectAll || ""}
                 onValueChange={(value) => handleMarkAll(value as "A" | "I" | "M")}
-                className="flex space-x-4"
+                className="flex flex-wrap gap-3"
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="A" id="markAllA" />
@@ -504,69 +648,94 @@ export default function AsistenciaPage() {
               </RadioGroup>
             </div>
 
-            {/* Tabla de Personal con Selects */}
-            <div className="border rounded-md">
-              <ScrollArea className="h-[300px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="bg-muted/50">Empleado</TableHead>
-                      <TableHead className="bg-muted/50">Estado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {personal.map((p) => (
-                      <TableRow key={p.id_personal}>
-                        <TableCell>{p.nombre_completo}</TableCell>
-                        <TableCell>
-                          {/* Actualiza el componente Select en la tabla de personal */}
-                          <Select
-                            value={selectedAsistencia[p.id_personal]?.estado || ""}
-                            onValueChange={(value) =>
-                              setSelectedAsistencia({
-                                ...selectedAsistencia,
-                                [p.id_personal]: {
-                                  ...selectedAsistencia[p.id_personal],
-                                  estado: value as "A" | "I" | "M",
-                                },
-                              })
-                            }
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Seleccione..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="A">
-                                <span className="flex items-center">
-                                  <Check className="h-4 w-4 text-green-600 mr-2" /> Asistencia
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="I">
-                                <span className="flex items-center">
-                                  <X className="h-4 w-4 text-red-600 mr-2" /> Inasistencia
-                                </span>
-                              </SelectItem>
-                              <SelectItem value="M">
-                                <span className="flex items-center">
-                                  <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" /> Medio Día
-                                </span>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
+            {/* Tabla de Personal */}
+            <div className="border rounded-md ">
+              <ScrollArea className="h-[35vh] w-[calc(100vw-4rem)] sm:w-full">
+                <div className="min-w-[280px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="bg-muted/50 w-[40%] text-sm">Empleado</TableHead>
+                        <TableHead className="bg-muted/50 w-[20%] text-center">
+                          <Check className="h-4 w-4 mx-auto text-green-600" />
+                        </TableHead>
+                        <TableHead className="bg-muted/50 w-[20%] text-center">
+                          <X className="h-4 w-4 mx-auto text-red-600" />
+                        </TableHead>
+                        <TableHead className="bg-muted/50 w-[20%] text-center">
+                          <AlertCircle className="h-4 w-4 mx-auto text-yellow-600" />
+                        </TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {personal.map((p) => (
+                        <TableRow key={p.id_personal}>
+                          <TableCell className="break-words text-sm py-2">{p.nombre_completo}</TableCell>
+                          <TableCell className="text-center">
+                            <RadioGroup
+                              value={selectedAsistencia[p.id_personal]?.estado || ""}
+                              onValueChange={(value) =>
+                                setSelectedAsistencia({
+                                  ...selectedAsistencia,
+                                  [p.id_personal]: {
+                                    ...selectedAsistencia[p.id_personal],
+                                    estado: value as "A" | "I" | "M",
+                                  },
+                                })
+                              }
+                              className="flex justify-center"
+                            >
+                              <RadioGroupItem value="A" id={`A-${p.id_personal}`} className="cursor-pointer" />
+                            </RadioGroup>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <RadioGroup
+                              value={selectedAsistencia[p.id_personal]?.estado || ""}
+                              onValueChange={(value) =>
+                                setSelectedAsistencia({
+                                  ...selectedAsistencia,
+                                  [p.id_personal]: {
+                                    ...selectedAsistencia[p.id_personal],
+                                    estado: value as "A" | "I" | "M",
+                                  },
+                                })
+                              }
+                              className="flex justify-center"
+                            >
+                              <RadioGroupItem value="I" id={`I-${p.id_personal}`} className="cursor-pointer" />
+                            </RadioGroup>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <RadioGroup
+                              value={selectedAsistencia[p.id_personal]?.estado || ""}
+                              onValueChange={(value) =>
+                                setSelectedAsistencia({
+                                  ...selectedAsistencia,
+                                  [p.id_personal]: {
+                                    ...selectedAsistencia[p.id_personal],
+                                    estado: value as "A" | "I" | "M",
+                                  },
+                                })
+                              }
+                              className="flex justify-center"
+                            >
+                              <RadioGroupItem value="M" id={`M-${p.id_personal}`} className="cursor-pointer" />
+                            </RadioGroup>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </ScrollArea>
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseModal} disabled={isSubmitting}>
+          <DialogFooter className="mt-4 flex-col sm:flex-row gap-2">
+            <Button variant="outline" onClick={handleCloseModal} disabled={isSubmitting} className="w-full sm:w-auto text-sm">
               Cerrar
             </Button>
-            <Button onClick={handleRegisterAsistencia} disabled={isSubmitting}>
+            <Button onClick={handleRegisterAsistencia} disabled={isSubmitting} className="w-full sm:w-auto text-sm">
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -167,6 +167,7 @@ model material {
 model personal {
   id_personal          Int                @id @default(autoincrement())
   dni                  String             @db.VarChar(8)
+  ruc                  String?            @db.VarChar(11)
   nombre_completo      String             @db.VarChar(45)
   fecha_nacimiento     DateTime           @db.Date
   ciudad               String             @db.VarChar(45)

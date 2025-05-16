@@ -26,6 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         pago_diario_reducido,
         fecha_ingreso,
         estado,
+        ruc,
         id_empresa,
       } = req.body;
 
@@ -60,6 +61,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           pago_diario_reducido: pago_diario_reducido || null,
           fecha_ingreso,
           estado,
+          ruc: ruc || null,
           id_empresa,
         });
         return res.status(201).json(personal);
@@ -82,6 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         pago_diario_reducido,
         fecha_ingreso,
         estado,
+        ruc,
         id_empresa,
       } = req.body;
 
@@ -119,6 +122,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         pago_diario_reducido: pago_diario_reducido || null,
         fecha_ingreso,
         estado,
+        ruc: ruc || null,
         id_empresa,
       });
       return res.status(200).json(updatedPersonal);

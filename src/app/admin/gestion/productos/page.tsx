@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { toast } from "sonner";
+import { toast } from "react-toastify";
 import { PlusCircle, Pencil, Trash2, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,19 @@ export default function ProductosPage() {
 
     // Estados para modales y datos
     const [showProductoModal, setShowProductoModal] = useState(false);
+    const handleProductoModalChange = (open: boolean) => {
+        if (!open) {
+            setCurrentProducto({});
+        }
+        setShowProductoModal(open);
+    };
     const [showCategoriaModal, setShowCategoriaModal] = useState(false);
+    const handleCategoriaModalChange = (open: boolean) => {
+        if (!open) {
+            setCurrentCategoria({});
+        }
+        setShowCategoriaModal(open);
+    };
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [currentProducto, setCurrentProducto] = useState<Partial<Producto>>({});
     const [currentCategoria, setCurrentCategoria] = useState<Partial<Categoria>>({});
@@ -263,7 +275,12 @@ export default function ProductosPage() {
                                             <TableCell>{producto.peso} Kg</TableCell>
                                             <TableCell>{producto.dimensiones}</TableCell>
                                             <TableCell>
-                                                <Badge variant={producto.estado ? "success" : "destructive"}>
+                                                <Badge
+                                                    variant={producto.estado ? "default" : "destructive"}
+                                                    className={producto.estado
+                                                        ? "bg-green-100 text-green-800 hover:bg-green-100"
+                                                        : "bg-red-50 text-red-600 hover:bg-red-50"}
+                                                >
                                                     {producto.estado ? "Disponible" : "No disponible"}
                                                 </Badge>
                                             </TableCell>
@@ -300,8 +317,8 @@ export default function ProductosPage() {
             </Card>
 
             {/* Modal de Categoría */}
-            <Dialog open={showCategoriaModal} onOpenChange={setShowCategoriaModal}>
-                <DialogContent className="sm:max-w-[1000px]"> {/* Aumentado el ancho máximo */}
+            <Dialog open={showCategoriaModal} onOpenChange={handleCategoriaModalChange}>
+                <DialogContent className="sm:max-w-[800px]"> {/* Aumentado el ancho máximo */}
                     <DialogHeader>
                         <DialogTitle>Gestión de Categorías</DialogTitle>
                     </DialogHeader>
@@ -392,7 +409,7 @@ export default function ProductosPage() {
             </Dialog>
 
             {/* Modal de Producto */}
-            <Dialog open={showProductoModal} onOpenChange={setShowProductoModal}>
+            <Dialog open={showProductoModal} onOpenChange={handleProductoModalChange}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>
@@ -412,7 +429,7 @@ export default function ProductosPage() {
                                         })
                                     }
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger id="categoria" className="w-full"> {/* Añadido w-full */}
                                         <SelectValue placeholder="Seleccionar categoría" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -489,7 +506,7 @@ export default function ProductosPage() {
                             <div className="space-y-2">
                                 <Label htmlFor="estado">Estado</Label>
                                 <Select
-                                    value={String(currentProducto.estado)}
+                                    value={currentProducto.estado?.toString() ?? ""} // Cambiado para permitir valor vacío
                                     onValueChange={(value) =>
                                         setCurrentProducto({
                                             ...currentProducto,
@@ -497,7 +514,7 @@ export default function ProductosPage() {
                                         })
                                     }
                                 >
-                                    <SelectTrigger>
+                                    <SelectTrigger id="estado" className="w-full"> {/* Añadido w-full */}
                                         <SelectValue placeholder="Seleccionar estado" />
                                     </SelectTrigger>
                                     <SelectContent>

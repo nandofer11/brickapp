@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { toast } from "sonner";
+import { toast } from "react-toastify";
 import { PlusCircle, Pencil, Trash2, Loader2, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -51,9 +51,18 @@ export default function ClientesPage() {
             setLoading(true);
             const res = await fetch("/api/clientes");
             const data = await res.json();
-            setClientes(data);
+            
+            // La respuesta tiene una estructura { clientes: [], totalPaginas: number }
+            if (data && Array.isArray(data.clientes)) {
+                setClientes(data.clientes);
+            } else {
+                setClientes([]);
+                console.error('Estructura de respuesta inválida:', data);
+            }
         } catch (error) {
+            console.error('Error al cargar clientes:', error);
             toast.error("Error al cargar clientes");
+            setClientes([]);
         } finally {
             setLoading(false);
         }
@@ -204,7 +213,7 @@ export default function ClientesPage() {
     };
 
     // Función para filtrar clientes
-    const filteredClientes = clientes.filter((cliente) => {
+    const filteredClientes = Array.isArray(clientes) ? clientes.filter((cliente) => {
         const matchSearch = (cliente.dni || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (cliente.nombres_apellidos || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (cliente.ruc || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -213,7 +222,7 @@ export default function ClientesPage() {
         const matchTipo = filterTipo === "TODOS" || !filterTipo ? true : cliente.tipo_cliente === filterTipo;
         
         return matchSearch && matchTipo;
-    });
+    }) : [];
 
     // Calcular paginación
     const totalPages = Math.ceil(filteredClientes.length / itemsPerPage);
@@ -275,7 +284,7 @@ export default function ClientesPage() {
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             <span className="ml-2">Cargando datos...</span>
                         </div>
-                    ) : clientes.length === 0 ? (
+                    ) : filteredClientes.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
                             No hay clientes registrados.
                         </div>

@@ -1,17 +1,16 @@
-import NextAuth, { AuthOptions } from "next-auth";
+import NextAuth, { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { compare } from "bcryptjs";
 import { prisma } from '@/lib/prisma';
+import { compare } from "bcryptjs";
 
-export const authOptions: AuthOptions = {
-  adapter: PrismaAdapter(prisma),
+export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
-      name: "Credentials",
+      id: 'credentials',
+      name: 'Credentials',
       credentials: {
         usuario: { label: "Usuario", type: "text" },
-        contrasena: { label: "Contraseña", type: "password" },
+        contrasena: { label: "Contraseña", type: "password" }
       },
       async authorize(credentials) {
         try {
@@ -44,17 +43,25 @@ export const authOptions: AuthOptions = {
           console.error("Error en autenticación:", error);
           throw new Error("Error en autenticación");
         }
-      },
-    }),
+      }
+    })
   ],
-  session: {
-    strategy: "jwt",
-  },
-  secret: process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: '/auth',
+    error: '/auth/error',
+    signOut: '/auth'
+  },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 días
   },
   callbacks: {
+    async session({ session, token }) {
+      if (token) {
+        session.user = token.user as any;
+      }
+      return session;
+    },
     async jwt({ token, user }) {
       if (user) {
         // Incluir roles, permisos, razón social y nombre completo en el token
@@ -83,24 +90,17 @@ export const authOptions: AuthOptions = {
         };
       }
       return token;
-    },
-    async session({ session, token }) {
-      // Pasar roles, permisos, razón social y nombre completo a la sesión
-      session.user = token.user as {
-        id: number;
-        name?: string | null | undefined;
-        email?: string | null | undefined;
-        image?: string | null | undefined;
-        id_empresa: number;
-        id_rol: number;
-        nombre_completo: string;
-        razon_social: string;
-        rol: string;
-        permisos: string[];
-      };
-      return session;
     }
   },
+  events: {
+    async signIn({ user }) {
+      console.log("Usuario conectado:", user);
+    },
+    async signOut({ token }) {
+      console.log("Usuario desconectado");
+    }
+  },
+  debug: process.env.NODE_ENV === 'development'
 };
 
 export default NextAuth(authOptions);

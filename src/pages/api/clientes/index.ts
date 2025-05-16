@@ -17,8 +17,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         switch (req.method) {
             case 'GET':
+                const { dni, page = 1, limit = 10 } = req.query;
+                const offset = (Number(page) - 1) * Number(limit);
+                
                 const clientes = await ClienteService.getClientes(id_empresa);
-                return res.status(200).json(clientes);
+                
+                // Aplicar filtro por DNI si existe
+                const clientesFiltrados = dni 
+                    ? clientes.filter(c => 
+                        (c.dni && c.dni.includes(dni as string)) || 
+                        (c.ruc && c.ruc.includes(dni as string))
+                      )
+                    : clientes;
+
+                // Aplicar paginación
+                const inicio = offset;
+                const fin = offset + Number(limit);
+                const clientesPaginados = clientesFiltrados.slice(inicio, fin);
+                const totalPaginas = Math.ceil(clientesFiltrados.length / Number(limit));
+
+                return res.status(200).json({
+                    clientes: clientesPaginados,
+                    totalPaginas,
+                    paginaActual: Number(page)
+                });
 
             case 'POST':
                 const nuevoCliente = await ClienteService.createCliente({
