@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { toast } from "react-toastify"
+import { toast } from "sonner"
 import { Edit, Check, X, AlertCircle, Plus, Loader2, NotebookPen, Calendar1 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -69,17 +69,8 @@ export default function AsistenciaPage() {
 
   useEffect(() => {
     document.title = "Asistencia"
-
-     if (selectedSemana && !modoEdicion) {
-    const selectedWeek = semanas.find(s => s.id_semana_laboral === selectedSemana);
-    if (selectedWeek) {
-      // Establecer la fecha inicial como la fecha de inicio de la semana
-      setSelectedDate(selectedWeek.fecha_inicio.split('T')[0]);
-    }
-  }
-
     fetchInitialData()
-  }, [selectedSemana, modoEdicion])
+  }, [])
 
   const fetchInitialData = async () => {
     setIsLoading(true)
@@ -149,11 +140,11 @@ export default function AsistenciaPage() {
       // Convertir fechas UTC a fechas locales de Lima
       const startDate = new Date(start);
       const endDate = new Date(end);
-
+      
       // Ajustar a UTC-5 (Lima)
       startDate.setHours(startDate.getHours() + 5);
       endDate.setHours(endDate.getHours() + 5);
-
+      
       const days: string[] = [];
       const currentDate = new Date(startDate);
 
@@ -182,26 +173,44 @@ export default function AsistenciaPage() {
         return
       }
 
+      // Asegurar que la fecha esté en formato YYYY-MM-DD
       const fechaObj = new Date(fecha)
-      const fechaCorrecta = fechaObj.toISOString().split("T")[0]
+      const fechaFormateada = fechaObj.toISOString().split('T')[0]
 
-      setSelectedDate(fechaCorrecta)
+      setSelectedDate(fechaFormateada)
       setModoEdicion(true)
       setModalOpen(true)
 
-      const response = await fetch(
-        `/api/asistencia?fecha=${fechaCorrecta}&id_semana_laboral=${selectedSemana}`,
-      )
+      // Agregar los parámetros de consulta necesarios
+      const queryParams = new URLSearchParams({
+        fecha: fechaFormateada,
+        id_semana_laboral: selectedSemana.toString()
+      })
+
+      const response = await fetch(`/api/asistencia?${queryParams.toString()}`)
 
       if (!response.ok) throw new Error("Error al obtener asistencia")
 
       const asistenciaData = await response.json()
-      const asistenciaSeleccionada: Record<number, { estado: "A" | "I" | "M"; id_asistencia: number }> = {}
 
+      // Inicializar todas las asistencias como vacías
+      const asistenciaSeleccionada: Record<number, { estado: "A" | "I" | "M" | "-"; id_asistencia?: number }> = {}
+      
+      // Primero inicializar todos los trabajadores con estado "-"
+      personal.forEach(p => {
+        asistenciaSeleccionada[p.id_personal] = {
+          estado: "-",
+          id_asistencia: undefined
+        }
+      })
+
+      // Luego actualizar solo los que tienen asistencia registrada
       asistenciaData.forEach((a: any) => {
-        asistenciaSeleccionada[a.id_personal] = {
-          estado: a.estado as "A" | "I" | "M",
-          id_asistencia: a.id_asistencia,
+        if (a.id_personal) {
+          asistenciaSeleccionada[a.id_personal] = {
+            estado: a.estado as "A" | "I" | "M",
+            id_asistencia: a.id_asistencia
+          }
         }
       })
 
@@ -219,23 +228,7 @@ export default function AsistenciaPage() {
       return
     }
 
-    const selectedWeek = semanas.find(s => s.id_semana_laboral === selectedSemana);
-  if (!selectedWeek) {
-    toast.error("Semana laboral no encontrada");
-    return;
-  }
-
-     if (!selectedDate) {
-    toast.error("Por favor, seleccione una fecha");
-    return;
-  }
-
-  if (!isDateInRange(selectedDate, selectedWeek.fecha_inicio, selectedWeek.fecha_fin)) {
-    toast.error("La fecha seleccionada debe estar dentro del rango de la semana laboral");
-    return;
-  }
-
-    const fechaAsistenciaISO = new Date(selectedDate ?? new Date()).toISOString();
+const fechaAsistenciaISO = new Date(selectedDate ?? new Date()).toISOString();
 
 
     // Construye los datos de asistencia según el modo (edición o creación)
@@ -355,9 +348,9 @@ export default function AsistenciaPage() {
     return asistencia.find((a) => {
       const asistenciaDate = new Date(a.fecha);
       const compareDate = new Date(fecha);
-
+      
       return (
-        a.id_personal === id_personal &&
+        a.id_personal === id_personal && 
         asistenciaDate.getUTCFullYear() === compareDate.getUTCFullYear() &&
         asistenciaDate.getUTCMonth() === compareDate.getUTCMonth() &&
         asistenciaDate.getUTCDate() === compareDate.getUTCDate()
@@ -365,20 +358,20 @@ export default function AsistenciaPage() {
     })?.estado || "-";
   }
 
-  // Función para validar fecha en rango
-  const isDateInRange = (date: string, startDate: string, endDate: string): boolean => {
-    const selectedDate = new Date(date);
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+  // Agregar esta función después de las interfaces y antes del componente principal
+const isDateInRange = (date: string, startDate: string, endDate: string): boolean => {
+  const selectedDate = new Date(date);
+  const start = new Date(startDate);
+  const end = new Date(endDate);
 
-    // Resetear las horas para comparar solo fechas
-    selectedDate.setHours(0, 0, 0, 0);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
+  // Resetear las horas para comparar solo fechas
+  selectedDate.setHours(0, 0, 0, 0);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
 
-    return selectedDate >= start && selectedDate <= end;
-  }
-
+  return selectedDate >= start && selectedDate <= end;
+}
+  
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <h1 className="text-2xl font-bold mb-6">Asistencia del Personal</h1>
@@ -399,13 +392,13 @@ export default function AsistenciaPage() {
                 {semanas
                   .filter(semana => semana?.id_semana_laboral) // Filtrar semanas inválidas
                   .map((semana) => (
-                    <SelectItem
-                      key={semana.id_semana_laboral}
+                    <SelectItem 
+                      key={semana.id_semana_laboral} 
                       value={String(semana.id_semana_laboral)}
                     >
                       Semana del {formatDate(semana.fecha_inicio)} al {formatDate(semana.fecha_fin)}
                     </SelectItem>
-                  ))}
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -423,9 +416,96 @@ export default function AsistenciaPage() {
         </div>
       ) : (
         <>
-        {/* Leyenda de estados de asistencia */}
+          {/* Tabla de Asistencia */}
+          {/* Tabla de Asistencia */}
+<div className="rounded-md border overflow-x-auto">
+  <Table>
+    <TableHeader>
+      <TableRow>
+        <TableHead colSpan={daysOfWeek.length + 4} className="text-center bg-muted">
+          {selectedWeek
+            ? `Semana del ${formatDate(selectedWeek.fecha_inicio)} al ${formatDate(selectedWeek.fecha_fin)}`
+            : "Seleccione una semana"}
+        </TableHead>
+      </TableRow>
+
+      <TableRow>
+        <TableHead className="bg-muted/50">Empleado</TableHead>
+
+        {daysOfWeek.map((dia) => (
+          <TableHead key={dia} className="bg-muted/50 text-center">
+            <div className="flex items-center justify-center gap-2">
+              <div className="flex flex-col items-start">
+                <span className="font-medium text-xs text-muted-foreground">{getDayName(dia)}</span>
+                <span>{formatDate(dia, true)}</span>
+              </div>
+              {/* Botón editar por día */}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => handleEditAsistencia(dia)}
+                className="my-1"
+              >
+                <Edit className="h-4 w-4" />
+                <span className="sr-only">Editar</span>
+              </Button>
+            </div>
+          </TableHead>
+        ))}
+
+        <TableHead className="bg-muted/70 text-center">
+          <Check className="h-4 w-4 mx-auto text-green-600" />
+        </TableHead>
+        <TableHead className="bg-muted/70 text-center">
+          <X className="h-4 w-4 mx-auto text-red-600" />
+        </TableHead>
+        <TableHead className="bg-muted/70 text-center">
+          <AlertCircle className="h-4 w-4 mx-auto text-yellow-600" />
+        </TableHead>
+      </TableRow>
+    </TableHeader>
+
+    <TableBody>
+      {personal.map((p) => {
+        let totalAsistencias = 0;
+        let totalFaltas = 0;
+        let totalMediosDias = 0;
+
+        const asistenciaCeldas = daysOfWeek.map((dia) => {
+          const estado = getAsistenciaForDate(p.id_personal, dia);
+
+          // Acumular totales
+          if (estado === "A") totalAsistencias++;
+          if (estado === "I") totalFaltas++;
+          if (estado === "M") totalMediosDias++;
+
+          return (
+            <TableCell key={dia} className="text-center">
+              {getAsistenciaIcon(estado)}
+            </TableCell>
+          );
+        });
+
+        return (
+          <TableRow key={p.id_personal}>
+            <TableCell className="font-medium">{p.nombre_completo}</TableCell>
+            {asistenciaCeldas}
+            <TableCell className="text-center font-bold bg-primary/10">
+              {totalAsistencias}
+            </TableCell>
+            <TableCell className="text-center font-bold">{totalFaltas}</TableCell>
+            <TableCell className="text-center font-bold">{totalMediosDias}</TableCell>
+          </TableRow>
+        );
+      })}
+    </TableBody>
+  </Table>
+</div>
+
+
           <div className="flex">
-            <Card className="p-2">
+
+            <Card className="">
               <CardContent className="flex gap-4">
                 <div className="flex items-center">
                   <Check className="h-4 w-4 text-green-600 mr-2" /> Asistencia
@@ -439,106 +519,6 @@ export default function AsistenciaPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Tabla de Asistencia */}
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead colSpan={daysOfWeek.length + 4} className="text-center bg-muted">
-                    {selectedWeek
-                      ? `Semana del ${formatDate(selectedWeek.fecha_inicio)} al ${formatDate(selectedWeek.fecha_fin)}`
-                      : "Seleccione una semana"}
-                  </TableHead>
-                </TableRow>
-                <TableRow>
-                  <TableHead className="bg-muted/50">Empleado</TableHead>
-                  {daysOfWeek.map((dia) => (
-                    <TableHead key={dia} className="bg-muted/50 text-center">
-                      <div className="flex items-center gap-2">
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium text-xs text-muted-foreground">{getDayName(dia)}</span>
-                          <span>{formatDate(dia, true)}</span>
-                        </div>
-                        {asistencia.some((a) => a.fecha.endsWith(dia)) && (
-                          <Button
-                            variant="outline" size="icon"
-                            onClick={() => handleEditAsistencia(dia)}
-                            className="my-1"
-                          >
-                            <Edit className="h-4 w-4" />
-                            <span className="sr-only">Editar</span>
-                          </Button>
-                        )}
-                      </div>
-                    </TableHead>
-                  ))}
-                  <TableHead className="bg-muted/70 text-center">
-                    <Check className="h-4 w-4 mx-auto text-green-600" />
-                  </TableHead>
-                  <TableHead className="bg-muted/70 text-center">
-                    <X className="h-4 w-4 mx-auto text-red-600" />
-                  </TableHead>
-                  <TableHead className="bg-muted/70 text-center">
-                    <AlertCircle className="h-4 w-4 mx-auto text-yellow-600" />
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {personal.map((p) => {
-                  let totalAsistencias = 0;
-                  let totalFaltas = 0;
-                  let totalMediosDias = 0;
-
-                  const asistenciaCeldas = daysOfWeek.map((dia) => {
-                    const estado = getAsistenciaForDate(p.id_personal, dia);
-
-                    // Actualizar totales
-                    if (estado === "A") totalAsistencias++;
-                    if (estado === "I") totalFaltas++;
-                    if (estado === "M") totalMediosDias++;
-
-                    return (
-                      <TableCell key={dia} className="text-center">
-                        {getAsistenciaIcon(estado)}
-                        {asistencia.some((a) => {
-                          const asistenciaDate = new Date(a.fecha);
-                          const compareDate = new Date(dia);
-                          return (
-                            asistenciaDate.getUTCFullYear() === compareDate.getUTCFullYear() &&
-                            asistenciaDate.getUTCMonth() === compareDate.getUTCMonth() &&
-                            asistenciaDate.getUTCDate() === compareDate.getUTCDate()
-                          );
-                        }) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditAsistencia(dia)}
-                              className="ml-2 h-6 w-6"
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                          )}
-                      </TableCell>
-                    )
-                  })
-
-                  return (
-                    <TableRow key={p.id_personal}>
-                      <TableCell className="font-medium">{p.nombre_completo}</TableCell>
-                      {asistenciaCeldas}
-                      <TableCell className="text-center font-bold bg-primary/10">
-                        {totalAsistencias}
-                      </TableCell>
-                      <TableCell className="text-center font-bold">{totalFaltas}</TableCell>
-                      <TableCell className="text-center font-bold">{totalMediosDias}</TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-
         </>
       )}
 
@@ -574,8 +554,8 @@ export default function AsistenciaPage() {
                       {semanas
                         .filter(semana => semana?.id_semana_laboral && semana.estado === 1)
                         .map((semana) => (
-                          <SelectItem
-                            key={semana.id_semana_laboral}
+                          <SelectItem 
+                            key={semana.id_semana_laboral} 
                             value={String(semana.id_semana_laboral)}
                             className="text-sm"
                           >
@@ -597,22 +577,8 @@ export default function AsistenciaPage() {
                   id="fecha"
                   type="date"
                   value={selectedDate}
-                  onChange={(e) => {
-                    const newDate = e.target.value;
-                    const selectedWeek = semanas.find(s => s.id_semana_laboral === selectedSemana);
-
-                    if (selectedWeek) {
-                      if (isDateInRange(newDate, selectedWeek.fecha_inicio, selectedWeek.fecha_fin)) {
-                        setSelectedDate(newDate);
-                      } else {
-                        toast.error("La fecha seleccionada debe estar dentro del rango de la semana laboral");
-                      }
-                    } else {
-                      toast.error("Seleccione primero una semana laboral");
-                    }
-                  }}
-                  min={selectedSemana ? semanas.find(s => s.id_semana_laboral === selectedSemana)?.fecha_inicio.split('T')[0] : ''}
-                  max={selectedSemana ? semanas.find(s => s.id_semana_laboral === selectedSemana)?.fecha_fin.split('T')[0] : ''}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  max={new Date(new Date().setHours(0, 0, 0, 0)).toISOString().split("T")[0]}
                   disabled={modoEdicion}
                   className="w-full text-sm"
                 />

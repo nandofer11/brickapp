@@ -48,6 +48,43 @@ export class AsistenciaRepository extends BaseRepository {
       where: { id_asistencia },
     });
   }
+
+  async findBySemana(id_semana_laboral: number, id_empresa: number) {
+  return prisma.asistencia.findMany({
+    where: {
+      id_semana_laboral,
+      personal: {
+        id_empresa,
+      },
+    },
+    include: {
+      personal: true,
+      semana_laboral: true,
+    },
+    orderBy: {
+      fecha: "asc",
+    },
+  });
+}
+
+
+  async findByFechaAndSemana(fechaInicio: Date, fechaFin: Date, id_semana_laboral: number, id_empresa: number) {
+    return await prisma.asistencia.findMany({
+      where: {
+        fecha: {
+          gte: fechaInicio,
+          lte: fechaFin,
+        },
+        id_semana_laboral: id_semana_laboral,
+        semana_laboral: {
+          id_empresa: id_empresa
+        }
+      },
+      orderBy: {
+        id_personal: 'asc'
+      }
+    });
+  }
 }
 
 export default new AsistenciaRepository();

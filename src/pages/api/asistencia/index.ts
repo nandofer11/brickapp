@@ -21,10 +21,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const id = parseInt(req.query.id as string, 10);
           const asistencia = await AsistenciaService.findById(id);
           return res.status(200).json(asistencia);
-        } else {
-          const asistencias = await AsistenciaService.findAllByEmpresa(id_empresa);
-          return res.status(200).json(asistencias);
         }
+
+        const idSemana = req.query.id_semana_laboral ? parseInt(req.query.id_semana_laboral as string, 10) : null;
+        const fecha = req.query.fecha as string | undefined;
+
+        if (idSemana && fecha) {
+          const asistenciaPorDia = await AsistenciaService.findByFechaAndSemana(fecha, idSemana, id_empresa);
+          return res.status(200).json(asistenciaPorDia);
+        }
+
+        if (idSemana) {
+          const asistenciasSemana = await AsistenciaService.findBySemana(idSemana, id_empresa);
+          return res.status(200).json(asistenciasSemana);
+        }
+
+        const todas = await AsistenciaService.findAllByEmpresa(id_empresa);
+        return res.status(200).json(todas);
 
       case "POST":
         const nuevaAsistencia = await AsistenciaService.createAsistencia(req.body);
@@ -32,7 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       case "PUT":
 
-      // Verificar si el body es un array
+        // Verificar si el body es un array
         if (Array.isArray(req.body)) {
           // Procesar actualizaciones múltiples
           const actualizaciones = await Promise.all(
@@ -49,14 +62,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(200).json(actualizaciones);
         }
 
-        
-        const idToUpdate = req.query.id 
+
+        const idToUpdate = req.query.id
           ? parseInt(req.query.id as string, 10)
           : req.body.id_asistencia;
 
         if (!idToUpdate) {
-          return res.status(400).json({ 
-            error: "ID es requerido para actualizar. Debe proporcionarse en la URL o en el body" 
+          return res.status(400).json({
+            error: "ID es requerido para actualizar. Debe proporcionarse en la URL o en el body"
           });
         }
 

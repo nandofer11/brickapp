@@ -23,6 +23,29 @@ export class AsistenciaService {
   async deleteAsistencia(id_asistencia: number) {
     return await asistenciaRepository.deleteAsistencia(id_asistencia);
   }
+
+  async findBySemana(id_semana_laboral: number, id_empresa: number) {
+  return await asistenciaRepository.findBySemana(id_semana_laboral, id_empresa);
+}
+
+
+  async findByFechaAndSemana(fecha: string, id_semana_laboral: number, id_empresa: number) {
+    // Crear fecha inicio y fin para el día específico
+    const fechaBase = new Date(fecha);
+    const fechaInicio = new Date(
+      fechaBase.getFullYear(),
+      fechaBase.getMonth(),
+      fechaBase.getDate()
+    );
+    const fechaFin = new Date(
+      fechaBase.getFullYear(),
+      fechaBase.getMonth(),
+      fechaBase.getDate(),
+      23, 59, 59, 999
+    );
+
+    return await asistenciaRepository.findByFechaAndSemana(fechaInicio, fechaFin, id_semana_laboral, id_empresa);
+  }
 }
 
 export default new AsistenciaService();
