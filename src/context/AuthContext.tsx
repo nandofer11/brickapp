@@ -9,7 +9,7 @@ interface AuthContextType {
   hasPermission: (permiso: string) => boolean;
   hasAllPermissions: (permisos: string[]) => boolean;
   hasAnyPermission: (permisos: string[]) => boolean;
-  empresa: number | null;
+  empresa: AuthUser['empresa'] | null;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -19,7 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   hasPermission: () => false,
   hasAllPermissions: () => false,
   hasAnyPermission: () => false,
-  empresa: null
+  empresa: null,
 });
 
 export const useAuthContext = () => useContext(AuthContext);
@@ -45,12 +45,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return;
     }
 
-    // Si hay sesión pero no tiene la estructura esperada
-    if (!session?.user || !session?.user?.permisos) {
-      // Intentar cargar los permisos desde el servidor
+    if (!session?.user || !session?.user?.permisos || !session?.user?.empresa) {
       fetchUserData();
     } else {
-      // Usar los datos de la sesión
       setUser({
         id: Number(session.user.id),
         name: session.user.name || '',
@@ -59,7 +56,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         id_empresa: Number(session.user.id_empresa),
         id_rol: Number(session.user.id_rol),
         rol: session.user.rol,
-        permisos: session.user.permisos || []
+        permisos: session.user.permisos || [],
+        empresa: {
+          id_empresa: session.user.empresa.id_empresa,
+          razon_social: session.user.empresa.razon_social,
+          ruc: session.user.empresa.ruc,
+          direccion: session.user.empresa.direccion,
+        },
       });
       setIsLoading(false);
     }
@@ -83,39 +86,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const hasPermission = (permiso: string): boolean => {
-    if (!user || !user.permisos || user.permisos.length === 0) {
-      return false;
-    }
-    return user.permisos.includes(permiso);
+    return user?.permisos.includes(permiso) || false;
   };
 
   const hasAllPermissions = (permisos: string[]): boolean => {
-    if (!user || !user.permisos || user.permisos.length === 0) {
-      return false;
-    }
-    return permisos.every(p => user.permisos.includes(p));
+    return permisos.every((p) => user?.permisos.includes(p));
   };
 
   const hasAnyPermission = (permisos: string[]): boolean => {
-    if (!user || !user.permisos || user.permisos.length === 0) {
-      return false;
-    }
-    return permisos.some(p => user.permisos.includes(p));
+    return permisos.some((p) => user?.permisos.includes(p));
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
     isLoading,
     hasPermission,
     hasAllPermissions,
     hasAnyPermission,
-    empresa: user?.id_empresa || null
+    empresa: user?.empresa || null,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-} 
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}

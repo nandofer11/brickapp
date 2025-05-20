@@ -10,7 +10,14 @@ export interface AuthUser {
   id_rol: number;
   rol?: string;
   permisos: string[];
+  empresa: {
+    id_empresa: number;
+    razon_social: string;
+    ruc: string;
+    direccion: string;
+  };
 }
+
 
 // Extendemos la interfaz de Session para TypeScript
 declare module "next-auth" {
@@ -24,9 +31,16 @@ declare module "next-auth" {
       id_rol: number;
       rol?: string;
       permisos?: string[];
-    }
+      empresa?: {
+        id_empresa: number;
+        razon_social: string;
+        ruc: string;
+        direccion: string;
+      };
+    };
   }
 }
+
 
 /**
  * Hook para usar en componentes cliente que necesiten información de autenticación
@@ -63,7 +77,13 @@ export function useAuth() {
         id_empresa: session.user.id_empresa,
         id_rol: session.user.id_rol,
         rol: session.user.rol,
-        permisos: session.user.permisos || []
+        permisos: session.user.permisos || [],
+        empresa: session.user.empresa || {
+          id_empresa: session.user.id_empresa,
+          razon_social: '',
+          ruc: '',
+          direccion: ''
+        }
       });
       setLoading(false);
     }

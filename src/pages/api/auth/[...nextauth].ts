@@ -30,13 +30,19 @@ export const authOptions: NextAuthOptions = {
             return {
               id: String(user.id_usuario),
               name: user.nombre_completo,
-              email: user.email || `${user.usuario}@example.com`, // NextAuth requiere email
+              email: user.email || `${user.usuario}@example.com`,
               usuario: user.usuario,
-              id_empresa: Number(user.id_empresa),
-              id_rol: Number(user.id_rol),
+              id_empresa: user.id_empresa,
+              id_rol: user.id_rol,
               rol: user.rol?.nombre || "Sin rol",
-              razon_social: user.empresa?.razon_social || "No especificado",
+              empresa: {
+                id_empresa: user.empresa?.id_empresa,
+                razon_social: user.empresa?.razon_social,
+                ruc: user.empresa?.ruc,
+                direccion: user.empresa?.direccion,
+              }
             };
+
           }
           return null;
         } catch (error) {
@@ -84,10 +90,16 @@ export const authOptions: NextAuthOptions = {
           id_empresa: dbUser?.id_empresa,
           id_rol: dbUser?.id_rol,
           nombre_completo: dbUser?.nombre_completo,
-          razon_social: dbUser?.empresa?.razon_social || "No especificado",
           rol: dbUser?.rol?.nombre || "Sin rol",
-          permisos: dbUser?.rol?.rol_permiso.map((rp) => rp.permiso.nombre) || []
+          permisos: dbUser?.rol?.rol_permiso.map((rp) => rp.permiso.nombre) || [],
+          empresa: {
+            id_empresa: dbUser?.empresa?.id_empresa,
+            razon_social: dbUser?.empresa?.razon_social,
+            ruc: dbUser?.empresa?.ruc,
+            direccion: dbUser?.empresa?.direccion
+          }
         };
+
       }
       return token;
     }
