@@ -2,12 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { format, parseISO } from "date-fns"
-import { es } from "date-fns/locale"
-import { toast } from "sonner"
-import { PlusCircle, Pencil, Trash2, Loader2, X, Flame, Users, Home } from "lucide-react"
+import { toast } from "react-toastify"
+import { Pencil, Trash2, Loader2, Users} from "lucide-react"
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -32,7 +29,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { formatDateString, formatDateRange, toISODateString } from '@/lib/utils/dates'
 import { Separator } from "@/components/ui/separator"

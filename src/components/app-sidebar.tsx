@@ -11,7 +11,7 @@ import {
   PieChart,
   Send,
   Settings2,
-  SquareTerminal,
+  DollarSign
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -37,7 +37,7 @@ const data = {
   },
   navMain: [
     {
-      title: "Dashboard",
+      title: "Inicio",
       url: "/admin/dashboard",
       icon: PieChart,
     },
@@ -87,6 +87,17 @@ const data = {
         {
           title: "Fabricación",
           url: "/admin/produccion/fabricacion",
+        },
+      ],
+    },
+    {
+      title: "Pagos",
+      url: "#",
+      icon: DollarSign,
+      items: [
+        {
+          title: "Pago Personal",
+          url: "/admin/pagos/personal",
         },
       ],
     },

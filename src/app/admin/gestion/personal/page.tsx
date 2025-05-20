@@ -501,10 +501,16 @@ export default function PersonalPage() {
                                   variant="outline"
                                   size="icon"
                                   onClick={() => {
+                                    const formatISODate = (dateString: string) => {
+                                      const date = new Date(dateString);
+                                      date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+                                      return date.toISOString().split('T')[0];
+                                    };
+
                                     setCurrentPersonal({
                                       ...p,
-                                      fecha_nacimiento: p.fecha_nacimiento ? p.fecha_nacimiento.split("T")[0] : "",
-                                      fecha_ingreso: p.fecha_ingreso ? p.fecha_ingreso.split("T")[0] : "",
+                                      fecha_nacimiento: formatISODate(p.fecha_nacimiento),
+                                      fecha_ingreso: formatISODate(p.fecha_ingreso),
                                     });
                                     setShowModal(true);
                                   }}
@@ -567,14 +573,14 @@ export default function PersonalPage() {
             <DialogDescription>Complete los datos del personal y presione guardar cuando termine.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-3 py-3"> {/* Reducido de gap-4 py-4 */}
+          <div className="grid gap-3 py-3">
             {/* Sección DNI y RUC */}
-            <div className="flex flex-col space-y-3"> {/* Reducido de space-y-4 */}
+            <div className="flex flex-col space-y-3">
               {/* Campo DNI y Nombre */}
               <div className="space-y-2">
                 <Label htmlFor="dni">DNI</Label>
-                <div className="flex flex-col md:flex-row gap-2">
-                  <div className="flex w-full md:w-[200px] gap-2">
+                <div className="flex gap-2">
+                  <div className="flex w-[200px] gap-2">
                     <Input
                       id="dni"
                       className="w-full"
@@ -601,7 +607,7 @@ export default function PersonalPage() {
                   </div>
                   <Input
                     id="nombre"
-                    className="w-full md:flex-1"
+                    className="flex-1"
                     value={currentPersonal?.nombre_completo ?? ""}
                     disabled
                     placeholder="Nombre completo"
@@ -640,7 +646,7 @@ export default function PersonalPage() {
                   </div>
                   <Input
                     id="razon_social"
-                    className="w-full md:flex-1"
+                    className="flex-1"
                     value={currentPersonal?.razon_social ?? ""}
                     disabled
                     placeholder="Razón social"
@@ -650,7 +656,7 @@ export default function PersonalPage() {
             </div>
 
             {/* Campos del formulario en dos columnas */}
-            <div className="flex flex-col space-y-3"> {/* Reducido de space-y-4 */}
+            <div className="flex flex-col space-y-3">
               {/* Fila: Ciudad y Dirección */}
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1 space-y-2">
@@ -723,7 +729,7 @@ export default function PersonalPage() {
               </div>
 
               {/* Fila: Fecha Ingreso y Estado */}
-              <div className="flex flex-col md:flex-row gap-3"> {/* Reducido de gap-4 */}
+              <div className="flex flex-col md:flex-row gap-3">
                 <div className="flex-1 space-y-2">
                   <Label htmlFor="fecha_ingreso">Fecha de Ingreso</Label>
                   <Input
@@ -738,7 +744,7 @@ export default function PersonalPage() {
                   <Select
                     value={currentPersonal?.estado?.toString() ?? ""}
                     onValueChange={(value) => setCurrentPersonal((prev) => ({ ...prev!, estado: Number(value) }))}>
-                    <SelectTrigger id="estado" className="w-full h-10"> {/* Añadido w-full y h-10 */}
+                    <SelectTrigger id="estado" className="w-full h-10">
                       <SelectValue placeholder="Seleccionar estado" />
                     </SelectTrigger>
                     <SelectContent>
@@ -772,6 +778,7 @@ export default function PersonalPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Modal de Confirmación de Eliminación */}
       <AlertDialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
         <AlertDialogContent>
           <AlertDialogHeader>

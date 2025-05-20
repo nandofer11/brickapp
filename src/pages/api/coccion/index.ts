@@ -14,21 +14,107 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   switch (method) {
     case 'GET':
       try {
-        const { id_coccion, include_relations, include_personal } = query;
+        const { id_coccion, include_relations, include_personal, include_complete, id_semana_laboral } = query;
 
-        // Si se solicita operadores específicamente
+        // Si se solicita filtrar por semana laboral
+        if (id_semana_laboral) {
+          const coccionesPorSemana = await prisma.coccion.findMany({
+            where: { 
+              semana_laboral_id_semana_laboral: Number(id_semana_laboral)
+            },
+            include: {
+              semana_laboral: {
+                select: {
+                  id_semana_laboral: true,
+                  fecha_inicio: true,
+                  fecha_fin: true,
+                  estado: true
+                }
+              },
+              coccion_personal: {
+                include: {
+                  personal: {
+                    select: {
+                      id_personal: true,
+                      nombre_completo: true,
+                      dni: true,
+                      pago_diario_normal: true,
+                      pago_diario_reducido: true
+                    }
+                  },
+                  cargo_coccion: {
+                    select: {
+                      id_cargo_coccion: true,
+                      nombre_cargo: true,
+                      costo_cargo: true
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          return res.status(200).json(coccionesPorSemana);
+        }
+
+        // Si se solicita la información completa de la cocción
+        if (id_coccion && include_complete === 'true') {
+          const coccionCompleta = await prisma.coccion.findUnique({
+            where: { 
+              id_coccion: Number(id_coccion) 
+            },
+            include: {
+              semana_laboral: {
+                select: {
+                  id_semana_laboral: true,
+                  fecha_inicio: true,
+                  fecha_fin: true,
+                  estado: true
+                }
+              },
+              coccion_personal: {
+                include: {
+                  personal: {
+                    select: {
+                      id_personal: true,
+                      nombre_completo: true,
+                      dni: true,
+                      pago_diario_normal: true,
+                      pago_diario_reducido: true
+                    }
+                  },
+                  cargo_coccion: {
+                    select: {
+                      id_cargo_coccion: true,
+                      nombre_cargo: true,
+                      costo_cargo: true
+                    }
+                  }
+                }
+              }
+            }
+          });
+
+          if (!coccionCompleta) {
+            return res.status(404).json({ message: 'Cocción no encontrada' });
+          }
+
+          return res.status(200).json(coccionCompleta);
+        }
+
+        // Si se solicita operadores específicamente (mantener para compatibilidad)
         if (id_coccion && include_personal === 'true') {
           const operadores = await coccionService.getOperadoresByCoccion(Number(id_coccion));
           return res.status(200).json(operadores);
         }
 
-        // Si se solicita cocción con relaciones
+        // Si se solicita cocción con relaciones (mantener para compatibilidad)
         if (id_coccion && include_relations === 'true') {
           const data = await coccionService.findByIdComplete(Number(id_coccion));
           return res.status(200).json(data);
         }
 
-        // Si solo se solicita la cocción
+        // Si solo se solicita la cocción (mantener para compatibilidad)
         if (id_coccion) {
           const coccion = await prisma.coccion.findUnique({
             where: { id_coccion: Number(id_coccion) },
@@ -46,7 +132,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return res.status(200).json(coccion);
         }
 
-        // Listar todas las cocciones
+        // Listar todas las cocciones (mantener igual)
         const cocciones = await prisma.coccion.findMany({
           where: {
             id_empresa: req.query.id_empresa as unknown as number
@@ -64,7 +150,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         console.error('Error en GET coccion:', error);
         return res.status(500).json({ message: 'Error al obtener datos' });
       }
-
     case "POST":
       try {
         const { coccion, operadores } = req.body;

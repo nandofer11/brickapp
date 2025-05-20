@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
-import { PlusCircle, Loader2, DollarSign, ClipboardList, Edit, Trash2, AlertTriangle } from "lucide-react";
+import { PlusCircle, Loader2, DollarSign, ClipboardList, Edit, Trash2, AlertTriangle, Eye, CreditCard } from "lucide-react";
 
 import {
   AlertDialog,
@@ -36,6 +36,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/utils/dateFormat";
+
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 
 interface SemanaLaboral {
   id_semana_laboral: number;
@@ -72,12 +81,18 @@ interface AdelantoPersonal {
   estado: "Pendiente" | "Cancelado";
 }
 
+// Actualizar las interfaces para incluir las relaciones
 interface TareaExtra {
   id_tarea_extra?: number;
   id_personal: number;
+  id_semana_laboral: number;
   fecha: string;
+  monto: string | number;
   descripcion: string;
-  monto: number;
+  created_at: string;
+  updated_at: string;
+  personal?: Personal;
+  semana_laboral?: SemanaLaboral;
 }
 
 interface ResumenPago {
@@ -98,6 +113,30 @@ interface Asistencia {
   id_personal: number;
   dias_completos: number;
   medios_dias: number;
+}
+
+interface CargoCoccion {
+  id_cargo_coccion: number;
+  nombre_cargo: string;
+  costo_cargo: string;
+}
+
+interface CoccionPersonal {
+  id_coccion_personal: number;
+  coccion_id_coccion: number;
+  personal_id_personal: number;
+  cargo_coccion_id_cargo_coccion: number;
+  personal: Personal;
+  cargo_coccion: CargoCoccion;
+}
+
+interface Coccion {
+  id_coccion: number;
+  semana_laboral_id_semana_laboral: number;
+  fecha_encendido: string;
+  estado: string;
+  semana_laboral: SemanaLaboral;
+  coccion_personal: CoccionPersonal[];
 }
 
 export default function PagoPersonalPage() {
@@ -124,6 +163,12 @@ export default function PagoPersonalPage() {
   const [adelantos, setAdelantos] = useState<AdelantoPersonal[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [adelantoToDelete, setAdelantoToDelete] = useState<number | null>(null);
+  const [isMultipleSelection, setIsMultipleSelection] = useState(false);
+  const [selectedPersonal, setSelectedPersonal] = useState<number[]>([]);
+  const [tareasExtra, setTareasExtra] = useState<TareaExtra[]>([]);
+
+  // estado para manejar la selección de filas en la tabla principal 
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
 
   useEffect(() => {
     fetchPersonal();
@@ -236,6 +281,35 @@ export default function PagoPersonalPage() {
         monto: Number(adelanto.monto)
       }));
       setAdelantos(adelantosProcessed);
+
+      // Actualizar los totales de adelantos en el resumen de pagos
+      setResumenPagos(prev => prev.map(resumen => {
+        // Filtrar adelantos por personal y sumar los montos
+        interface AdelantoPersonalWithSemana extends AdelantoPersonal {
+          id_semana_laboral: number;
+        }
+
+        const adelantosPersonal: AdelantoPersonalWithSemana[] = adelantosProcessed.filter(
+          (adelanto: AdelantoPersonalWithSemana) =>
+            adelanto.id_personal === resumen.id_personal &&
+            adelanto.id_semana_laboral.toString() === idSemana
+        );
+        const totalAdelantos = adelantosPersonal.reduce(
+          (sum, adelanto) => sum + Number(adelanto.monto),
+          0
+        );
+
+        return {
+          ...resumen,
+          total_adelantos: totalAdelantos,
+          // Recalcular el total final
+          total_final: resumen.total_asistencia +
+            resumen.total_tareas_extra +
+            resumen.total_coccion -
+            totalAdelantos -
+            resumen.total_descuentos
+        };
+      }));
     } catch (error) {
       console.error("Error al cargar adelantos:", error);
       toast.error("Error al cargar los adelantos");
@@ -355,6 +429,8 @@ export default function PagoPersonalPage() {
       // Recargar adelantos
       if (semanaSeleccionada) {
         fetchAdelantos(semanaSeleccionada);
+        
+        await actualizarResumenPagos(semanaSeleccionada);
       }
 
     } catch (error) {
@@ -370,67 +446,161 @@ export default function PagoPersonalPage() {
     if (semanaSeleccionada) {
       fetchAsistenciaSemana(semanaSeleccionada);
       fetchAdelantos(semanaSeleccionada);
+      fetchTareasExtra(semanaSeleccionada);
+      actualizarResumenPagos(semanaSeleccionada);
     }
   }, [semanaSeleccionada]);
 
+  // Agregar la función fetchTareasExtra
+  const fetchTareasExtra = async (idSemana: string) => {
+    try {
+      const response = await fetch("/api/tarea_extra");
+      if (!response.ok) throw new Error("Error al obtener tareas extras");
+
+      const data = await response.json();
+
+      // Filtrar por semana seleccionada
+      const tareasFiltradas = data.filter(
+        (tarea: TareaExtra) => tarea.id_semana_laboral.toString() === idSemana
+      );
+
+      setTareasExtra(tareasFiltradas);
+
+      // Actualizar los totales en el resumen de pagos
+      setResumenPagos(prev => prev.map(resumen => {
+        const tareasPorPersonal: TareaExtra[] = tareasFiltradas.filter(
+          (tarea: TareaExtra) => tarea.id_personal === resumen.id_personal
+        );
+        const totalTareasExtra = tareasPorPersonal.reduce(
+          (sum, tarea) => sum + Number(tarea.monto),
+          0
+        );
+
+        return {
+          ...resumen,
+          total_tareas_extra: totalTareasExtra,
+          total_final: resumen.total_asistencia +
+            totalTareasExtra +
+            resumen.total_coccion -
+            resumen.total_adelantos -
+            resumen.total_descuentos
+        };
+      }));
+
+    } catch (error) {
+      console.error("Error al cargar tareas extra:", error);
+      toast.error("Error al cargar las tareas extra");
+    }
+  };
+
+  // Modificar la función handleTareaExtraSubmit
   async function handleTareaExtraSubmit(event: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
     event.preventDefault();
 
-    // Validación de semana laboral
-    if (!semanaSeleccionada) {
-      toast.error("Debe seleccionar una semana laboral");
-      return;
-    }
-
-    // Validación de campos requeridos
-    if (!tareaData.id_personal) {
-      toast.error("Debe seleccionar un personal");
-      return;
-    }
-
-    if (!tareaData.fecha) {
-      toast.error("Debe ingresar una fecha");
-      return;
-    }
-
-    if (!tareaData.monto || tareaData.monto <= 0) {
-      toast.error("Debe ingresar un monto válido");
-      return;
-    }
-
-    if (!tareaData.descripcion || tareaData.descripcion.trim() === "") {
-      toast.error("Debe ingresar una descripción");
-      return;
-    }
-
-    const dataToSubmit = {
-      ...tareaData,
-      id_semana_laboral: Number(semanaSeleccionada),
-    };
-
     try {
+      // Validación de la semana laboral
+      if (!semanaSeleccionada) {
+        toast.error("Debe seleccionar una semana laboral");
+        return;
+      }
+
+      // Validación de personal según el modo de selección
+      if (isMultipleSelection) {
+        if (selectedPersonal.length === 0) {
+          toast.error("Debe seleccionar al menos un personal");
+          return;
+        }
+      } else {
+        if (!tareaData.id_personal) {
+          toast.error("Debe seleccionar un personal");
+          return;
+        }
+      }
+
+      // Validación de fecha
+      if (!tareaData.fecha) {
+        toast.error("Debe ingresar una fecha");
+        return;
+      }
+
+      // Validación de monto
+      if (!tareaData.monto || Number(tareaData.monto) <= 0) {
+        toast.error("El monto debe ser mayor a 0");
+        return;
+      }
+
       setIsSubmitting(true);
-      const response = await fetch("/api/tarea_extra", {
-        method: tareaData.id_tarea_extra ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(dataToSubmit),
-      });
 
-      if (!response.ok) throw new Error("Error al procesar tarea extra");
+      // Preparar datos base
+      const tareaToSubmit = {
+        fecha: new Date(tareaData.fecha + 'T00:00:00.000Z').toISOString(),
+        monto: Number(tareaData.monto),
+        descripcion: tareaData.descripcion || "",
+        id_semana_laboral: Number(semanaSeleccionada),
+      };
 
-      toast.success(
-        tareaData.id_tarea_extra
-          ? "Tarea extra actualizada correctamente"
-          : "Tarea extra registrada correctamente"
-      );
+      if (tareaData.id_tarea_extra) {
+        // Modo edición
+        const response = await fetch(`/api/tarea_extra?id=${tareaData.id_tarea_extra}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...tareaToSubmit,
+            id_tarea_extra: tareaData.id_tarea_extra,
+            id_personal: tareaData.id_personal
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Error al actualizar la tarea extra");
+        }
+
+        toast.success("Tarea extra actualizada correctamente");
+      } else {
+        // Modo creación (existente)
+        if (isMultipleSelection) {
+          const tareasMultiples = selectedPersonal.map(idPersonal => ({
+            ...tareaToSubmit,
+            id_personal: idPersonal,
+          }));
+
+          const response = await fetch("/api/tarea_extra", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(tareasMultiples),
+          });
+
+          if (!response.ok) {
+            throw new Error("Error al registrar las tareas extras");
+          }
+
+          toast.success(`${selectedPersonal.length} tareas extras registradas correctamente`);
+        } else {
+          const response = await fetch("/api/tarea_extra", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...tareaToSubmit,
+              id_personal: Number(tareaData.id_personal),
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Error al registrar la tarea extra");
+          }
+
+          toast.success("Tarea extra registrada correctamente");
+        }
+      }
+
+      // Recargar datos y limpiar formulario
+      await fetchTareasExtra(semanaSeleccionada);
+await actualizarResumenPagos(semanaSeleccionada);
 
       setTareaModalOpen(false);
-      setTareaData({ fecha: new Date().toISOString().split("T")[0] });
-
-      // Aquí podrías recargar las tareas extra y actualizar el resumen si es necesario
-      // Por ejemplo: fetchTareasExtra(semanaSeleccionada);
+      setTareaData({ fecha: new Date().toISOString().split('T')[0] });
+      setSelectedPersonal([]);
+      setIsMultipleSelection(false);
 
     } catch (error) {
       console.error("Error:", error);
@@ -439,6 +609,142 @@ export default function PagoPersonalPage() {
       setIsSubmitting(false);
     }
   }
+
+  // Agregar función para eliminar tarea extra
+  const handleDeleteTareaExtra = async (id: number) => {
+    try {
+      const response = await fetch(`/api/tarea_extra/?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Error al eliminar tarea extra');
+
+      toast.success('Tarea extra eliminada correctamente');
+      // Recargar tareas extras
+      if (semanaSeleccionada) {
+        await fetchTareasExtra(semanaSeleccionada);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Error al eliminar la tarea extra');
+    }
+  };
+
+  // Crear una función para actualizar el resumen de forma centralizada
+const actualizarResumenPagos = async (idSemana: string) => {
+  try {
+    setIsLoading(true);
+    
+    // Modificar el endpoint para obtener las cocciones por semana
+    const [asistenciasResponse, adelantosResponse, tareasExtraResponse, coccionesResponse] = await Promise.all([
+      fetch("/api/asistencia"),
+      fetch("/api/adelanto_pago"),
+      fetch("/api/tarea_extra"),
+      fetch(`/api/coccion?id_semana_laboral=${idSemana}`)  // Cambiar aquí el endpoint
+    ]);
+
+    const [asistencias, adelantos, tareasExtra, cocciones] = await Promise.all([
+      asistenciasResponse.json(),
+      adelantosResponse.json(),
+      tareasExtraResponse.json(),
+      coccionesResponse.json()
+    ]);
+
+    // Asegurar que cocciones sea un array
+    const coccionesSemana = Array.isArray(cocciones) ? cocciones : [];
+
+    // Filtrar datos por semana
+    const asistenciasSemana = asistencias.filter((a: any) => 
+      a.id_semana_laboral.toString() === idSemana
+    );
+    const adelantosSemana = adelantos.filter((a: any) => 
+      a.id_semana_laboral.toString() === idSemana
+    );
+    const tareasExtraSemana = tareasExtra.filter((t: any) => 
+      t.id_semana_laboral.toString() === idSemana
+    );
+
+    // Actualizar el resumen en una sola operación
+    setResumenPagos(prev => prev.map(resumen => {
+      // Calcular asistencias
+      const asistenciasPersonal = asistenciasSemana.filter((a: any) => 
+        a.id_personal === resumen.id_personal
+      );
+      const dias_completos = asistenciasPersonal.filter((a: any) => a.estado === "A").length;
+      const medios_dias = asistenciasPersonal.filter((a: any) => a.estado === "M").length;
+      
+      // Calcular pago por asistencia
+      const personalObj = personal.find(p => p.id_personal === resumen.id_personal);
+      const pagoDiarioNormal = personalObj ? personalObj.pago_diario_normal : 0;
+      const total_asistencia = (dias_completos * pagoDiarioNormal) + 
+        (medios_dias * (pagoDiarioNormal / 2));
+
+      // Calcular adelantos
+      const adelantosPersonal = adelantosSemana.filter(
+        (a: any) => a.id_personal === resumen.id_personal
+      );
+      const total_adelantos = adelantosPersonal.reduce(
+        (sum: number, adelanto: any) => sum + Number(adelanto.monto),
+        0
+      );
+
+      // Calcular tareas extra
+      const tareasPersonal = tareasExtraSemana.filter(
+        (t: any) => t.id_personal === resumen.id_personal
+      );
+      const total_tareas_extra = tareasPersonal.reduce(
+        (sum: number, tarea: any) => sum + Number(tarea.monto),
+        0
+      );
+
+      // Calcular total de cocción
+      const total_coccion = coccionesSemana.reduce((sum, coccion) => {
+        // Encontrar todas las participaciones del personal en esta cocción
+        // Define interfaces for the nested objects if not already defined
+        interface CoccionPersonalWithCargo extends CoccionPersonal {
+          cargo_coccion: CargoCoccion;
+        }
+        interface CoccionWithPersonal extends Coccion {
+          coccion_personal: CoccionPersonalWithCargo[];
+        }
+
+        const participacionesPersonal = (coccion as CoccionWithPersonal).coccion_personal?.filter(
+          (cp: CoccionPersonalWithCargo) => cp.personal_id_personal === resumen.id_personal
+        ) || [];
+
+        // Sumar los costos de cargo para cada participación
+        const costoCoccion = participacionesPersonal.reduce((cargoSum, participacion) => {
+          const costoCargo = participacion.cargo_coccion?.costo_cargo;
+          return cargoSum + (costoCargo ? Number(costoCargo) : 0);
+        }, 0);
+
+        return sum + costoCoccion;
+      }, 0);
+
+      // Calcular total final incluyendo el total de cocción
+      const total_final = total_asistencia + total_tareas_extra + 
+        total_coccion - total_adelantos - resumen.total_descuentos;
+
+      return {
+        ...resumen,
+        dias_completos,
+        medios_dias,
+        total_asistencia,
+        total_tareas_extra,
+        total_adelantos,
+        total_coccion, // Asegurarnos de incluir el total_coccion actualizado
+        total_final
+      };
+    }));
+
+  } catch (error) {
+    console.error("Error al actualizar resumen:", error);
+    toast.error("Error al actualizar los datos");
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -450,8 +756,8 @@ export default function PagoPersonalPage() {
       </div>
 
       {/* Filtros y Acciones */}
-      <div className="flex justify-between items-center gap-4">
-        <div className="w-[300px]">
+      <div className="flex flex-col md:flex-row justify-between gap-2">
+        <div className="w-full md:w-[300px]">
           <Label>Semana Laboral</Label>
           <Select value={semanaSeleccionada} onValueChange={setSemanaSeleccionada}>
             <SelectTrigger>
@@ -470,12 +776,53 @@ export default function PagoPersonalPage() {
           </Select>
         </div>
 
-        <div className="flex gap-4">
-          <Button onClick={() => setAdelantoModalOpen(true)}>
+        {/*card total */}
+        <div>
+          <Card className="w-[280px] p-2">
+            <CardContent className="py-0">
+              <div className="flex flex-row items-center gap-2">
+                <div className="flex flex-col">
+                  <CardTitle className="text-sm font-medium">Total General</CardTitle>
+                  <CardDescription className="text-xs">Total pagos finales</CardDescription>
+                </div>
+                <div className="text-1xl font-bold">
+                  S/. {resumenPagos.reduce((sum, item) => sum + item.total_final, 0).toFixed(2)}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* card total asistencia */}
+        <div>
+          <Card className="w-[280px] p-2 ">
+            <CardContent className="py-0">
+              <div className="flex flex-row items-center gap-2">
+                <div className="flex flex-col">
+                  <CardTitle className="text-sm font-medium">Total Asistencia</CardTitle>
+                  <CardDescription className="text-xs">Total por asistencia</CardDescription>
+                </div>
+                <div className="text-1xl font-bold">
+                  S/. {resumenPagos.reduce((sum, item) => sum + item.total_asistencia, 0).toFixed(2)}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+
+        <div className="flex flex-col md:flex-row w-full md:w-auto gap-2 md:gap-2">
+          <Button
+            onClick={() => setAdelantoModalOpen(true)}
+            className="w-full md:w-auto"
+          >
             <DollarSign className="mr-2 h-4 w-4" />
             Adelanto Pago
           </Button>
-          <Button onClick={() => setTareaModalOpen(true)}>
+          <Button
+            onClick={() => setTareaModalOpen(true)}
+            className="w-full md:w-auto"
+          >
             <ClipboardList className="mr-2 h-4 w-4" />
             Agregar Tarea Extra
           </Button>
@@ -496,6 +843,7 @@ export default function PagoPersonalPage() {
               <TableHead rowSpan={2} className="text-right align-bottom">S/.<br />Descuentos</TableHead>
               <TableHead rowSpan={2} className="text-right align-bottom">S/. Total<br />Final</TableHead>
               <TableHead rowSpan={2} className="text-center align-bottom">Estado</TableHead>
+              <TableHead rowSpan={2} className="text-right align-bottom">Acciones</TableHead>
             </TableRow>
             <TableRow>
               <TableHead className="text-center border-b">Días Completos</TableHead>
@@ -504,7 +852,13 @@ export default function PagoPersonalPage() {
           </TableHeader>
           <TableBody>
             {!isLoading && resumenPagos.map((resumen) => (
-              <TableRow key={resumen.id_personal}>
+              <TableRow key={resumen.id_personal}
+                className={`cursor-pointer transition-colors ${selectedRow === resumen.id_personal
+                  ? "bg-muted hover:bg-muted/80"
+                  : "hover:bg-muted/50"
+                  }`}
+                onClick={() => setSelectedRow(resumen.id_personal)}
+              >
                 <TableCell className="font-medium">{resumen.nombre_completo}</TableCell>
                 <TableCell className="text-center">{resumen.dias_completos}</TableCell>
                 <TableCell className="text-center">{resumen.medios_dias}</TableCell>
@@ -517,10 +871,38 @@ export default function PagoPersonalPage() {
                 <TableCell className="text-center">
                   <Badge
                     variant={resumen.estado_pago === "Pagado" ? "default" : "secondary"}
-                    className="w-full justify-center"
+                    className={resumen.estado_pago === "Pagado"
+                      ? "bg-green-100 text-green-800 hover:bg-green-100"
+                      : "bg-red-50 text-red-600 hover:bg-red-50"
+                    }
                   >
                     {resumen.estado_pago}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        // Implementar ver detalle
+                        toast.info("Ver detalle del pago");
+                      }}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        // Implementar pago
+                        toast.info("Realizar pago");
+                      }}
+                      disabled={resumen.estado_pago === "Pagado"}
+                    >
+                      <CreditCard className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             ))}
@@ -540,9 +922,11 @@ export default function PagoPersonalPage() {
 
       {/* Modal de Adelanto */}
       <Dialog open={adelantoModalOpen} onOpenChange={setAdelantoModalOpen}>
-        <DialogContent className="sm:max-w-[1000px] w-[90vw]">
+        <DialogContent className="sm:max-w-[800px] lg:max-w-[1000px] w-[90vw] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle> {adelantoData.id_adelanto_pago ? "Actualizar Adelanto" : "Registrar Adelanto"}</DialogTitle>
+            <DialogTitle>
+              {adelantoData.id_adelanto_pago ? "Actualizar Adelanto" : "Registrar Adelanto"}
+            </DialogTitle>
             <DialogDescription>
               {adelantoData.id_adelanto_pago
                 ? "Modifique los detalles del adelanto de pago."
@@ -551,9 +935,9 @@ export default function PagoPersonalPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-[2fr_3fr] gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-4 md:gap-6">
             {/* Formulario de Adelanto */}
-            <div className="space-y-4">
+            <div className="space-y-3 md:space-y-4">
               {/* Información de la Semana */}
               <div className="rounded-lg border p-3 bg-muted/50">
                 <Label>Semana Seleccionada:</Label>
@@ -570,7 +954,7 @@ export default function PagoPersonalPage() {
                 )}
               </div>
 
-              {/* Personal */}
+              {/* Personal Select */}
               <div className="grid gap-2 w-full">
                 <Label htmlFor="personal">Personal</Label>
                 <Select
@@ -583,6 +967,7 @@ export default function PagoPersonalPage() {
                       estado: "Pendiente"
                     })
                   }
+                  disabled={!!adelantoData.id_adelanto_pago} // Deshabilitar en modo edición
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Seleccione al personal" />
@@ -636,67 +1021,69 @@ export default function PagoPersonalPage() {
             </div>
 
             {/* Tabla de Adelantos */}
-            <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Personal</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {adelantos.map((adelanto) => (
-                    <TableRow key={adelanto.id_adelanto_pago}>
-                      <TableCell>{formatDate(adelanto.fecha)}</TableCell>
-                      <TableCell>
-                        {personal.find(p => p.id_personal === adelanto.id_personal)?.nombre_completo}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {(typeof adelanto.monto === 'number' ? adelanto.monto : Number(adelanto.monto)).toFixed(2)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={adelanto.estado === "Pendiente" ? "destructive" : "default"}
-                          className={adelanto.estado === "Pendiente"
-                            ? "bg-red-50 text-red-600 hover:bg-red-50"
-                            : "bg-green-100 text-green-800 hover:bg-green-100"
-                          }
-                        >
-                          {adelanto.estado}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => handleEditAdelanto(adelanto)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => adelanto.id_adelanto_pago && handleDeleteAdelanto(adelanto.id_adelanto_pago)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {adelantos.length === 0 && (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center">
-                        No hay adelantos registrados
-                      </TableCell>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Personal</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {adelantos.map((adelanto) => (
+                      <TableRow key={adelanto.id_adelanto_pago}>
+                        <TableCell>{formatDate(adelanto.fecha)}</TableCell>
+                        <TableCell>
+                          {personal.find(p => p.id_personal === adelanto.id_personal)?.nombre_completo}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {(typeof adelanto.monto === 'number' ? adelanto.monto : Number(adelanto.monto)).toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={adelanto.estado === "Pendiente" ? "destructive" : "default"}
+                            className={adelanto.estado === "Pendiente"
+                              ? "bg-red-50 text-red-600 hover:bg-red-50"
+                              : "bg-green-100 text-green-800 hover:bg-green-100"
+                            }
+                          >
+                            {adelanto.estado}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleEditAdelanto(adelanto)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => adelanto.id_adelanto_pago && handleDeleteAdelanto(adelanto.id_adelanto_pago)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {adelantos.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center">
+                          No hay adelantos registrados
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
 
@@ -720,86 +1107,242 @@ export default function PagoPersonalPage() {
 
       {/* Modal de Tarea Extra */}
       <Dialog open={tareaModalOpen} onOpenChange={setTareaModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Registrar Tarea Extra</DialogTitle>
+        <DialogContent className="sm:max-w-[800px] lg:max-w-[1000px] w-[90vw] max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="pb-2">
+            <DialogTitle>
+              {tareaData.id_tarea_extra ? "Editar Tarea Extra" : "Registrar Tarea Extra"}
+            </DialogTitle>
             <DialogDescription>
-              Ingrese los detalles de la tarea extra realizada por el personal.
+              {tareaData.id_tarea_extra
+                ? "Modifique los detalles de la tarea extra."
+                : "Ingrese los detalles de la tarea extra realizada por el personal."
+              }
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="personal">Personal</Label>
-              <Select
-                value={tareaData.id_personal?.toString()}
-                onValueChange={(value) =>
-                  setTareaData({ ...tareaData, id_personal: Number(value) })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione al personal" />
-                </SelectTrigger>
-                <SelectContent>
-                  {personal.map((p) => (
-                    <SelectItem key={p.id_personal} value={p.id_personal.toString()}>
-                      {p.nombre_completo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-4">
+            {/* Formulario de Tarea Extra */}
+            <div className="space-y-3">
+              {/* Información de la Semana */}
+              <div className="rounded-lg border p-2 bg-muted/50">
+                <Label>Semana Seleccionada:</Label>
+                {semanaSeleccionada && (
+                  <p className="text-sm mt-0.5">
+                    {(() => {
+                      const semana = semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada);
+                      if (semana) {
+                        return `${formatDate(semana.fecha_inicio)} - ${formatDate(semana.fecha_fin)}`;
+                      }
+                      return "Seleccione una semana";
+                    })()}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="selection-mode">Modo de selección</Label>
+                <Select
+                  value={isMultipleSelection ? "multiple" : "single"}
+                  onValueChange={(value) => {
+                    setIsMultipleSelection(value === "multiple");
+                    setSelectedPersonal([]);
+                    setTareaData(prev => {
+                      const { id_personal, ...rest } = prev;
+                      return { ...rest };
+                    });
+                  }}
+                  disabled={!!tareaData.id_tarea_extra} // Deshabilitar si es edición
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Seleccione modo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Personal Individual</SelectItem>
+                    <SelectItem value="multiple">Múltiples Personal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="personal">
+                  {isMultipleSelection ? "Seleccionar Personal" : "Personal"}
+                </Label>
+                {isMultipleSelection ? (
+                  <div className="border rounded-md p-2 max-h-[150px] overflow-y-auto space-y-1">
+                    {personal.map((p) => (
+                      <div key={p.id_personal} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`personal-${p.id_personal}`}
+                          checked={selectedPersonal.includes(p.id_personal)}
+                          onChange={(e) => {
+                            const newSelected = e.target.checked
+                              ? [...selectedPersonal, p.id_personal]
+                              : selectedPersonal.filter(id => id !== p.id_personal);
+                            setSelectedPersonal(newSelected);
+                            setTareaData(prev => {
+                              // Remove id_personal from tareaData in multiple mode to avoid type error
+                              const { id_personal, ...rest } = prev;
+                              return { ...rest };
+                            });
+                          }}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                        <Label
+                          htmlFor={`personal-${p.id_personal}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          {p.nombre_completo}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Select
+                    value={tareaData.id_personal?.toString()}
+                    onValueChange={(value) =>
+                      setTareaData({ ...tareaData, id_personal: Number(value) })
+                    }
+                    disabled={!!tareaData.id_tarea_extra} // Deshabilitar si es edición
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccione al personal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {personal.map((p) => (
+                        <SelectItem key={p.id_personal} value={p.id_personal.toString()}>
+                          {p.nombre_completo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="fecha">Fecha</Label>
+                  <Input
+                    id="fecha"
+                    type="date"
+                    value={tareaData.fecha}
+                    onChange={(e) =>
+                      setTareaData({ ...tareaData, fecha: e.target.value })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="monto">Monto a Pagar</Label>
+                  <Input
+                    id="monto"
+                    type="number"
+                    value={tareaData.monto || ""}
+                    onChange={(e) =>
+                      setTareaData({ ...tareaData, monto: Number(e.target.value) })
+                    }
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="descripcion">Descripción de la Tarea</Label>
+                <Textarea
+                  id="descripcion"
+                  value={tareaData.descripcion || ""}
+                  onChange={(e) =>
+                    setTareaData({ ...tareaData, descripcion: e.target.value })
+                  }
+                  placeholder="Describa la tarea extra realizada"
+                  className="min-h-[80px]"
+                />
+              </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="fecha">Fecha</Label>
-              <Input
-                id="fecha"
-                type="date"
-                value={tareaData.fecha}
-                onChange={(e) =>
-                  setTareaData({ ...tareaData, fecha: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="descripcion">Descripción de la Tarea</Label>
-              <Textarea
-                id="descripcion"
-                value={tareaData.descripcion || ""}
-                onChange={(e) =>
-                  setTareaData({ ...tareaData, descripcion: e.target.value })
-                }
-                placeholder="Describa la tarea extra realizada"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="monto">Monto a Pagar</Label>
-              <Input
-                id="monto"
-                type="number"
-                value={tareaData.monto || ""}
-                onChange={(e) =>
-                  setTareaData({ ...tareaData, monto: Number(e.target.value) })
-                }
-                placeholder="0.00"
-              />
+            {/* Tabla de Tareas Extras */}
+            <div className="border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Personal</TableHead>
+                      <TableHead>Descripción</TableHead>
+                      <TableHead className="text-right">Monto</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tareasExtra.length > 0 ? (
+                      tareasExtra.map((tarea) => (
+                        <TableRow key={tarea.id_tarea_extra}>
+                          <TableCell>{formatDate(tarea.fecha)}</TableCell>
+                          <TableCell>{tarea.personal?.nombre_completo}</TableCell>
+                          <TableCell>{tarea.descripcion}</TableCell>
+                          <TableCell className="text-right">
+                            {Number(tarea.monto).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => {
+                                  setTareaData({
+                                    ...tarea,
+                                    // Convertir la fecha ISO a formato YYYY-MM-DD para el input type="date"
+                                    fecha: new Date(tarea.fecha).toISOString().split('T')[0],
+                                    monto: Number(tarea.monto)
+                                  });
+                                  setIsMultipleSelection(false);
+                                  setTareaModalOpen(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => {
+                                  tarea.id_tarea_extra && handleDeleteTareaExtra(tarea.id_tarea_extra)
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center">
+                          No hay tareas extras registradas
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTareaModalOpen(false)}>
+            <Button variant="outline" onClick={() => {
+              setTareaModalOpen(false);
+              setSelectedPersonal([]);
+              setIsMultipleSelection(false);
+            }}>
               Cancelar
             </Button>
             <Button onClick={handleTareaExtraSubmit} disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Guardando...
+                  {tareaData.id_tarea_extra ? "Actualizando..." : "Guardando..."}
                 </>
               ) : (
-                "Guardar"
+                tareaData.id_tarea_extra ? "Actualizar" : "Guardar"
               )}
             </Button>
           </DialogFooter>

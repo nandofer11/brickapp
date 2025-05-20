@@ -140,11 +140,11 @@ export default function AsistenciaPage() {
       // Convertir fechas UTC a fechas locales de Lima
       const startDate = new Date(start);
       const endDate = new Date(end);
-      
+
       // Ajustar a UTC-5 (Lima)
       startDate.setHours(startDate.getHours() + 5);
       endDate.setHours(endDate.getHours() + 5);
-      
+
       const days: string[] = [];
       const currentDate = new Date(startDate);
 
@@ -195,7 +195,7 @@ export default function AsistenciaPage() {
 
       // Inicializar todas las asistencias como vacías
       const asistenciaSeleccionada: Record<number, { estado: "A" | "I" | "M" | "-"; id_asistencia?: number }> = {}
-      
+
       // Primero inicializar todos los trabajadores con estado "-"
       personal.forEach(p => {
         asistenciaSeleccionada[p.id_personal] = {
@@ -228,7 +228,7 @@ export default function AsistenciaPage() {
       return
     }
 
-const fechaAsistenciaISO = new Date(selectedDate ?? new Date()).toISOString();
+    const fechaAsistenciaISO = new Date(selectedDate ?? new Date()).toISOString();
 
 
     // Construye los datos de asistencia según el modo (edición o creación)
@@ -348,9 +348,9 @@ const fechaAsistenciaISO = new Date(selectedDate ?? new Date()).toISOString();
     return asistencia.find((a) => {
       const asistenciaDate = new Date(a.fecha);
       const compareDate = new Date(fecha);
-      
+
       return (
-        a.id_personal === id_personal && 
+        a.id_personal === id_personal &&
         asistenciaDate.getUTCFullYear() === compareDate.getUTCFullYear() &&
         asistenciaDate.getUTCMonth() === compareDate.getUTCMonth() &&
         asistenciaDate.getUTCDate() === compareDate.getUTCDate()
@@ -359,30 +359,29 @@ const fechaAsistenciaISO = new Date(selectedDate ?? new Date()).toISOString();
   }
 
   // Agregar esta función después de las interfaces y antes del componente principal
-const isDateInRange = (date: string, startDate: string, endDate: string): boolean => {
-  const selectedDate = new Date(date);
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  const isDateInRange = (date: string, startDate: string, endDate: string): boolean => {
+    const selectedDate = new Date(date);
+    const start = new Date(startDate);
+    const end = new Date(endDate);
 
-  // Resetear las horas para comparar solo fechas
-  selectedDate.setHours(0, 0, 0, 0);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
+    // Resetear las horas para comparar solo fechas
+    selectedDate.setHours(0, 0, 0, 0);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(0, 0, 0, 0);
 
-  return selectedDate >= start && selectedDate <= end;
-}
-  
+    return selectedDate >= start && selectedDate <= end;
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
-      <h1 className="text-2xl font-bold mb-6">Asistencia del Personal</h1>
+      <h1 className="text-2xl font-bold mb-2">Asistencia del Personal</h1>
 
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="w-full md:w-auto">
           <Label htmlFor="semana-select" className="mb-2 block">
             Seleccionar Semana:
           </Label>
           <div className="flex items-center gap-2">
-
             <Calendar1 />
             <Select value={selectedSemana?.toString() || ""} onValueChange={(value) => setSelectedSemana(Number(value))}>
               <SelectTrigger className="w-full md:w-[300px]" id="semana-select">
@@ -392,13 +391,13 @@ const isDateInRange = (date: string, startDate: string, endDate: string): boolea
                 {semanas
                   .filter(semana => semana?.id_semana_laboral) // Filtrar semanas inválidas
                   .map((semana) => (
-                    <SelectItem 
-                      key={semana.id_semana_laboral} 
+                    <SelectItem
+                      key={semana.id_semana_laboral}
                       value={String(semana.id_semana_laboral)}
                     >
                       Semana del {formatDate(semana.fecha_inicio)} al {formatDate(semana.fecha_fin)}
                     </SelectItem>
-                ))}
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -416,96 +415,8 @@ const isDateInRange = (date: string, startDate: string, endDate: string): boolea
         </div>
       ) : (
         <>
-          {/* Tabla de Asistencia */}
-          {/* Tabla de Asistencia */}
-<div className="rounded-md border overflow-x-auto">
-  <Table>
-    <TableHeader>
-      <TableRow>
-        <TableHead colSpan={daysOfWeek.length + 4} className="text-center bg-muted">
-          {selectedWeek
-            ? `Semana del ${formatDate(selectedWeek.fecha_inicio)} al ${formatDate(selectedWeek.fecha_fin)}`
-            : "Seleccione una semana"}
-        </TableHead>
-      </TableRow>
-
-      <TableRow>
-        <TableHead className="bg-muted/50">Empleado</TableHead>
-
-        {daysOfWeek.map((dia) => (
-          <TableHead key={dia} className="bg-muted/50 text-center">
-            <div className="flex items-center justify-center gap-2">
-              <div className="flex flex-col items-start">
-                <span className="font-medium text-xs text-muted-foreground">{getDayName(dia)}</span>
-                <span>{formatDate(dia, true)}</span>
-              </div>
-              {/* Botón editar por día */}
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => handleEditAsistencia(dia)}
-                className="my-1"
-              >
-                <Edit className="h-4 w-4" />
-                <span className="sr-only">Editar</span>
-              </Button>
-            </div>
-          </TableHead>
-        ))}
-
-        <TableHead className="bg-muted/70 text-center">
-          <Check className="h-4 w-4 mx-auto text-green-600" />
-        </TableHead>
-        <TableHead className="bg-muted/70 text-center">
-          <X className="h-4 w-4 mx-auto text-red-600" />
-        </TableHead>
-        <TableHead className="bg-muted/70 text-center">
-          <AlertCircle className="h-4 w-4 mx-auto text-yellow-600" />
-        </TableHead>
-      </TableRow>
-    </TableHeader>
-
-    <TableBody>
-      {personal.map((p) => {
-        let totalAsistencias = 0;
-        let totalFaltas = 0;
-        let totalMediosDias = 0;
-
-        const asistenciaCeldas = daysOfWeek.map((dia) => {
-          const estado = getAsistenciaForDate(p.id_personal, dia);
-
-          // Acumular totales
-          if (estado === "A") totalAsistencias++;
-          if (estado === "I") totalFaltas++;
-          if (estado === "M") totalMediosDias++;
-
-          return (
-            <TableCell key={dia} className="text-center">
-              {getAsistenciaIcon(estado)}
-            </TableCell>
-          );
-        });
-
-        return (
-          <TableRow key={p.id_personal}>
-            <TableCell className="font-medium">{p.nombre_completo}</TableCell>
-            {asistenciaCeldas}
-            <TableCell className="text-center font-bold bg-primary/10">
-              {totalAsistencias}
-            </TableCell>
-            <TableCell className="text-center font-bold">{totalFaltas}</TableCell>
-            <TableCell className="text-center font-bold">{totalMediosDias}</TableCell>
-          </TableRow>
-        );
-      })}
-    </TableBody>
-  </Table>
-</div>
-
-
-          <div className="flex">
-
-            <Card className="">
+        <div className="flex">
+            <Card className="p-2 px-0">
               <CardContent className="flex gap-4">
                 <div className="flex items-center">
                   <Check className="h-4 w-4 text-green-600 mr-2" /> Asistencia
@@ -518,6 +429,90 @@ const isDateInRange = (date: string, startDate: string, endDate: string): boolea
                 </div>
               </CardContent>
             </Card>
+          </div>
+          {/* Tabla de Asistencia */}
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead colSpan={daysOfWeek.length + 4} className="text-center bg-muted">
+                    {selectedWeek
+                      ? `Semana del ${formatDate(selectedWeek.fecha_inicio)} al ${formatDate(selectedWeek.fecha_fin)}`
+                      : "Seleccione una semana"}
+                  </TableHead>
+                </TableRow>
+
+                <TableRow>
+                  <TableHead className="bg-muted/50">Empleado</TableHead>
+
+                  {daysOfWeek.map((dia) => (
+                    <TableHead key={dia} className="bg-muted/50 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="flex flex-col items-start">
+                          <span className="font-medium text-xs text-muted-foreground">{getDayName(dia)}</span>
+                          <span>{formatDate(dia, true)}</span>
+                        </div>
+                        {/* Botón editar por día */}
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleEditAsistencia(dia)}
+                          className="my-1"
+                        >
+                          <Edit className="h-4 w-4" />
+                          <span className="sr-only">Editar</span>
+                        </Button>
+                      </div>
+                    </TableHead>
+                  ))}
+
+                  <TableHead className="bg-muted/70 text-center">
+                    <Check className="h-4 w-4 mx-auto text-green-600" />
+                  </TableHead>
+                  <TableHead className="bg-muted/70 text-center">
+                    <X className="h-4 w-4 mx-auto text-red-600" />
+                  </TableHead>
+                  <TableHead className="bg-muted/70 text-center">
+                    <AlertCircle className="h-4 w-4 mx-auto text-yellow-600" />
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody>
+                {personal.map((p) => {
+                  let totalAsistencias = 0;
+                  let totalFaltas = 0;
+                  let totalMediosDias = 0;
+
+                  const asistenciaCeldas = daysOfWeek.map((dia) => {
+                    const estado = getAsistenciaForDate(p.id_personal, dia);
+
+                    // Acumular totales
+                    if (estado === "A") totalAsistencias++;
+                    if (estado === "I") totalFaltas++;
+                    if (estado === "M") totalMediosDias++;
+
+                    return (
+                      <TableCell key={dia} className="text-center">
+                        {getAsistenciaIcon(estado)}
+                      </TableCell>
+                    );
+                  });
+
+                  return (
+                    <TableRow key={p.id_personal}>
+                      <TableCell className="font-medium">{p.nombre_completo}</TableCell>
+                      {asistenciaCeldas}
+                      <TableCell className="text-center font-bold bg-primary/10">
+                        {totalAsistencias}
+                      </TableCell>
+                      <TableCell className="text-center font-bold">{totalFaltas}</TableCell>
+                      <TableCell className="text-center font-bold">{totalMediosDias}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         </>
       )}
@@ -554,8 +549,8 @@ const isDateInRange = (date: string, startDate: string, endDate: string): boolea
                       {semanas
                         .filter(semana => semana?.id_semana_laboral && semana.estado === 1)
                         .map((semana) => (
-                          <SelectItem 
-                            key={semana.id_semana_laboral} 
+                          <SelectItem
+                            key={semana.id_semana_laboral}
                             value={String(semana.id_semana_laboral)}
                             className="text-sm"
                           >
