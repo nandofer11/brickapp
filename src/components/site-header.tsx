@@ -5,16 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { useSidebar } from "@/components/ui/sidebar"
 import { Label } from "@/components/ui/label"
-import { useSession } from "next-auth/react"
+import { useAuthContext } from "@/context/AuthContext"
 
 import { ModeToggle } from '@/components/mode-toggle'
 
 
 export function SiteHeader() {
   const { toggleSidebar } = useSidebar()
-  const { data: session } = useSession()
-  const razon_social = session?.user?.razon_social;
-
+  const { empresa } = useAuthContext()
 
   return (
     <header className="bg-background sticky top-0 z-50 flex w-full items-center border-b">
@@ -30,7 +28,7 @@ export function SiteHeader() {
         <Separator orientation="vertical" className="mr-2 h-4" />
 
         <Label>Empresa:</Label>
-        <Label>{razon_social}</Label>
+        <Label>{empresa?.razon_social}</Label>
         {/* <SearchForm className="w-full sm:ml-auto sm:w-auto" /> */}
         <ModeToggle></ModeToggle>
       </div>

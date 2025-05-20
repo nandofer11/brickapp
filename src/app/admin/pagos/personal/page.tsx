@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 import { PlusCircle, Loader2, DollarSign, ClipboardList, Edit, Trash2, AlertTriangle, Eye, CreditCard } from "lucide-react";
+import { useAuthContext } from "@/context/AuthContext";
 
 import {
   AlertDialog,
@@ -45,6 +46,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+
+
 
 interface SemanaLaboral {
   id_semana_laboral: number;
@@ -140,6 +143,7 @@ interface Coccion {
 }
 
 export default function PagoPersonalPage() {
+  const { empresa } = useAuthContext();
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [resumenPagos, setResumenPagos] = useState<ResumenPago[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -169,6 +173,32 @@ export default function PagoPersonalPage() {
 
   // estado para manejar la selección de filas en la tabla principal 
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
+
+  // Agregar al componente principal, después de los estados existentes
+  const [pagoModalOpen, setPagoModalOpen] = useState(false);
+  const [selectedPago, setSelectedPago] = useState<ResumenPago | null>(null);
+
+  const [descuentosModalOpen, setDescuentosModalOpen] = useState(false);
+  const [descuentoTemp, setDescuentoTemp] = useState({
+    monto: '',
+    motivo: ''
+  });
+  const [descuentosSeleccionados, setDescuentosSeleccionados] = useState<{
+    id?: number;
+    tipo: 'adelanto' | 'descuento';
+    monto: number;
+    motivo: string;
+  }[]>([]);
+
+  // Función para obtener la fecha y hora actual en formato peruano
+  const getCurrentDateTime = () => {
+    const now = new Date();
+    return now.toLocaleString('es-PE', {
+      timeZone: 'America/Lima',
+      dateStyle: 'long',
+      timeStyle: 'medium'
+    });
+  };
 
   useEffect(() => {
     fetchPersonal();
@@ -429,7 +459,7 @@ export default function PagoPersonalPage() {
       // Recargar adelantos
       if (semanaSeleccionada) {
         fetchAdelantos(semanaSeleccionada);
-        
+
         await actualizarResumenPagos(semanaSeleccionada);
       }
 
@@ -595,7 +625,7 @@ export default function PagoPersonalPage() {
 
       // Recargar datos y limpiar formulario
       await fetchTareasExtra(semanaSeleccionada);
-await actualizarResumenPagos(semanaSeleccionada);
+      await actualizarResumenPagos(semanaSeleccionada);
 
       setTareaModalOpen(false);
       setTareaData({ fecha: new Date().toISOString().split('T')[0] });
@@ -631,120 +661,131 @@ await actualizarResumenPagos(semanaSeleccionada);
   };
 
   // Crear una función para actualizar el resumen de forma centralizada
-const actualizarResumenPagos = async (idSemana: string) => {
-  try {
-    setIsLoading(true);
-    
-    // Modificar el endpoint para obtener las cocciones por semana
-    const [asistenciasResponse, adelantosResponse, tareasExtraResponse, coccionesResponse] = await Promise.all([
-      fetch("/api/asistencia"),
-      fetch("/api/adelanto_pago"),
-      fetch("/api/tarea_extra"),
-      fetch(`/api/coccion?id_semana_laboral=${idSemana}`)  // Cambiar aquí el endpoint
-    ]);
+  const actualizarResumenPagos = async (idSemana: string) => {
+    try {
+      setIsLoading(true);
 
-    const [asistencias, adelantos, tareasExtra, cocciones] = await Promise.all([
-      asistenciasResponse.json(),
-      adelantosResponse.json(),
-      tareasExtraResponse.json(),
-      coccionesResponse.json()
-    ]);
+      // Modificar el endpoint para obtener las cocciones por semana
+      const [asistenciasResponse, adelantosResponse, tareasExtraResponse, coccionesResponse] = await Promise.all([
+        fetch("/api/asistencia"),
+        fetch("/api/adelanto_pago"),
+        fetch("/api/tarea_extra"),
+        fetch(`/api/coccion?id_semana_laboral=${idSemana}`)  // Cambiar aquí el endpoint
+      ]);
 
-    // Asegurar que cocciones sea un array
-    const coccionesSemana = Array.isArray(cocciones) ? cocciones : [];
+      const [asistencias, adelantos, tareasExtra, cocciones] = await Promise.all([
+        asistenciasResponse.json(),
+        adelantosResponse.json(),
+        tareasExtraResponse.json(),
+        coccionesResponse.json()
+      ]);
 
-    // Filtrar datos por semana
-    const asistenciasSemana = asistencias.filter((a: any) => 
-      a.id_semana_laboral.toString() === idSemana
-    );
-    const adelantosSemana = adelantos.filter((a: any) => 
-      a.id_semana_laboral.toString() === idSemana
-    );
-    const tareasExtraSemana = tareasExtra.filter((t: any) => 
-      t.id_semana_laboral.toString() === idSemana
-    );
+      // Asegurar que cocciones sea un array
+      const coccionesSemana = Array.isArray(cocciones) ? cocciones : [];
 
-    // Actualizar el resumen en una sola operación
-    setResumenPagos(prev => prev.map(resumen => {
-      // Calcular asistencias
-      const asistenciasPersonal = asistenciasSemana.filter((a: any) => 
-        a.id_personal === resumen.id_personal
+      // Filtrar datos por semana
+      const asistenciasSemana = asistencias.filter((a: any) =>
+        a.id_semana_laboral.toString() === idSemana
       );
-      const dias_completos = asistenciasPersonal.filter((a: any) => a.estado === "A").length;
-      const medios_dias = asistenciasPersonal.filter((a: any) => a.estado === "M").length;
-      
-      // Calcular pago por asistencia
-      const personalObj = personal.find(p => p.id_personal === resumen.id_personal);
-      const pagoDiarioNormal = personalObj ? personalObj.pago_diario_normal : 0;
-      const total_asistencia = (dias_completos * pagoDiarioNormal) + 
-        (medios_dias * (pagoDiarioNormal / 2));
-
-      // Calcular adelantos
-      const adelantosPersonal = adelantosSemana.filter(
-        (a: any) => a.id_personal === resumen.id_personal
+      const adelantosSemana = adelantos.filter((a: any) =>
+        a.id_semana_laboral.toString() === idSemana
       );
-      const total_adelantos = adelantosPersonal.reduce(
-        (sum: number, adelanto: any) => sum + Number(adelanto.monto),
-        0
+      const tareasExtraSemana = tareasExtra.filter((t: any) =>
+        t.id_semana_laboral.toString() === idSemana
       );
 
-      // Calcular tareas extra
-      const tareasPersonal = tareasExtraSemana.filter(
-        (t: any) => t.id_personal === resumen.id_personal
-      );
-      const total_tareas_extra = tareasPersonal.reduce(
-        (sum: number, tarea: any) => sum + Number(tarea.monto),
-        0
-      );
+      // Actualizar el resumen en una sola operación
+      setResumenPagos(prev => prev.map(resumen => {
+        // Calcular asistencias
+        const asistenciasPersonal = asistenciasSemana.filter((a: any) =>
+          a.id_personal === resumen.id_personal
+        );
+        const dias_completos = asistenciasPersonal.filter((a: any) => a.estado === "A").length;
+        const medios_dias = asistenciasPersonal.filter((a: any) => a.estado === "M").length;
 
-      // Calcular total de cocción
-      const total_coccion = coccionesSemana.reduce((sum, coccion) => {
-        // Encontrar todas las participaciones del personal en esta cocción
-        // Define interfaces for the nested objects if not already defined
-        interface CoccionPersonalWithCargo extends CoccionPersonal {
-          cargo_coccion: CargoCoccion;
-        }
-        interface CoccionWithPersonal extends Coccion {
-          coccion_personal: CoccionPersonalWithCargo[];
-        }
+        // Calcular pago por asistencia
+        const personalObj = personal.find(p => p.id_personal === resumen.id_personal);
+        const pagoDiarioNormal = personalObj ? personalObj.pago_diario_normal : 0;
+        const total_asistencia = (dias_completos * pagoDiarioNormal) +
+          (medios_dias * (pagoDiarioNormal / 2));
 
-        const participacionesPersonal = (coccion as CoccionWithPersonal).coccion_personal?.filter(
-          (cp: CoccionPersonalWithCargo) => cp.personal_id_personal === resumen.id_personal
-        ) || [];
+        // Calcular adelantos
+        const adelantosPersonal = adelantosSemana.filter(
+          (a: any) => a.id_personal === resumen.id_personal
+        );
+        const total_adelantos = adelantosPersonal.reduce(
+          (sum: number, adelanto: any) => sum + Number(adelanto.monto),
+          0
+        );
 
-        // Sumar los costos de cargo para cada participación
-        const costoCoccion = participacionesPersonal.reduce((cargoSum, participacion) => {
-          const costoCargo = participacion.cargo_coccion?.costo_cargo;
-          return cargoSum + (costoCargo ? Number(costoCargo) : 0);
+        // Calcular tareas extra
+        const tareasPersonal = tareasExtraSemana.filter(
+          (t: any) => t.id_personal === resumen.id_personal
+        );
+        const total_tareas_extra = tareasPersonal.reduce(
+          (sum: number, tarea: any) => sum + Number(tarea.monto),
+          0
+        );
+
+        // Calcular total de cocción
+        const total_coccion = coccionesSemana.reduce((sum, coccion) => {
+          // Encontrar todas las participaciones del personal en esta cocción
+          // Define interfaces for the nested objects if not already defined
+          interface CoccionPersonalWithCargo extends CoccionPersonal {
+            cargo_coccion: CargoCoccion;
+          }
+          interface CoccionWithPersonal extends Coccion {
+            coccion_personal: CoccionPersonalWithCargo[];
+          }
+
+          const participacionesPersonal = (coccion as CoccionWithPersonal).coccion_personal?.filter(
+            (cp: CoccionPersonalWithCargo) => cp.personal_id_personal === resumen.id_personal
+          ) || [];
+
+          // Sumar los costos de cargo para cada participación
+          const costoCargo = participacionesPersonal.reduce((cargoSum, participacion) => {
+            const costoCargo = participacion.cargo_coccion?.costo_cargo;
+            return cargoSum + (costoCargo ? Number(costoCargo) : 0);
+          }, 0);
+
+          return sum + costoCargo;
         }, 0);
 
-        return sum + costoCoccion;
-      }, 0);
+        // Calcular total final incluyendo el total de cocción
+        const total_final = total_asistencia + total_tareas_extra +
+          total_coccion - total_adelantos - resumen.total_descuentos;
 
-      // Calcular total final incluyendo el total de cocción
-      const total_final = total_asistencia + total_tareas_extra + 
-        total_coccion - total_adelantos - resumen.total_descuentos;
+        return {
+          ...resumen,
+          dias_completos,
+          medios_dias,
+          total_asistencia,
+          total_tareas_extra,
+          total_adelantos,
+          total_coccion, // Asegurarnos de incluir el total_coccion actualizado
+          total_final
+        };
+      }));
 
-      return {
-        ...resumen,
-        dias_completos,
-        medios_dias,
-        total_asistencia,
-        total_tareas_extra,
-        total_adelantos,
-        total_coccion, // Asegurarnos de incluir el total_coccion actualizado
-        total_final
-      };
-    }));
+    } catch (error) {
+      console.error("Error al actualizar resumen:", error);
+      toast.error("Error al actualizar los datos");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  } catch (error) {
-    console.error("Error al actualizar resumen:", error);
-    toast.error("Error al actualizar los datos");
-  } finally {
-    setIsLoading(false);
+  const handleCloseDescuentosModal = () => {
+    setDescuentosModalOpen(false);
+    setDescuentoTemp({ monto: '', motivo: '' });
+    setDescuentosSeleccionados([]);
+  };
+
+
+  function handlePagoClick(resumen: ResumenPago) {
+    setSelectedPago(resumen);
+    setPagoModalOpen(true);
   }
-};
-
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -776,34 +817,22 @@ const actualizarResumenPagos = async (idSemana: string) => {
           </Select>
         </div>
 
-        {/*card total */}
-        <div>
-          <Card className="w-[280px] p-2">
-            <CardContent className="py-0">
-              <div className="flex flex-row items-center gap-2">
-                <div className="flex flex-col">
-                  <CardTitle className="text-sm font-medium">Total General</CardTitle>
-                  <CardDescription className="text-xs">Total pagos finales</CardDescription>
-                </div>
-                <div className="text-1xl font-bold">
-                  S/. {resumenPagos.reduce((sum, item) => sum + item.total_final, 0).toFixed(2)}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* card total asistencia */}
         <div>
-          <Card className="w-[280px] p-2 ">
-            <CardContent className="py-0">
-              <div className="flex flex-row items-center gap-2">
-                <div className="flex flex-col">
-                  <CardTitle className="text-sm font-medium">Total Asistencia</CardTitle>
-                  <CardDescription className="text-xs">Total por asistencia</CardDescription>
+          <Card className="w-[320px] bg-blue-50/50 py-0">
+            <CardContent className="p-3">
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle className="text-sm font-medium">Total</CardTitle>
+                  <CardDescription className="text-[11px] text-muted-foreground">
+                    Asistencia, T.Extra, Cocción
+                  </CardDescription>
                 </div>
-                <div className="text-1xl font-bold">
-                  S/. {resumenPagos.reduce((sum, item) => sum + item.total_asistencia, 0).toFixed(2)}
+                <div className="text-lg font-bold text-blue-600">
+                  S/. {resumenPagos.reduce((sum, item) =>
+                    sum + item.total_asistencia + item.total_tareas_extra + item.total_coccion,
+                    0
+                  ).toFixed(2)}
                 </div>
               </div>
             </CardContent>
@@ -894,9 +923,9 @@ const actualizarResumenPagos = async (idSemana: string) => {
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => {
-                        // Implementar pago
-                        toast.info("Realizar pago");
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePagoClick(resumen);
                       }}
                       disabled={resumen.estado_pago === "Pagado"}
                     >
@@ -1350,7 +1379,6 @@ const actualizarResumenPagos = async (idSemana: string) => {
       </Dialog>
 
       {/* Modal de Confirmación de Eliminación */}
-      {/* Modal de Confirmación de Eliminación */}
       <AlertDialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1380,6 +1408,295 @@ const actualizarResumenPagos = async (idSemana: string) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Pago */}
+      <Dialog open={pagoModalOpen} onOpenChange={setPagoModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Detalles del Pago</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 print:p-4">
+            {/* Cabecera de la empresa */}
+            <div className="text-center space-y-1">
+              <h3 className="font-bold text-lg">{empresa?.razon_social}</h3>
+              <p className="text-sm">RUC: {empresa?.ruc}</p>
+              <p className="text-sm">{empresa?.direccion}</p>
+            </div>
+
+            {/* Título del recibo */}
+            <div className="text-center border-y py-2">
+              <h2 className="font-bold text-xl">RECIBO PAGO</h2>
+            </div>
+
+            {/* Información del pago */}
+            {selectedPago && (
+              <div className="space-y-4">
+                {/* Fecha y Personal */}
+                <div className="space-y-2">
+                  <p><span className="font-semibold">Fecha y Hora:</span> {getCurrentDateTime()}</p>
+                  <p>
+                    <span className="font-semibold">Personal:</span> {
+                      personal.find(p => p.id_personal === selectedPago.id_personal)?.dni
+                    } - {selectedPago.nombre_completo}
+                  </p>
+                </div>
+
+                {/* Detalle del pago */}
+                <div className="space-y-2 border-t pt-2">
+                  <div className="flex justify-between items-center">
+                    <span>Total Semana S/.</span>
+                    <span>{selectedPago.total_asistencia.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Tareas Extra S/.</span>
+                    <span>{selectedPago.total_tareas_extra.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span>Servicios cocción S/.</span>
+                    <span>{selectedPago.total_coccion.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span>Descuentos S/.</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDescuentosModalOpen(true)}
+                        className="h-8"
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <span>{selectedPago.total_descuentos.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Total Final */}
+                <div className="border-t pt-2">
+                  <div className="flex justify-between items-center font-bold text-lg">
+                    <span>TOTAL S/.</span>
+                    <span>{selectedPago.total_final.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setPagoModalOpen(false)}
+              >
+                Cerrar
+              </Button>
+              <Button
+                onClick={() => {
+                  // Implementar lógica de pago
+                  toast.info("Función de pago pendiente");
+                }}
+              >
+                Pagar
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Agregar el nuevo modal de descuentos */}
+      <Dialog
+        open={descuentosModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseDescuentosModal();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>Gestionar Descuentos</DialogTitle>
+            <DialogDescription>
+              Seleccione adelantos pendientes o agregue nuevos descuentos
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Sección de Adelantos Pendientes */}
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm">Adelantos Pendientes</h4>
+              <div className="max-h-[150px] overflow-y-auto border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[50px]"></TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Monto</TableHead>
+                      <TableHead>Comentario</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {adelantos
+                      .filter(a =>
+                        a.id_personal === selectedPago?.id_personal &&
+                        a.estado === "Pendiente"
+                      )
+                      .map((adelanto) => (
+                        <TableRow key={adelanto.id_adelanto_pago}>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              checked={descuentosSeleccionados.some(
+                                d => d.tipo === 'adelanto' && d.id === adelanto.id_adelanto_pago
+                              )}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setDescuentosSeleccionados([
+                                    ...descuentosSeleccionados,
+                                    {
+                                      id: adelanto.id_adelanto_pago,
+                                      tipo: 'adelanto',
+                                      monto: adelanto.monto,
+                                      motivo: adelanto.comentario || 'Adelanto de pago'
+                                    }
+                                  ]);
+                                } else {
+                                  setDescuentosSeleccionados(
+                                    descuentosSeleccionados.filter(
+                                      d => !(d.tipo === 'adelanto' && d.id === adelanto.id_adelanto_pago)
+                                    )
+                                  );
+                                }
+                              }}
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                          </TableCell>
+                          <TableCell>{formatDate(adelanto.fecha)}</TableCell>
+                          <TableCell>S/. {adelanto.monto.toFixed(2)}</TableCell>
+                          <TableCell>{adelanto.comentario || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            {/* Formulario para Nuevo Descuento */}
+            <div className="space-y-3">
+              <h4 className="font-medium">Agregar Nuevo Descuento</h4>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="monto" className="text-sm">Monto</Label>
+                  <Input
+                    id="monto"
+                    type="number"
+                    value={descuentoTemp.monto}
+                    onChange={(e) => setDescuentoTemp({
+                      ...descuentoTemp,
+                      monto: e.target.value
+                    })}
+                    placeholder="0.00"
+                    className="h-8"
+                  />
+                </div>
+                <div className="flex-[2]">
+                  <Label htmlFor="motivo" className="text-sm">Motivo</Label>
+                  <Input
+                    id="motivo"
+                    value={descuentoTemp.motivo}
+                    onChange={(e) => setDescuentoTemp({
+                      ...descuentoTemp,
+                      motivo: e.target.value
+                    })}
+                    placeholder="Motivo del descuento"
+                    className="h-8"
+                  />
+                </div>
+                <Button
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => {
+                    if (!descuentoTemp.monto || !descuentoTemp.motivo) {
+                      toast.error("Complete todos los campos");
+                      return;
+                    }
+                    setDescuentosSeleccionados([
+                      ...descuentosSeleccionados,
+                      {
+                        tipo: 'descuento',
+                        monto: Number(descuentoTemp.monto),
+                        motivo: descuentoTemp.motivo
+                      }
+                    ]);
+                    setDescuentoTemp({ monto: '', motivo: '' });
+                  }}
+                >
+                  <PlusCircle className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Resumen de Descuentos Seleccionados */}
+            <div className="space-y-2">
+              <h4 className="font-medium text-sm">Descuentos Seleccionados</h4>
+              <div className="max-h-[150px] overflow-y-auto border rounded-md p-4">
+                {descuentosSeleccionados.map((descuento, index) => (
+                  <div key={index} className="flex justify-between items-center py-2">
+                    <div>
+                      <span className="font-medium">{descuento.motivo}</span>
+                      <Badge className="ml-2">
+                        {descuento.tipo === 'adelanto' ? 'Adelanto' : 'Descuento'}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span>S/. {descuento.monto.toFixed(2)}</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setDescuentosSeleccionados(
+                            descuentosSeleccionados.filter((_, i) => i !== index)
+                          );
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {descuentosSeleccionados.length === 0 && (
+                  <p className="text-center text-muted-foreground">
+                    No hay descuentos seleccionados
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-between items-center font-medium">
+                <span>Total Descuentos:</span>
+                <span>S/. {descuentosSeleccionados.reduce((sum, d) => sum + d.monto, 0).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={handleCloseDescuentosModal}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                // Actualizar el total de descuentos en el pago
+                const totalDescuentos = descuentosSeleccionados.reduce((sum, d) => sum + d.monto, 0);
+                setSelectedPago(prev => prev ? {
+                  ...prev,
+                  total_descuentos: totalDescuentos,
+                  total_final: prev.total_asistencia + prev.total_tareas_extra +
+                    prev.total_coccion - totalDescuentos
+                } : null);
+                handleCloseDescuentosModal();
+              }}
+            >
+              Aplicar Descuentos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
