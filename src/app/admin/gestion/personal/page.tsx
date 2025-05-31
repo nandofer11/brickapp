@@ -35,6 +35,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+import { formatDateForInput } from '@/utils/dateFormat';
+
+
 interface Personal {
   id_personal: number
   dni: string
@@ -144,13 +147,13 @@ export default function PersonalPage() {
         }
 
         // Validar que el nombre del DNI coincida con la razón social del RUC
-        const nombreDNI = currentPersonal.nombre_completo.trim().toLowerCase();
-        const nombreRUC = currentPersonal.razon_social.trim().toLowerCase();
+        // const nombreDNI = currentPersonal.nombre_completo.trim().toLowerCase();
+        // const nombreRUC = currentPersonal.razon_social.trim().toLowerCase();
 
-        if (nombreDNI !== nombreRUC) {
-          toast.error("El nombre del DNI no coincide con la razón social del RUC");
-          return;
-        }
+        // if (nombreDNI !== nombreRUC) {
+        //   toast.error("El nombre del DNI no coincide con la razón social del RUC");
+        //   return;
+        // }
       }
 
       // Validar ciudad
@@ -239,20 +242,28 @@ export default function PersonalPage() {
   };
 
   const handleDelete = async () => {
-    if (!deleteId) return
+    if (!deleteId) return;
     try {
-      const res = await fetch(`/api/personal?id_personal=${deleteId}`, { method: "DELETE" })
+      const res = await fetch(`/api/personal?id_personal=${deleteId}`, { method: "DELETE" });
 
-      if (!res.ok) throw new Error("Error al eliminar")
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: "Error desconocido" }));
+        throw new Error(errorData.message || "Error al eliminar");
+      }
 
-      toast.success("Personal eliminado correctamente.")
-      setShowConfirmModal(false)
-      fetchPersonal()
+      toast.success("Personal eliminado correctamente.");
+      setShowConfirmModal(false);
+      fetchPersonal();
     } catch (error) {
-      toast.error("Error al eliminar el personal.")
-      console.log("ELIMINAR PERSONAL: ", error)
+      if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Error al eliminar el personal.");
+      }
+      setShowConfirmModal(false);
+      console.log("ELIMINAR PERSONAL: ", error);
     }
-  }
+  };
 
   const validateDNI = async () => {
     if (!currentPersonal?.dni) {
@@ -286,7 +297,7 @@ export default function PersonalPage() {
       const data = await res.json();
 
       if (data.nombres && data.apellido_paterno && data.apellido_materno) {
-        const nombreCompleto = `${data.apellido_paterno} ${data.apellido_materno} ${data.nombres} `;
+        const nombreCompleto = ` ${data.nombres} ${data.apellido_paterno} ${data.apellido_materno} `;
         setCurrentPersonal((prev) => ({ ...prev!, nombre_completo: nombreCompleto }));
         toast.success("DNI validado correctamente.");
       } else {
@@ -434,13 +445,13 @@ export default function PersonalPage() {
                 <PlusCircle className="mr-2 h-4 w-4" /> Registrar Personal
               </Button>
 
-<div className="bg-green-50 border border-green-200 rounded-md px-4 py-2 flex items-center">
-      <Check className="h-4 w-4 text-green-600 mr-2" />
-      <span className="text-sm text-green-800 font-medium">
-        Personal Activo: {personalList.filter(p => p.estado === 1).length}
-      </span>
-    </div>
-    
+              <div className="bg-green-50 border border-green-200 rounded-md px-4 py-2 flex items-center">
+                <Check className="h-4 w-4 text-green-600 mr-2" />
+                <span className="text-sm text-green-800 font-medium">
+                  Personal Activo: {personalList.filter(p => p.estado === 1).length}
+                </span>
+              </div>
+
               <div className="relative w-full md:w-[350px]">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -471,12 +482,10 @@ export default function PersonalPage() {
                           <TableHead className="w-24 ">DNI</TableHead>
                           <TableHead className="w-24 ">RUC</TableHead>
                           <TableHead className="w-48 ">Nombre completo</TableHead>
-                          <TableHead className="w-28 ">F. Nac.</TableHead>
                           <TableHead className="w-28 ">Ciudad</TableHead>
                           <TableHead className="w-40 ">Dirección</TableHead>
                           <TableHead className="w-28 ">Celular</TableHead>
                           <TableHead className="w-28 ">Pago Diario</TableHead>
-                          <TableHead className="w-28 ">Pago Red.</TableHead>
                           <TableHead className="w-28 ">F. Ingreso</TableHead>
                           <TableHead className="w-24 ">Estado</TableHead>
                           <TableHead className="w-24 text-right ">Acciones</TableHead>
@@ -487,20 +496,18 @@ export default function PersonalPage() {
                           <TableRow
                             key={p.id_personal}
                             className={`cursor-pointer transition-colors ${selectedRow === p.id_personal
-                                ? "bg-primary/10 hover:bg-primary/15"
-                                : "hover:bg-muted/50"
+                              ? "bg-primary/10 hover:bg-primary/15"
+                              : "hover:bg-muted/50"
                               }`}
                             onClick={() => setSelectedRow(p.id_personal)}
                           >
                             <TableCell>{p.dni}</TableCell>
                             <TableCell>{p.ruc || "-"}</TableCell>
                             <TableCell>{p.nombre_completo}</TableCell>
-                            <TableCell>{formatDate(p.fecha_nacimiento)}</TableCell>
                             <TableCell>{p.ciudad}</TableCell>
                             <TableCell>{p.direccion || "-"}</TableCell>
                             <TableCell>{p.celular || "-"}</TableCell>
-                            <TableCell>{p.pago_diario_normal}</TableCell>
-                            <TableCell>{p.pago_diario_reducido || "-"}</TableCell>
+                            <TableCell>S/. {p.pago_diario_normal}</TableCell>
                             <TableCell>{formatDate(p.fecha_ingreso)}</TableCell>
                             <TableCell>
                               <Badge
@@ -516,7 +523,15 @@ export default function PersonalPage() {
                                 size="icon"
                                 onClick={(e) => {
                                   e.stopPropagation(); // Previene que se seleccione la fila al hacer clic en el botón
-                                  setCurrentPersonal(p);
+
+                                  // Formatear las fechas al cargar los datos para edición
+                                  const formattedData = {
+                                    ...p,
+                                    fecha_nacimiento: p.fecha_nacimiento ? formatDateForInput(p.fecha_nacimiento) : "",
+                                    fecha_ingreso: p.fecha_ingreso ? formatDateForInput(p.fecha_ingreso) : "",
+                                  };
+
+                                  setCurrentPersonal(formattedData);
                                   setShowModal(true);
                                 }}
                               >
@@ -704,9 +719,9 @@ export default function PersonalPage() {
                 </div>
               </div>
 
-              {/* Fila: Pagos */}
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Pago Diario Normal */}
+                <div className="space-y-2">
                   <Label htmlFor="pago_normal">Pago Diario Normal (S/.)</Label>
                   <Input
                     id="pago_normal"
@@ -717,22 +732,9 @@ export default function PersonalPage() {
                     }
                   />
                 </div>
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="pago_reducido">Pago Diario Reducido (S/.)</Label>
-                  <Input
-                    id="pago_reducido"
-                    type="number"
-                    value={currentPersonal?.pago_diario_reducido ?? ""}
-                    onChange={(e) =>
-                      setCurrentPersonal((prev) => ({ ...prev!, pago_diario_reducido: Number(e.target.value) }))
-                    }
-                  />
-                </div>
-              </div>
 
-              {/* Fila: Fecha Ingreso y Estado */}
-              <div className="flex flex-col md:flex-row gap-3">
-                <div className="flex-1 space-y-2">
+                {/* Fecha de Ingreso */}
+                <div className="space-y-2">
                   <Label htmlFor="fecha_ingreso">Fecha de Ingreso</Label>
                   <Input
                     id="fecha_ingreso"
@@ -741,7 +743,9 @@ export default function PersonalPage() {
                     onChange={(e) => setCurrentPersonal((prev) => ({ ...prev!, fecha_ingreso: e.target.value }))}
                   />
                 </div>
-                <div className="flex-1 space-y-2">
+
+                {/* Estado */}
+                <div className="space-y-2">
                   <Label htmlFor="estado">Estado</Label>
                   <Select
                     value={currentPersonal?.estado?.toString() ?? ""}
@@ -782,33 +786,30 @@ export default function PersonalPage() {
 
       {/* Modal de Confirmación de Eliminación */}
       <AlertDialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="bg-red-500 text-white p-3 rounded-t-lg">
-              Confirmar Eliminación
-            </AlertDialogTitle>
-            <div className="flex flex-col items-center gap-4">
-              <AlertTriangle className="h-12 w-12 text-red-500" />
-              <AlertDialogDescription className="text-center text-base">
-                ¿Estás seguro de que deseas eliminar este personal?
-                <p className="text-sm text-muted-foreground mt-1">
-                  Esta acción no se puede deshacer.
-                </p>
-              </AlertDialogDescription>
-            </div>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex gap-2">
-            <AlertDialogCancel className="mt-0">
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-red-500 text-white hover:bg-red-600"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
+       <AlertDialogContent>
+  <AlertDialogHeader>
+    <div className="flex flex-col items-center justify-center">
+      <AlertTriangle className="h-12 w-12 text-destructive mb-2" />
+      <AlertDialogTitle className="text-xl font-semibold">Confirmar Eliminación</AlertDialogTitle>
+    </div>
+  </AlertDialogHeader>
+  
+  {/* No usar <p> dentro de <AlertDialogDescription> que ya es un <p> */}
+  <AlertDialogDescription className="text-center text-base">
+    ¿Está seguro que desea eliminar este registro?
+    <span className="block text-sm text-muted-foreground mt-1">Esta acción no se puede deshacer.</span>
+  </AlertDialogDescription>
+  
+  <AlertDialogFooter className="flex justify-center gap-2 mt-6">
+    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+    <AlertDialogAction
+      onClick={handleDelete}
+      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+    >
+      Eliminar
+    </AlertDialogAction>
+  </AlertDialogFooter>
+</AlertDialogContent>
       </AlertDialog>
     </div>
   )

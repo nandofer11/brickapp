@@ -9,9 +9,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const session = await getServerSession(req, res, authOptions);
 
   if (!session) return res.status(401).json({ message: "No autorizado" });
-  
+
   try {
-  
+
     const id_empresa = session.user.id_empresa; // 🔥 Obtener la empresa del usuario autenticado
 
     if (req.method === "POST") {
@@ -128,22 +128,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(200).json(updatedPersonal);
     }
 
-    if(req.method === "GET") {
+    if (req.method === "GET") {
       const personal = await PersonalService.getAllByEmpresa(id_empresa);
       return res.status(200).json(personal);
     }
 
     if (req.method === "DELETE") {
-      const { id_personal } = req.query;
+  const { id_personal } = req.query;
 
-      if (!id_personal) {
-        return res.status(400).json({ message: "El ID del personal es obligatorio para eliminar." });
-      }
+  if (!id_personal) {
+    return res.status(400).json({ message: "El ID del personal es obligatorio para eliminar." });
+  }
 
-      // Eliminar el personal
-      await PersonalService.deletePersonal(Number(id_personal), id_empresa);
-      return res.status(204).end(); // No content
+  try {
+    // Intentar eliminar el personal
+    await PersonalService.deletePersonal(Number(id_personal), id_empresa);
+    return res.status(204).end(); // No content
+  } catch (error: any) {
+    console.error("Error al eliminar personal:", error);
+    
+    // Si es un error específico de restricción de clave foránea
+    if (error.message.includes('tiene registros asociados')) {
+      return res.status(400).json({ 
+        message: error.message 
+      });
     }
+    
+    // Para otros errores internos
+    return res.status(500).json({ 
+      message: "Error interno del servidor al intentar eliminar el personal." 
+    });
+  }
+}
 
   } catch (error: any) {
     console.error("Error:", error);
