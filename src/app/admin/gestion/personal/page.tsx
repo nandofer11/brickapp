@@ -76,6 +76,9 @@ export default function PersonalPage() {
   const currentRecords = filteredPersonal.slice(indexOfFirstRecord, indexOfLastRecord)
   const totalPages = Math.ceil(filteredPersonal.length / recordsPerPage)
 
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
+
+
   useEffect(() => {
     document.title = "Gestión de Personal"
     fetchPersonal()
@@ -431,6 +434,13 @@ export default function PersonalPage() {
                 <PlusCircle className="mr-2 h-4 w-4" /> Registrar Personal
               </Button>
 
+<div className="bg-green-50 border border-green-200 rounded-md px-4 py-2 flex items-center">
+      <Check className="h-4 w-4 text-green-600 mr-2" />
+      <span className="text-sm text-green-800 font-medium">
+        Personal Activo: {personalList.filter(p => p.estado === 1).length}
+      </span>
+    </div>
+    
               <div className="relative w-full md:w-[350px]">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -474,63 +484,55 @@ export default function PersonalPage() {
                       </TableHeader>
                       <TableBody>
                         {currentRecords.map((p) => (
-                          <TableRow key={p.id_personal}>
+                          <TableRow
+                            key={p.id_personal}
+                            className={`cursor-pointer transition-colors ${selectedRow === p.id_personal
+                                ? "bg-primary/10 hover:bg-primary/15"
+                                : "hover:bg-muted/50"
+                              }`}
+                            onClick={() => setSelectedRow(p.id_personal)}
+                          >
                             <TableCell>{p.dni}</TableCell>
-                            <TableCell>{p.ruc ?? "-"}</TableCell>
+                            <TableCell>{p.ruc || "-"}</TableCell>
                             <TableCell>{p.nombre_completo}</TableCell>
                             <TableCell>{formatDate(p.fecha_nacimiento)}</TableCell>
                             <TableCell>{p.ciudad}</TableCell>
-                            <TableCell>{p.direccion ?? "-"}</TableCell>
-                            <TableCell>{p.celular ?? "-"}</TableCell>
-                            <TableCell>S/. {p.pago_diario_normal}</TableCell>
-                            <TableCell>{p.pago_diario_reducido ? `S/. ${p.pago_diario_reducido}` : "-"}</TableCell>
+                            <TableCell>{p.direccion || "-"}</TableCell>
+                            <TableCell>{p.celular || "-"}</TableCell>
+                            <TableCell>{p.pago_diario_normal}</TableCell>
+                            <TableCell>{p.pago_diario_reducido || "-"}</TableCell>
                             <TableCell>{formatDate(p.fecha_ingreso)}</TableCell>
                             <TableCell>
                               <Badge
-                                variant={p.estado === 1 ? "default" : "destructive"}
-                                className={p.estado === 1
-                                  ? "bg-green-100 text-green-800 hover:bg-green-100"
-                                  : "bg-red-50 text-red-600 hover:bg-red-50"}
+                                variant={p.estado === 1 ? "default" : "secondary"}
+                                className={p.estado === 1 ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}
                               >
                                 {p.estado === 1 ? "Activo" : "Inactivo"}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => {
-                                    const formatISODate = (dateString: string) => {
-                                      const date = new Date(dateString);
-                                      date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-                                      return date.toISOString().split('T')[0];
-                                    };
-
-                                    setCurrentPersonal({
-                                      ...p,
-                                      fecha_nacimiento: formatISODate(p.fecha_nacimiento),
-                                      fecha_ingreso: formatISODate(p.fecha_ingreso),
-                                    });
-                                    setShowModal(true);
-                                  }}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                  <span className="sr-only">Editar</span>
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="text-destructive hover:text-destructive"
-                                  onClick={() => {
-                                    setDeleteId(p.id_personal);
-                                    setShowConfirmModal(true);
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                  <span className="sr-only">Eliminar</span>
-                                </Button>
-                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Previene que se seleccione la fila al hacer clic en el botón
+                                  setCurrentPersonal(p);
+                                  setShowModal(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation(); // Previene que se seleccione la fila al hacer clic en el botón
+                                  setDeleteId(p.id_personal);
+                                  setShowConfirmModal(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </TableCell>
                           </TableRow>
                         ))}
