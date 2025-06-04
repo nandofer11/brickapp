@@ -139,12 +139,16 @@ export default function PersonalPage() {
           return;
         }
 
-        // Validar que el RUC tenga razón social
+        const esEdicion = !!currentPersonal.id_personal;
+      const inputRucDeshabilitado = document.getElementById("ruc")?.getAttribute("disabled") === "";
+
+      if (!esEdicion || !inputRucDeshabilitado) {
         if (!currentPersonal.razon_social?.trim()) {
           toast.error("Debe validar el RUC ingresado");
           document.getElementById("ruc")?.focus();
           return;
         }
+      }
 
         // Validar que el nombre del DNI coincida con la razón social del RUC
         // const nombreDNI = currentPersonal.nombre_completo.trim().toLowerCase();
@@ -786,30 +790,30 @@ export default function PersonalPage() {
 
       {/* Modal de Confirmación de Eliminación */}
       <AlertDialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
-       <AlertDialogContent>
-  <AlertDialogHeader>
-    <div className="flex flex-col items-center justify-center">
-      <AlertTriangle className="h-12 w-12 text-destructive mb-2" />
-      <AlertDialogTitle className="text-xl font-semibold">Confirmar Eliminación</AlertDialogTitle>
-    </div>
-  </AlertDialogHeader>
-  
-  {/* No usar <p> dentro de <AlertDialogDescription> que ya es un <p> */}
-  <AlertDialogDescription className="text-center text-base">
-    ¿Está seguro que desea eliminar este registro?
-    <span className="block text-sm text-muted-foreground mt-1">Esta acción no se puede deshacer.</span>
-  </AlertDialogDescription>
-  
-  <AlertDialogFooter className="flex justify-center gap-2 mt-6">
-    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-    <AlertDialogAction
-      onClick={handleDelete}
-      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-    >
-      Eliminar
-    </AlertDialogAction>
-  </AlertDialogFooter>
-</AlertDialogContent>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <div className="flex flex-col items-center justify-center">
+              <AlertTriangle className="h-12 w-12 text-destructive mb-2" />
+              <AlertDialogTitle className="text-xl font-semibold">Confirmar Eliminación</AlertDialogTitle>
+            </div>
+          </AlertDialogHeader>
+
+          {/* No usar <p> dentro de <AlertDialogDescription> que ya es un <p> */}
+          <AlertDialogDescription className="text-center text-base">
+            ¿Está seguro que desea eliminar este registro?
+            <span className="block text-sm text-muted-foreground mt-1">Esta acción no se puede deshacer.</span>
+          </AlertDialogDescription>
+
+          <AlertDialogFooter className="flex justify-center gap-2 mt-6">
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
     </div>
   )
