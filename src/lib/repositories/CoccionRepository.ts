@@ -110,8 +110,8 @@ export class CoccionRepository extends BaseRepository {
         }
 
         return await prisma.$transaction(async (prisma) => {
-            // Primero eliminar registros de coccion_personal
-            await prisma.coccion_personal.deleteMany({
+            // Primero eliminar registros de coccion_turno
+            await prisma.coccion_turno.deleteMany({
                 where: { coccion_id_coccion: id_coccion }
             });
 
@@ -193,13 +193,4 @@ export class CoccionRepository extends BaseRepository {
         });
     }
 
-    async getOperadoresByIdCoccion(id_coccion: number) {
-        return await prisma.coccion_personal.findMany({
-            where: { coccion_id_coccion: id_coccion },
-            include: {
-                personal: true,
-                cargo_coccion: true
-            }
-        });
-    }
 }

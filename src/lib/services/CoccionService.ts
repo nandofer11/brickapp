@@ -36,22 +36,6 @@ export class CoccionService {
     return await coccionRepository.deleteCoccion(id_coccion, id_empresa);
   }
 
-  async createCoccionWithOperadores(coccionData: any, operadoresData: any[]) {
-    const nuevaCoccion = await this.createCoccion(coccionData);
-    
-    if (operadoresData?.length) {
-      await prisma.coccion_personal.createMany({
-        data: operadoresData.map(op => ({
-          personal_id_personal: op.personal_id_personal,
-          cargo_coccion_id_cargo_coccion: op.cargo_coccion_id_cargo_coccion,
-          coccion_id_coccion: nuevaCoccion.id_coccion
-        }))
-      });
-    }
-
-    return nuevaCoccion;
-  }
-
   public static async validarCoccionPorSemanaYHorno(
     semana_laboral_id: number,
     horno_id: number,
@@ -97,19 +81,11 @@ export class CoccionService {
     return await coccionRepository.deleteCoccionCompleta(id_coccion);
   }
 
-  async getOperadoresByCoccion(id_coccion: number) {
-    return await coccionRepository.getOperadoresByIdCoccion(id_coccion);
-  }
-
   async findByIdComplete(id_coccion: number) {
     const coccion = await this.findByIdWithRelations(id_coccion);
     if (!coccion) throw new Error('Cocción no encontrada');
     
-    const operadores = await this.getOperadoresByCoccion(id_coccion);
-    return {
-      ...coccion,
-      operadores
-    };
+    
   }
 }
 

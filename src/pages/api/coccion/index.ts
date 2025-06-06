@@ -1,12 +1,10 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { CoccionService } from "@/lib/services/CoccionService";
-import { CoccionPersonalService } from "@/lib/services/CoccionPersonalService";
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
 const coccionService = new CoccionService();
-const coccionOperadorService = new CoccionPersonalService();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { method, query } = req;
@@ -19,7 +17,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Si se solicita filtrar por semana laboral
         if (id_semana_laboral) {
           const coccionesPorSemana = await prisma.coccion.findMany({
-            where: { 
+            where: {
               semana_laboral_id_semana_laboral: Number(id_semana_laboral)
             },
             include: {
@@ -31,26 +29,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   estado: true
                 }
               },
-              coccion_personal: {
-                include: {
-                  personal: {
-                    select: {
-                      id_personal: true,
-                      nombre_completo: true,
-                      dni: true,
-                      pago_diario_normal: true,
-                      pago_diario_reducido: true
-                    }
-                  },
-                  cargo_coccion: {
-                    select: {
-                      id_cargo_coccion: true,
-                      nombre_cargo: true,
-                      costo_cargo: true
-                    }
-                  }
-                }
-              }
             }
           });
 
@@ -60,8 +38,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Si se solicita la información completa de la cocción
         if (id_coccion && include_complete === 'true') {
           const coccionCompleta = await prisma.coccion.findUnique({
-            where: { 
-              id_coccion: Number(id_coccion) 
+            where: {
+              id_coccion: Number(id_coccion)
             },
             include: {
               semana_laboral: {
@@ -72,26 +50,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                   estado: true
                 }
               },
-              coccion_personal: {
-                include: {
-                  personal: {
-                    select: {
-                      id_personal: true,
-                      nombre_completo: true,
-                      dni: true,
-                      pago_diario_normal: true,
-                      pago_diario_reducido: true
-                    }
-                  },
-                  cargo_coccion: {
-                    select: {
-                      id_cargo_coccion: true,
-                      nombre_cargo: true,
-                      costo_cargo: true
-                    }
-                  }
-                }
-              }
             }
           });
 
@@ -100,12 +58,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
 
           return res.status(200).json(coccionCompleta);
-        }
-
-        // Si se solicita operadores específicamente (mantener para compatibilidad)
-        if (id_coccion && include_personal === 'true') {
-          const operadores = await coccionService.getOperadoresByCoccion(Number(id_coccion));
-          return res.status(200).json(operadores);
         }
 
         // Si se solicita cocción con relaciones (mantener para compatibilidad)
@@ -121,12 +73,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             include: {
               horno: true,
               semana_laboral: true,
-              coccion_personal: {
-                include: {
-                  personal: true,
-                  cargo_coccion: true
-                }
-              }
             }
           });
           return res.status(200).json(coccion);
@@ -152,25 +98,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     case "POST":
       try {
-        const { coccion, operadores } = req.body;
-        
+        const coccionData = req.body;
+
         // Validar campos obligatorios
-        if (!coccion.semana_trabajo_id_semana_trabajo || 
-            !coccion.horno_id_horno || 
-            !coccion.fecha_encendido) {
-          return res.status(400).json({ 
-            message: "Los campos semana_trabajo_id_semana_trabajo, horno_id_horno y fecha_encendido son obligatorios" 
+        if (!coccionData.semana_laboral_id_semana_laboral ||
+          !coccionData.horno_id_horno ||
+          !coccionData.fecha_encendido) {
+          return res.status(400).json({
+            message: "Los campos semana_laboral_id_semana_laboral, horno_id_horno y fecha_encendido son obligatorios"
           });
         }
 
-        const coccionData = {
-          ...coccion,
-          semana_laboral_id_semana_laboral: coccion.semana_trabajo_id_semana_trabajo,
-          fecha_encendido: new Date(coccion.fecha_encendido),
-        };
-        delete coccionData.semana_trabajo_id_semana_trabajo;
+        // Convertir la fecha a objeto Date para formato ISO
+        coccionData.fecha_encendido = new Date(coccionData.fecha_encendido);
 
-        const result = await coccionService.createCoccionWithOperadores(coccionData, operadores);
+        const result = await coccionService.createCoccion(coccionData);
         return res.status(201).json(result);
       } catch (error: any) {
         return res.status(500).json({ message: error.message });
@@ -178,51 +120,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     case "PUT":
       try {
-        const { where, coccion, operadores } = req.body;
-        // Convertir id_coccion a número y validar
-        const id_coccion = Number(where?.id_coccion);
+        // Versión modificada - Obtener id_coccion directamente del cuerpo
+        const id_coccion = Number(req.body.id_coccion);
         if (!id_coccion || isNaN(id_coccion)) {
           res.status(400).json({ message: "id_coccion es requerido y debe ser un número válido" });
           return;
         }
 
-        // Validar campos obligatorios de cocción
-        if (!coccion.semana_trabajo_id_semana_trabajo || 
-            !coccion.horno_id_horno || 
-            !coccion.fecha_encendido) {
-          return res.status(400).json({ 
-            message: "Los campos semana_trabajo_id_semana_trabajo, horno_id_horno y fecha_encendido son obligatorios" 
+        // Extraer el id_coccion para usarlo en el where de Prisma, pero no incluirlo en los datos
+        const { id_coccion: _, ...dataToUpdate } = req.body;
+
+        // Validar campos obligatorios
+        if (!dataToUpdate.semana_laboral_id_semana_laboral ||
+          !dataToUpdate.horno_id_horno ||
+          !dataToUpdate.fecha_encendido) {
+          return res.status(400).json({
+            message: "Los campos semana_trabajo_id_semana_trabajo, horno_id_horno y fecha_encendido son obligatorios"
           });
         }
 
-        // Mapear los campos al formato correcto para Prisma
-        const coccionData = {
-          ...coccion,
-          semana_laboral_id_semana_laboral: coccion.semana_trabajo_id_semana_trabajo,
-          fecha_encendido: new Date(coccion.fecha_encendido),
-        };
-        
-        // Eliminar el campo incorrecto
-        delete coccionData.semana_trabajo_id_semana_trabajo;
-
-        // Validar operadores si se proporcionan
-        if (operadores?.length) {
-          const operadoresInvalidos = operadores.some((op: any) => 
-            !op.personal_id_personal || !op.cargo_coccion_id_cargo_coccion
-          );
-
-          if (operadoresInvalidos) {
-            return res.status(400).json({ 
-              message: "Cada operador debe tener personal_id_personal y cargo_coccion_id_cargo_coccion" 
-            });
-          }
+        // Convertir fechas de string a objeto Date para formato ISO
+        if (dataToUpdate.fecha_encendido && typeof dataToUpdate.fecha_encendido === 'string') {
+          dataToUpdate.fecha_encendido = new Date(dataToUpdate.fecha_encendido);
         }
 
-        // Eliminar id_coccion del objeto coccion antes de actualizar
-        const { id_coccion: _, ...coccionSinId } = coccion || {};
+        if (dataToUpdate.fecha_apagado && typeof dataToUpdate.fecha_apagado === 'string') {
+          dataToUpdate.fecha_apagado = new Date(dataToUpdate.fecha_apagado);
+        }
+
+        // Mapear los campos al formato correcto para Prisma
+        if (dataToUpdate.semana_labora_id_semana_laboral) {
+          dataToUpdate.semana_laboral_id_semana_laboral = dataToUpdate.semana_laboral_id_semana_laboral;
+          delete dataToUpdate.semana_laboral_id_semana_laboral;
+        }
 
         // Llama al servicio con el objeto limpio
-        const result = await coccionService.updateCoccionCompleta(id_coccion, coccionSinId, operadores);
+        const result = await coccionService.updateCoccion(id_coccion, dataToUpdate);
 
         res.status(200).json(result);
         return;
@@ -233,17 +166,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     case "DELETE":
       try {
         const id_coccion = Number(req.query.id_coccion);
-        
+
         if (!id_coccion || isNaN(id_coccion)) {
-            return res.status(400).json({ message: "ID de cocción inválido" });
+          return res.status(400).json({ message: "ID de cocción inválido" });
         }
 
         const result = await coccionService.deleteCoccionCompleta(id_coccion);
         return res.status(200).json(result);
       } catch (error) {
         console.error('Error al eliminar:', error);
-        return res.status(500).json({ 
-            message: error instanceof Error ? error.message : "Error al eliminar cocción" 
+        return res.status(500).json({
+          message: error instanceof Error ? error.message : "Error al eliminar cocción"
         });
       }
 
