@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { Pencil, Trash2, Calendar as CalendarIcon, Loader2, X as XIcon, CalendarX } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -15,6 +15,9 @@ import { useForm } from "react-hook-form";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils"
+
+
+import { formatDate, formatDateForInput, formatDateWithDayName } from "@/utils/dateFormat";
 
 import { toast } from "react-toastify";
 
@@ -46,12 +49,23 @@ export default function Page() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Estados para manejo de cierre de semana
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [semanaToClose, setSemanaToClose] = useState<number | null>(null);
+
+
   const form = useForm<z.infer<typeof formSchema>>({
     defaultValues: {
       fecha_inicio: undefined,
       fecha_fin: undefined,
     },
   });
+
+  useEffect(() => {
+    document.title = "Dashboard"
+    fetchSemanasLaborales();
+
+  }, [isModalOpen]);
 
   const fetchSemanasLaborales = async () => {
     setIsLoading(true);
@@ -61,8 +75,14 @@ export default function Page() {
         throw new Error('Error al cargar los datos');
       }
       const data = await response.json();
-      // Asegurarse de que data sea un array
-      setSemanasLaborales(Array.isArray(data) ? data : []);
+      // Asegurarse de que data sea un array y obtener solo las últimas 4 semanas
+      const semanasOrdenadas = Array.isArray(data)
+        ? data.sort((a, b) => new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime())
+        : [];
+
+      // Tomar solo las últimas 4 semanas
+      const ultimasCuatroSemanas = semanasOrdenadas.slice(0, 4);
+      setSemanasLaborales(ultimasCuatroSemanas);
     } catch (error) {
       console.error('Error al cargar semanas laborales:', error);
       toast.error('Error al cargar semanas laborales');
@@ -87,15 +107,36 @@ export default function Page() {
   };
 
   const getNextMonday = (date: Date) => {
+    // Crear una nueva instancia de fecha para no modificar la original
     const nextMonday = new Date(date);
-    nextMonday.setDate(date.getDate() + (8 - date.getDay()));
+
+    // Resetear las horas, minutos, segundos para evitar problemas de comparación
+    nextMonday.setHours(0, 0, 0, 0);
+
+    const dayOfWeek = nextMonday.getDay(); // 0 es domingo, 6 es sábado
+
+    let daysToAdd;
+
+    if (dayOfWeek === 0) { // Domingo
+      daysToAdd = 1;
+    } else if (dayOfWeek === 6) { // Sábado
+      daysToAdd = 2;
+    } else { // Cualquier otro día
+      daysToAdd = 8 - dayOfWeek;
+    }
+
+    nextMonday.setDate(nextMonday.getDate() + daysToAdd);
+
+    console.log('Fecha original:', date.toISOString().split('T')[0]);
+    console.log('Próximo lunes calculado:', nextMonday.toISOString().split('T')[0]);
+
     return nextMonday;
   };
 
   const validateNewWeek = async (startDate: Date) => {
     const response = await fetch('/api/semana_laboral');
     const semanas = await response.json();
-    
+
     // Verificar si hay semana activa
     const activeSemana = semanas.find((s: SemanaLaboral) => s.estado === 1);
     if (activeSemana) {
@@ -103,12 +144,23 @@ export default function Page() {
     }
 
     // Verificar continuidad con última semana
-    const lastSemana = semanas[semanas.length - 1];
+    const lastSemana = semanas.length > 0 ? semanas[semanas.length - 1] : null;
     if (lastSemana) {
       const lastEndDate = new Date(lastSemana.fecha_fin);
+      lastEndDate.setHours(0, 0, 0, 0); // Resetear hora para comparación correcta
+
       const expectedNextMonday = getNextMonday(lastEndDate);
-      if (startDate.getTime() !== expectedNextMonday.getTime()) {
-        throw new Error("La fecha de inicio debe ser el lunes siguiente a la última semana registrada");
+
+      // Normalizar las fechas para comparación (solo año, mes, día)
+      const expectedStr = expectedNextMonday.toISOString().split('T')[0];
+      const startDateStr = startDate.toISOString().split('T')[0];
+
+      console.log('Fecha fin última semana:', lastEndDate.toISOString().split('T')[0]);
+      console.log('Lunes siguiente esperado:', expectedStr);
+      console.log('Fecha inicio proporcionada:', startDateStr);
+
+      if (expectedStr !== startDateStr) {
+        throw new Error(`La fecha de inicio debe ser el lunes siguiente a la última semana registrada (${expectedStr.split('-').reverse().join('/')})`);
       }
     }
   };
@@ -119,14 +171,14 @@ export default function Page() {
       // Convertir las fechas string a objetos Date y ajustar la zona horaria
       const fechaInicio = new Date(semana.fecha_inicio);
       const fechaFin = new Date(semana.fecha_fin);
-      
+
       // Crear nuevas fechas con la hora establecida a medianoche en la zona horaria local
       const fechaInicioLocal = new Date(
         fechaInicio.getUTCFullYear(),
         fechaInicio.getUTCMonth(),
         fechaInicio.getUTCDate()
       );
-      
+
       const fechaFinLocal = new Date(
         fechaFin.getUTCFullYear(),
         fechaFin.getUTCMonth(),
@@ -136,7 +188,7 @@ export default function Page() {
       // Establecer las fechas en el formulario
       form.setValue('fecha_inicio', fechaInicioLocal, { shouldValidate: true });
       form.setValue('fecha_fin', fechaFinLocal, { shouldValidate: true });
-      
+
       setIsEditing(true);
       setIsModalOpen(true);
     } catch (error) {
@@ -147,13 +199,32 @@ export default function Page() {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       const { fecha_inicio, fecha_fin } = values;
-      
+
+      // Validar que ambas fechas existan
+      if (!fecha_inicio) {
+        toast.error("Debe seleccionar una fecha de inicio");
+        return;
+      }
+
+      if (!fecha_fin) {
+        toast.error("Debe seleccionar una fecha de fin");
+        return;
+      }
+
+
+      // Asegurarse de que las fechas tengan hora 00:00:00
+      const startDate = new Date(fecha_inicio);
+      startDate.setHours(0, 0, 0, 0);
+
+      const endDate = new Date(fecha_fin);
+      endDate.setHours(0, 0, 0, 0);
+
       // Validar si existe una semana activa al crear una nueva
       if (!isEditing) {
         const semanasResponse = await fetch('/api/semana_laboral');
         const semanas = await semanasResponse.json();
         const semanasActivas = semanas.filter((s: SemanaLaboral) => s.estado === 1);
-        
+
         if (semanasActivas.length > 0) {
           toast.error("No se puede crear una nueva semana mientras exista una activa. Por favor, cierre la semana actual.");
           return;
@@ -171,20 +242,19 @@ export default function Page() {
         toast.error("La semana laboral debe tener entre 6 y 7 días");
         return;
       }
-
       if (!isEditing) {
-        if (!isMonday(fecha_inicio)) {
+        if (!isMonday(startDate)) {
           toast.error("La fecha de inicio debe ser lunes");
           return;
         }
-        await validateNewWeek(fecha_inicio);
+        await validateNewWeek(startDate);
       }
 
       const endpoint = '/api/semana_laboral';
       const method = isEditing ? 'PUT' : 'POST';
       const body = {
-        fecha_inicio: fecha_inicio.toISOString(),
-        fecha_fin: fecha_fin.toISOString(),
+        fecha_inicio: startDate.toISOString(),
+        fecha_fin: endDate.toISOString(),
         estado: 1,
         ...(isEditing && { id_semana_laboral: selectedSemanaId })
       };
@@ -227,8 +297,7 @@ export default function Page() {
   };
 
   const formatearFecha = (fecha: string) => {
-    const date = new Date(fecha);
-    return date.toISOString().split('T')[0].split('-').reverse().join('/');
+    return formatDateWithDayName(fecha);
   };
 
   const handleModalClose = () => {
@@ -237,20 +306,91 @@ export default function Page() {
     form.reset();
   };
 
-  useEffect(() => {
-    if (isModalOpen) {
-      fetchSemanasLaborales();
+
+
+  // Función para cerrar una semana laboral
+  const handleCerrarSemana = async (idSemana: number) => {
+    setSemanaToClose(idSemana);
+    setShowCloseModal(true);
+
+  };
+
+  const confirmCerrarSemana = async () => {
+    try {
+      if (!semanaToClose) return;
+
+      const response = await fetch('/api/semana_laboral', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_semana_laboral: semanaToClose,
+          estado: 0 // Actualizar estado a "cerrado"
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al cerrar la semana');
+      }
+
+      toast.success('Semana laboral cerrada exitosamente');
+      setShowCloseModal(false);
+      await fetchSemanasLaborales();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al cerrar la semana');
     }
-  }, [isModalOpen]);
+  }
+
+  const semanaActiva = semanasLaborales.find(semana => semana.estado === 1);
 
   return (
     <>
       <div className="flex flex-1 flex-col gap-6 p-6">
-        <div className="flex flex-col gap-4">
-          <h1 className="text-3xl font-bold tracking-tight">Bienvenido</h1>
-          <p className="text-muted-foreground">Gestione su semana laboral y vea los registros existentes.</p>
-          <div className="flex items-center gap-4">
-            <Button onClick={() => setIsModalOpen(true)}>Semana Laboral</Button>
+        <div className="flex gap-4 justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Bienvenido</h1>
+            <p className="text-muted-foreground">Gestione su semana laboral y vea los registros existentes.</p>
+            <div className="flex items-center gap-4">
+              <Button onClick={() => setIsModalOpen(true)}>Semana Laboral</Button>
+            </div>
+          </div>
+
+          <div className="min-w-[300px] max-w-sm rounded-xl border bg-card p-6 shadow-sm">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-lg font-semibold">Semana Laboral</h3>
+
+              {semanaActiva ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Estado:</span>
+                    <Badge
+                      className={cn(
+                        "px-2 py-1",
+                        "bg-green-100 text-green-800 hover:bg-green-100"
+                      )}
+                    >
+                      Activa
+                    </Badge>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Fecha inicio:</span>
+                    <span className="font-medium"> {formatearFecha(semanaActiva.fecha_inicio)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Fecha fin:</span>
+                    <span className="font-medium"> {formatearFecha(semanaActiva.fecha_fin)}</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="py-2 text-center text-muted-foreground">
+                    No hay semana laboral activa.
+                  </div>
+
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -265,16 +405,16 @@ export default function Page() {
         </div>
       </div>
       <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="">
           <DialogHeader>
             <DialogTitle>Semana Laboral</DialogTitle>
             <DialogDescription>
-              {isEditing 
+              {isEditing
                 ? "Edite la fecha de fin de la semana laboral."
                 : "Ingrese las fechas de inicio y fin de la semana laboral."}
             </DialogDescription>
           </DialogHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4">
@@ -319,7 +459,7 @@ export default function Page() {
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={form.control}
                   name="fecha_fin"
@@ -397,33 +537,43 @@ export default function Page() {
                     <TableCell>{formatearFecha(semana.fecha_fin)}</TableCell>
                     <TableCell>
                       <Badge variant={semana.estado === 1 ? "default" : "destructive"}
-                      className={cn(
-                                                      "px-2 py-1",
-                                                      semana.estado === 1
-                                                        ? "bg-green-100 text-green-800 hover:bg-green-100"
-                                                        : "bg-red-100 text-red-800 hover:bg-red-100",
-                                                    )}>
+                        className={cn(
+                          "px-2 py-1",
+                          semana.estado === 1
+                            ? "bg-green-100 text-green-800 hover:bg-green-100"
+                            : "bg-red-100 text-red-800 hover:bg-red-100",
+                        )}>
                         {semana.estado === 1 ? 'Activo' : 'Cerrada'}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex gap-0">
                         {semana.estado === 1 && (
                           <>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               onClick={() => handleEdit(semana)}
+                              title="Editar semana"
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleCerrarSemana(semana.id_semana_laboral)}
+                              title="Cerrar semana"
+                            >
+                              <CalendarX className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
                               size="icon"
                               onClick={() => {
                                 setSelectedSemanaId(semana.id_semana_laboral);
                                 setShowDeleteModal(true);
                               }}
+                              title="Eliminar semana"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -452,6 +602,26 @@ export default function Page() {
             </Button>
             <Button variant="destructive" onClick={handleDelete}>
               Eliminar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showCloseModal} onOpenChange={setShowCloseModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar cierre de semana</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea cerrar esta semana laboral?
+              Una vez cerrada, no podrá realizar más cambios.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-4">
+            <Button variant="outline" onClick={() => setShowCloseModal(false)}>
+              Cancelar
+            </Button>
+            <Button variant="default" onClick={confirmCerrarSemana}>
+              Confirmar cierre
             </Button>
           </div>
         </DialogContent>
