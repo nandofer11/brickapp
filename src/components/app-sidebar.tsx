@@ -101,6 +101,17 @@ const data = {
         },
       ],
     },
+    {
+      title: "Reportes",
+      url: "#",
+      icon: DollarSign,
+      items: [
+        {
+          title: "Reporte Asistencia",
+          url: "/admin/reportes/asistencia",
+        },
+      ],
+    },
   ],
   // navSecondary: [
   //   {

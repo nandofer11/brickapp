@@ -55,7 +55,8 @@ export function NavMain({
                     {item.items.map((subItem) => (
                       <SidebarMenuSubItem key={subItem.title}>
                         <SidebarMenuSubButton asChild>
-                          <Link href={subItem.url}>
+                          <Link href={subItem.url}
+                          prefetch={true}>
                             <span>{subItem.title}</span>
                           </Link>
                         </SidebarMenuSubButton>
@@ -69,7 +70,7 @@ export function NavMain({
             // 🟢 Aquí renderizamos los items sin submenús como links normales
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild>
-                <Link href={item.url} className="flex items-center gap-2 w-full">
+                <Link prefetch={true} href={item.url} className="flex items-center gap-2 w-full">
                   {item.icon && <item.icon />}
                   <span>{item.title}</span>
                 </Link>
