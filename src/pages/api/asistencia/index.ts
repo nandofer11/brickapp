@@ -17,25 +17,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     switch (req.method) {
       case "GET":
+        // Verificar si se solicita una asistencia específica por ID
         if (req.query.id) {
           const id = parseInt(req.query.id as string, 10);
           const asistencia = await AsistenciaService.findById(id);
           return res.status(200).json(asistencia);
         }
 
-        const idSemana = req.query.id_semana_laboral ? parseInt(req.query.id_semana_laboral as string, 10) : null;
+        // Parámetros de filtrado
+        const idSemana = req.query.id_semana ? parseInt(req.query.id_semana as string, 10) : null;
+        const idPersonal = req.query.id_personal ? parseInt(req.query.id_personal as string, 10) : null;
         const fecha = req.query.fecha as string | undefined;
 
+        // Filtro por fecha y semana
         if (idSemana && fecha) {
           const asistenciaPorDia = await AsistenciaService.findByFechaAndSemana(fecha, idSemana, id_empresa);
           return res.status(200).json(asistenciaPorDia);
         }
 
+        // Filtro por semana y personal (si ambos están presentes)
+        if (idSemana && idPersonal) {
+          const asistenciasPersonalSemana = await AsistenciaService.findByPersonalAndSemana(idPersonal, idSemana, id_empresa);
+          return res.status(200).json(asistenciasPersonalSemana);
+        }
+
+        // Filtro solo por semana
         if (idSemana) {
           const asistenciasSemana = await AsistenciaService.findBySemana(idSemana, id_empresa);
           return res.status(200).json(asistenciasSemana);
         }
 
+        // Filtro solo por personal
+        if (idPersonal) {
+          const asistenciasPersonal = await AsistenciaService.findByPersonal(idPersonal, id_empresa);
+          return res.status(200).json(asistenciasPersonal);
+        }
+
+        // Si no hay filtros, obtener todas las asistencias de la empresa
         const todas = await AsistenciaService.findAllByEmpresa(id_empresa);
         return res.status(200).json(todas);
 

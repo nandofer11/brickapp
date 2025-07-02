@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { formatDateForInput, getCurrentDateForLima } from "@/utils/dateFormat" // Importar ambas funciones
 
 interface Personal {
   id_personal: number
@@ -54,6 +55,7 @@ interface Coccion {
   horno_id_horno: number
   semana_laboral_id_semana_laboral?: number
   fecha_encendido: string
+  horno: Horno
 }
 
 // Nueva interfaz para Horno
@@ -107,9 +109,7 @@ export default function AsistenciaPage() {
     [key: number]: { estado: string; id_asistencia?: number }
   }>({})
   const [selectAll, setSelectAll] = useState<"A" | "I" | "M" | null>(null)
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toLocaleDateString("es-PE", { timeZone: "America/Lima" }).split("/").reverse().join("-"),
-  )
+  const [selectedDate, setSelectedDate] = useState(getCurrentDateForLima())
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -134,7 +134,7 @@ export default function AsistenciaPage() {
   const [personalSeleccionado, setPersonalSeleccionado] = useState<Record<number, boolean>>({})
   const [turnosRegistrados, setTurnosRegistrados] = useState<CoccionTurno[]>([])
   const [cargandoTurnos, setCargandoTurnos] = useState(false)
-  
+
   // Nuevos estados para manejar la lógica de límites de humeadores/quemadores
   const [hornoActual, setHornoActual] = useState<Horno | null>(null)
   const [limitePuestos, setLimitePuestos] = useState<number>(0)
@@ -177,9 +177,17 @@ export default function AsistenciaPage() {
     try {
       const response = await fetch("/api/semana_laboral")
       const data = await response.json()
-      setSemanas(data)
 
-      const semanaAbierta = data.find((s: Semana) => s.estado === 1)
+      // Ordenar las semanas por fecha de inicio (más reciente primero)
+      const semanasOrdenadas = Array.isArray(data)
+        ? data.sort((a, b) => new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime())
+        : [];
+
+      // Obtener solo las últimas 4 semanas
+      const ultimasCuatroSemanas = semanasOrdenadas.slice(0, 4);
+      setSemanas(ultimasCuatroSemanas)
+
+      const semanaAbierta = ultimasCuatroSemanas.find((s: Semana) => s.estado === 1)
       if (semanaAbierta) {
         setSelectedSemana(semanaAbierta.id_semana_laboral)
       }
@@ -215,12 +223,14 @@ export default function AsistenciaPage() {
   // Nueva función para cargar cocciones
   const fetchCocciones = async () => {
     try {
-      const response = await fetch("/api/coccion?estados=Programado,En Proceso")
+      const response = await fetch("/api/coccion")
       const data = await response.json()
-      setCocciones(data)
+
+      // Filtrar cocciones que NO están finalizadas
+      const coccionesNoFinalizadas = Array.isArray(data) ? data.filter(c => c.estado !== "Finalizado") : [];
+      setCocciones(coccionesNoFinalizadas)
 
       // No seleccionar automáticamente la primera cocción
-      // Dejar que el usuario seleccione explícitamente
       setSelectedCoccion(null)
     } catch (error) {
       console.error("Error al cargar cocciones:", error)
@@ -287,18 +297,18 @@ export default function AsistenciaPage() {
   const getTurnoForPersonalAndDate = (idPersonal: number, fecha: string) => {
     // Normalizar la fecha para comparar solo año-mes-día
     const fechaNormalizada = new Date(fecha).toISOString().split('T')[0];
-    
+
     // Buscar si existe un turno para este personal en esta fecha
     const turno = turnosSemana.find(t => {
       if (!t.personal_id_personal || t.personal_id_personal !== idPersonal) return false;
-      
+
       // Normalizar la fecha del turno
       const fechaTurno = new Date(t.fecha).toISOString().split('T')[0];
       return fechaTurno === fechaNormalizada;
     });
-    
+
     if (!turno) return null;
-    
+
     // Identificar el tipo de cargo para devolver el tipo de icono
     const nombreCargo = turno.cargo_coccion?.nombre_cargo?.toLowerCase() || '';
     if (nombreCargo.includes('humeador')) {
@@ -330,7 +340,7 @@ export default function AsistenciaPage() {
         console.error("Error actualizando API:", error);
       }
     };
-    
+
     patchAPI();
   }, []);
 
@@ -447,16 +457,16 @@ export default function AsistenciaPage() {
   const handleCargoChange = (value: string) => {
     setSelectedCargo(value);
     resetSeleccionPersonal();
-    
+
     if (!hornoActual || !value) {
       setLimitePuestos(0);
       setTipoCargo('otro');
       return;
     }
-    
+
     // Determinar el tipo de cargo y establecer límite correspondiente
     const cargoNombre = cargos.find(c => c.id_cargo_coccion.toString() === value)?.nombre_cargo.toLowerCase() || "";
-    
+
     if (cargoNombre.includes('humeador')) {
       setTipoCargo('humeador');
       setLimitePuestos(hornoActual.cantidad_humeadores || 0);
@@ -467,7 +477,7 @@ export default function AsistenciaPage() {
       setTipoCargo('otro');
       setLimitePuestos(0); // Sin límite para otros cargos
     }
-    
+
     setPuestosSeleccionados(0);
   }
 
@@ -481,16 +491,16 @@ export default function AsistenciaPage() {
       }
       return;
     }
-    
+
     // Si está seleccionando
     const nuevaCantidad = puestosSeleccionados + 1;
-    
+
     // Verificar si alcanzó el límite
     if (limitePuestos > 0 && nuevaCantidad > limitePuestos) {
       toast.warning(`Solo puede seleccionar ${limitePuestos} ${tipoCargo === 'humeador' ? 'humeadores' : 'quemadores'}`);
       return;
     }
-    
+
     setPersonalSeleccionado(prev => ({ ...prev, [idPersonal]: true }));
     setPuestosSeleccionados(nuevaCantidad);
   }
@@ -506,7 +516,10 @@ export default function AsistenciaPage() {
   const resetTurnoModal = () => {
     setTipoPersonal("interno")
     setSelectedPersonalTurno(null)
-    setTurnoDate(new Date().toLocaleDateString("es-PE", { timeZone: "America/Lima" }).split("/").reverse().join("-"))
+
+    // función utilitaria que maneja específicamente la zona horaria de Lima
+    setTurnoDate(getCurrentDateForLima())
+
     setSelectedCargo("")
     setNombreExterno("")
     resetSeleccionPersonal()
@@ -543,7 +556,7 @@ export default function AsistenciaPage() {
   const filtrarCargosPorHorno = (idHorno: number) => {
     const filtrados = cargos.filter(cargo => cargo.id_horno === idHorno);
     setCargosFiltrados(filtrados);
-    
+
     // Si el cargo actual no está en los filtrados, limpiarlo
     if (selectedCargo && !filtrados.some(c => c.id_cargo_coccion.toString() === selectedCargo)) {
       setSelectedCargo("");
@@ -563,13 +576,13 @@ export default function AsistenciaPage() {
     const coccionId = Number(value)
     setSelectedCoccion(coccionId)
     fetchTurnosRegistrados(coccionId)
-    
+
     // Obtener el id_horno de la cocción seleccionada
     const coccionSeleccionada = cocciones.find(c => c.id_coccion === coccionId);
     if (coccionSeleccionada) {
       // Filtrar los cargos por el horno de la cocción
       filtrarCargosPorHorno(coccionSeleccionada.horno_id_horno);
-      
+
       // Obtener información del horno
       const hornoInfo = hornos.find(h => h.id_horno === coccionSeleccionada.horno_id_horno);
       if (hornoInfo) {
@@ -577,7 +590,7 @@ export default function AsistenciaPage() {
       } else {
         setHornoActual(null);
       }
-      
+
       // Reiniciar selección de cargos y personal cuando cambia la cocción
       setSelectedCargo("");
       resetSeleccionPersonal();
@@ -585,7 +598,7 @@ export default function AsistenciaPage() {
       setPuestosSeleccionados(0);
     }
   }
-  
+
   const formatDate = (dateString: string, includeYear = true) => {
     try {
       if (!dateString) return '';
@@ -627,15 +640,15 @@ export default function AsistenciaPage() {
       }
       return days;
     } catch (error) {
-      console.error('Error al obtener días de la semana:', error);
-      return [];
+      console.error('Error al obtener nombre del día:', error);
+      return 'Error';
     }
   }
 
   const selectedWeek = semanas.find((s) => s.id_semana_laboral === selectedSemana)
   const daysOfWeek = selectedWeek ? getDaysOfWeek(selectedWeek.fecha_inicio, selectedWeek.fecha_fin) : []
 
-  // Modificar la función handleEditAsistencia
+  // Modificamos la función handleEditAsistencia
   const handleEditAsistencia = async (fecha: string) => {
     try {
       if (!selectedSemana) {
@@ -691,6 +704,7 @@ export default function AsistenciaPage() {
     }
   }
 
+
   // Actualiza la función handleRegisterAsistencia para incluir id_asistencia en modo edición
   const handleRegisterAsistencia = async () => {
     if (!selectedSemana) {
@@ -709,6 +723,19 @@ export default function AsistenciaPage() {
       toast.error(`La fecha debe estar dentro del rango de la semana seleccionada (${formatDate(semanaActual.fecha_inicio)} al ${formatDate(semanaActual.fecha_fin)})`)
       return
     }
+
+    // verificar que todos los trabajadores tengan un estado seleccionado
+    const personalSinEstado = personal.filter(p =>
+      !selectedAsistencia[p.id_personal] ||
+      !selectedAsistencia[p.id_personal].estado ||
+      selectedAsistencia[p.id_personal].estado === "-"
+    );
+
+    if (personalSinEstado.length > 0) {
+      // Mostrar mensaje de error con el número de trabajadores sin estado
+      toast.error(`Hay ${personalSinEstado.length} trabajador(es) sin estado de asistencia seleccionado`);
+      return;
+    }
     try {
       // Si no estamos en modo edición, verificamos que no existan registros previos para la fecha
       if (!modoEdicion) {
@@ -726,9 +753,31 @@ export default function AsistenciaPage() {
 
         const asistenciasExistentes = await verificacionResponse.json();
 
-        // Si hay al menos un registro de asistencia para esta fecha, mostramos error
-        if (asistenciasExistentes && asistenciasExistentes.length > 0) {
-          toast.error("Ya existe registro de asistencia para la fecha seleccionada. Para modificarla, utilice la opción de edición desde la tabla.");
+        // Normalizar la fecha seleccionada para comparación (solo año-mes-día)
+        const fechaSeleccionadaNormalizada = new Date(selectedDate);
+        fechaSeleccionadaNormalizada.setHours(0, 0, 0, 0);
+        
+        // Verificar específicamente que las asistencias existentes correspondan a la semana seleccionada 
+        // Y a la misma fecha (ignorando la hora)
+        const asistenciasEnEstaSemanaYFecha = asistenciasExistentes.filter((a: any) => {
+          // Verificar semana
+          if (a.id_semana_laboral !== selectedSemana) return false;
+          
+          // Normalizar la fecha de asistencia existente (solo año-mes-día)
+          const fechaAsistencia = new Date(a.fecha);
+          fechaAsistencia.setHours(0, 0, 0, 0);
+          
+          // Comparar fechas normalizadas
+          return (
+            fechaAsistencia.getFullYear() === fechaSeleccionadaNormalizada.getFullYear() &&
+            fechaAsistencia.getMonth() === fechaSeleccionadaNormalizada.getMonth() &&
+            fechaAsistencia.getDate() === fechaSeleccionadaNormalizada.getDate()
+          );
+        });
+
+        // Si hay al menos un registro de asistencia para esta fecha Y en esta semana específica, mostramos error
+        if (asistenciasEnEstaSemanaYFecha && asistenciasEnEstaSemanaYFecha.length > 0) {
+          toast.error("Ya existe registro de asistencia para la fecha seleccionada en esta semana. Para modificarla, utilice la opción de edición desde la tabla.");
           return;
         }
       }
@@ -806,7 +855,7 @@ export default function AsistenciaPage() {
 
   // Actualiza resetModal para el nuevo formato
   const resetModal = () => {
-    setSelectedDate(new Date().toLocaleDateString("es-PE", { timeZone: "America/Lima" }).split("/").reverse().join("-"))
+    setSelectedDate(getCurrentDateForLima())
     setSelectedAsistencia({})
     setModoEdicion(false)
     setSelectAll(null)
@@ -814,11 +863,11 @@ export default function AsistenciaPage() {
 
   const handleOpenRegisterModal = () => {
     resetModal()
-    setSelectedDate(new Date().toISOString().split("T")[0])
+    setSelectedDate(getCurrentDateForLima())
     setModalOpen(true)
   }
 
-  // Nuevo manejador para abrir el modal de registro de turno
+  // Modificamos el handler para abrir el modal de turno
   const handleOpenTurnoModal = () => {
     resetTurnoModal();
     setTurnoModalOpen(true);
@@ -938,22 +987,27 @@ export default function AsistenciaPage() {
       ) : (
         <>
           <div className="flex">
-            <Card className="p-2 px-0">
-              <CardContent className="flex flex-wrap gap-4">
+            <Card className="p-1 px-0">
+              <CardContent className="flex flex-wrap gap-2 p-2">
                 <div className="flex items-center">
-                  <Check className="h-4 w-4 text-green-600 mr-2" /> Asistencia
+                  <Check className="h-3 w-3 text-green-600 mr-1" />
+                  <span className="text-xs">Asistencia</span>
                 </div>
                 <div className="flex items-center">
-                  <X className="h-4 w-4 text-red-600 mr-2" /> Faltas
+                  <X className="h-3 w-3 text-red-600 mr-1" />
+                  <span className="text-xs">Faltas</span>
                 </div>
                 <div className="flex items-center">
-                  <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" /> Medio Día
+                  <AlertCircle className="h-3 w-3 text-yellow-600 mr-1" />
+                  <span className="text-xs">Medio Día</span>
                 </div>
                 <div className="flex items-center">
-                  <Wind className="h-4 w-4 text-blue-600 mr-2" /> Humeador
+                  <Wind className="h-3 w-3 text-blue-600 mr-1" />
+                  <span className="text-xs">Humeador</span>
                 </div>
                 <div className="flex items-center">
-                  <Flame className="h-4 w-4 text-orange-600 mr-2" /> Quemador
+                  <Flame className="h-3 w-3 text-orange-600 mr-1" />
+                  <span className="text-xs">Quemador</span>
                 </div>
               </CardContent>
             </Card>
@@ -973,7 +1027,7 @@ export default function AsistenciaPage() {
                 <TableRow>
                   <TableHead className="bg-muted/50">Empleado</TableHead>
 
-                  {daysOfWeek.map((dia) => {
+                  {Array.isArray(daysOfWeek) && daysOfWeek.map((dia) => {
                     // Verificar si hay asistencias registradas para este día
                     const hayAsistenciasParaEsteDia = asistencia.some((a) => {
                       const asistenciaDate = new Date(a.fecha);
@@ -1028,7 +1082,7 @@ export default function AsistenciaPage() {
                   let totalFaltas = 0;
                   let totalMediosDias = 0;
 
-                  const asistenciaCeldas = daysOfWeek.map((dia) => {
+                  const asistenciaCeldas = Array.isArray(daysOfWeek) ? daysOfWeek.map((dia) => {
                     const estado = getAsistenciaForDate(p.id_personal, dia);
                     const tipoTurno = getTurnoForPersonalAndDate(p.id_personal, dia);
                     const turnoIcon = getTurnoIcon(tipoTurno);
@@ -1046,13 +1100,13 @@ export default function AsistenciaPage() {
                         </div>
                       </TableCell>
                     );
-                  });
+                  }) : [];
 
                   return (
                     <TableRow key={p.id_personal}>
                       <TableCell className="font-medium">{p.nombre_completo}</TableCell>
                       {asistenciaCeldas}
-                      <TableCell className="text-center font-bold bg-primary/10">
+                      <TableCell className="text-center font-bold bg-green-200">
                         {totalAsistencias}
                       </TableCell>
                       <TableCell className="text-center font-bold">{totalFaltas}</TableCell>
@@ -1261,7 +1315,7 @@ export default function AsistenciaPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Nuevo Modal para Registro de Turno */}
+      {/* Modal para Registro de Turno */}
       <Dialog open={turnoModalOpen} onOpenChange={setTurnoModalOpen}>
         <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[900px] p-3 sm:p-4 h-[90vh] overflow-hidden">
           <DialogHeader className="space-y-1">
@@ -1289,15 +1343,15 @@ export default function AsistenciaPage() {
                   <SelectContent>
                     {cocciones.length > 0 ? (
                       cocciones.map((coccion) => {
-                        const hornoNombre = getNombreHorno(coccion.horno_id_horno)
-                        const semanaInfo = getSemanaInfo(coccion.semana_laboral_id_semana_laboral)
+                        const hornoNombre = coccion.horno?.nombre || getNombreHorno(coccion.horno_id_horno)
+                        const coccionId = coccion.id_coccion
                         return (
                           <SelectItem
                             key={coccion.id_coccion}
                             value={String(coccion.id_coccion)}
                             className="text-xs sm:text-sm"
                           >
-                            {semanaInfo} - {hornoNombre}
+                            Id: {coccionId} - Horno: {hornoNombre} - {coccion.estado}
                           </SelectItem>
                         )
                       })
@@ -1308,11 +1362,11 @@ export default function AsistenciaPage() {
                     )}
                   </SelectContent>
                 </Select>
-                
+
                 {/* Mostrar información del horno seleccionado */}
                 {hornoActual && (
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Horno: {hornoActual.nombre} - Humeadores: {hornoActual.cantidad_humeadores || 0}, 
+                    Horno: {hornoActual.nombre} - Humeadores: {hornoActual.cantidad_humeadores || 0},
                     Quemadores: {hornoActual.cantidad_quemadores || 0}
                   </div>
                 )}
@@ -1375,14 +1429,14 @@ export default function AsistenciaPage() {
                       ))
                     ) : (
                       <SelectItem disabled value="no-cargo" className="text-xs sm:text-sm">
-                        {!selectedCoccion 
-                          ? "Primero seleccione una cocción" 
+                        {!selectedCoccion
+                          ? "Primero seleccione una cocción"
                           : "No hay cargos disponibles para este horno"}
                       </SelectItem>
                     )}
                   </SelectContent>
                 </Select>
-                
+
                 {/* Mostrar información de límite de selección */}
                 {limitePuestos > 0 && (
                   <div className="mt-1 text-xs text-primary">
@@ -1403,7 +1457,7 @@ export default function AsistenciaPage() {
                       </span>
                     )}
                   </Label>
-                  
+
                   <div className="max-h-[150px] overflow-y-auto pr-1">
                     {personal.length === 0 ? (
                       <div className="text-xs sm:text-sm text-center text-gray-500 py-4">
@@ -1420,20 +1474,21 @@ export default function AsistenciaPage() {
                               handlePersonalSelection(p.id_personal, e.target.checked);
                             }}
                             disabled={
-                              limitePuestos > 0 && // Si hay un límite
-                              puestosSeleccionados >= limitePuestos && // Si ya alcanzó el límite
-                              !personalSeleccionado[p.id_personal] // Y este checkbox no estaba seleccionado
+                              !selectedCargo || // Deshabilitar si no hay cargo seleccionado
+                              (limitePuestos > 0 && // Si hay un límite
+                                puestosSeleccionados >= limitePuestos && // Si ya alcanzó el límite
+                                !personalSeleccionado[p.id_personal]) // Y este checkbox no estaba seleccionado
                             }
                             className="h-4 w-4 rounded border-gray-300"
                           />
                           <Label
                             htmlFor={`personal-check-${p.id_personal}`}
-                            className={`text-xs sm:text-sm cursor-pointer ${
-                              limitePuestos > 0 && 
-                              puestosSeleccionados >= limitePuestos && 
-                              !personalSeleccionado[p.id_personal] ? 
-                              'text-gray-400' : ''
-                            }`}
+                            className={`text-xs sm:text-sm cursor-pointer ${!selectedCargo ||
+                                (limitePuestos > 0 &&
+                                  puestosSeleccionados >= limitePuestos &&
+                                  !personalSeleccionado[p.id_personal]) ?
+                                'text-gray-400' : ''
+                              }`}
                           >
                             {p.nombre_completo}
                           </Label>
@@ -1459,7 +1514,7 @@ export default function AsistenciaPage() {
               <div className="mt-4 flex-shrink-0">
                 <Button
                   onClick={handleRegisterTurno}
-                  disabled={isSubmittingTurno || 
+                  disabled={isSubmittingTurno ||
                     !selectedCoccion ||
                     !selectedCargo ||
                     (limitePuestos > 0 && puestosSeleccionados !== limitePuestos && tipoPersonal === "interno")}
@@ -1478,7 +1533,7 @@ export default function AsistenciaPage() {
             </div>
 
             {/* Columna de la tabla de turnos registrados */}
-            <div className="flex flex-col gap-3 overflow-hidden">
+            <div className="flex flex-col gap-3 overflow-hidden h-full">
               <div className="text-xs sm:text-sm font-medium">
                 Turnos registrados:
               </div>
@@ -1490,16 +1545,16 @@ export default function AsistenciaPage() {
                   </div>
                 ) : turnosRegistrados.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
-                    {!selectedCoccion 
-                      ? "Seleccione una cocción para ver los turnos" 
+                    {!selectedCoccion
+                      ? "Seleccione una cocción para ver los turnos"
                       : "No hay turnos registrados para esta cocción"}
                   </div>
                 ) : (
-                  <ScrollArea className="h-[calc(100%-2px)] w-full">
+                  <div className="h-full overflow-auto">
                     <Table>
                       <TableHeader className="sticky top-0 bg-white z-10">
                         <TableRow>
-                          <TableHead className="text-xs sm:text-sm">Cocción</TableHead>
+                          <TableHead className="text-xs sm:text-sm">ID</TableHead>
                           <TableHead className="text-xs sm:text-sm">Horno</TableHead>
                           <TableHead className="text-xs sm:text-sm">Personal</TableHead>
                           <TableHead className="text-xs sm:text-sm">Cargo</TableHead>
@@ -1519,7 +1574,7 @@ export default function AsistenciaPage() {
                               {turno.personal_externo || turno.nombre_personal || "Sin nombre"}
                             </TableCell>
                             <TableCell className="text-xs sm:text-sm py-1">
-                              {getNombreCargo(turno.cargo_coccion_id_cargo_coccion)}
+                              {turno.cargo || getNombreCargo(turno.cargo_coccion_id_cargo_coccion)}
                             </TableCell>
                             <TableCell className="text-xs sm:text-sm py-1">
                               {formatDate(turno.fecha)}
@@ -1528,7 +1583,7 @@ export default function AsistenciaPage() {
                         ))}
                       </TableBody>
                     </Table>
-                  </ScrollArea>
+                  </div>
                 )}
               </div>
 

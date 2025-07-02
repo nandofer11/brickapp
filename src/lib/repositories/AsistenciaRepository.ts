@@ -50,23 +50,59 @@ export class AsistenciaRepository extends BaseRepository {
   }
 
   async findBySemana(id_semana_laboral: number, id_empresa: number) {
-  return prisma.asistencia.findMany({
-    where: {
-      id_semana_laboral,
-      personal: {
-        id_empresa,
+    return prisma.asistencia.findMany({
+      where: {
+        id_semana_laboral,
+        personal: {
+          id_empresa,
+        },
       },
-    },
-    include: {
-      personal: true,
-      semana_laboral: true,
-    },
-    orderBy: {
-      fecha: "asc",
-    },
-  });
-}
+      include: {
+        personal: true,
+        semana_laboral: true,
+      },
+      orderBy: {
+        fecha: "asc",
+      },
+    });
+  }
 
+  async findByPersonal(id_personal: number, id_empresa: number) {
+    return prisma.asistencia.findMany({
+      where: {
+        id_personal,
+        personal: {
+          id_empresa,
+        },
+      },
+      include: {
+        personal: true,
+        semana_laboral: true,
+      },
+      orderBy: {
+        fecha: "asc",
+      },
+    });
+  }
+
+  async findByPersonalAndSemana(id_personal: number, id_semana_laboral: number, id_empresa: number) {
+    return prisma.asistencia.findMany({
+      where: {
+        id_personal,
+        id_semana_laboral,
+        personal: {
+          id_empresa,
+        },
+      },
+      include: {
+        personal: true,
+        semana_laboral: true,
+      },
+      orderBy: {
+        fecha: "asc",
+      },
+    });
+  }
 
   async findByFechaAndSemana(fechaInicio: Date, fechaFin: Date, id_semana_laboral: number, id_empresa: number) {
     return await prisma.asistencia.findMany({

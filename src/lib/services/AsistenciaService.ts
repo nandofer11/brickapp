@@ -25,9 +25,16 @@ export class AsistenciaService {
   }
 
   async findBySemana(id_semana_laboral: number, id_empresa: number) {
-  return await asistenciaRepository.findBySemana(id_semana_laboral, id_empresa);
-}
+    return await asistenciaRepository.findBySemana(id_semana_laboral, id_empresa);
+  }
 
+  async findByPersonal(id_personal: number, id_empresa: number) {
+    return await asistenciaRepository.findByPersonal(id_personal, id_empresa);
+  }
+
+  async findByPersonalAndSemana(id_personal: number, id_semana_laboral: number, id_empresa: number) {
+    return await asistenciaRepository.findByPersonalAndSemana(id_personal, id_semana_laboral, id_empresa);
+  }
 
   async findByFechaAndSemana(fecha: string, id_semana_laboral: number, id_empresa: number) {
     // Crear fecha inicio y fin para el día específico
