@@ -18,8 +18,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (req.query.id_semana) {
           const id_semana = parseInt(req.query.id_semana as string, 10);
           
-          // Obtener los turnos basados en la semana laboral
-          const turnos = await prisma.coccion_turno.findMany({
+          // Primero obtenemos la información de la semana para conocer sus fechas
+          const semanaLaboral = await prisma.semana_laboral.findUnique({
+            where: { id_semana_laboral: id_semana }
+          });
+          
+          if (!semanaLaboral) {
+            return res.status(404).json({ message: "Semana laboral no encontrada" });
+          }
+          
+          // Calculamos el rango de fechas de la semana
+          const fechaInicio = new Date(semanaLaboral.fecha_inicio);
+          const fechaFin = new Date(semanaLaboral.fecha_fin);
+          // Añadimos un día al final para incluir todo el último día
+          fechaFin.setDate(fechaFin.getDate() + 1);
+          
+          // Consulta 1: Turnos asociados directamente a cocciones de esta semana
+          const turnosPorCoccion = await prisma.coccion_turno.findMany({
             where: {
               coccion: {
                 semana_laboral_id_semana_laboral: id_semana,
@@ -28,6 +43,81 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             },
             include: {
               coccion: true,
+              cargo_coccion: true
+            }
+          });
+          
+          // Consulta 2: Turnos cuya fecha cae dentro del rango de esta semana,
+          // incluso si la cocción está asociada a otra semana
+          const turnosPorFecha = await prisma.coccion_turno.findMany({
+            where: {
+              fecha: {
+                gte: fechaInicio,
+                lt: fechaFin
+              },
+              coccion: {
+                id_empresa: id_empresa
+              },
+              // Excluimos los que ya obtuvimos en la consulta anterior
+              NOT: {
+                coccion: {
+                  semana_laboral_id_semana_laboral: id_semana
+                }
+              }
+            },
+            include: {
+              coccion: true,
+              cargo_coccion: true
+            }
+          });
+          
+          // Combinamos ambos conjuntos de resultados
+          const todosLosTurnos = [...turnosPorCoccion, ...turnosPorFecha];
+          
+          console.log(`Total turnos recuperados para semana ${id_semana}: ${todosLosTurnos.length}`);
+          console.log(`- Por cocción: ${turnosPorCoccion.length}`);
+          console.log(`- Por fecha: ${turnosPorFecha.length}`);
+          
+          return res.status(200).json(todosLosTurnos);
+        } 
+        // Consulta turnos por id_personal y id_semana
+        else if (req.query.id_personal && req.query.id_semana) {
+          const idPersonal = parseInt(req.query.id_personal as string, 10);
+          const idSemana = parseInt(req.query.id_semana as string, 10);
+          
+          // Obtenemos la información de la semana para conocer sus fechas
+          const semanaLaboral = await prisma.semana_laboral.findUnique({
+            where: { id_semana_laboral: idSemana }
+          });
+          
+          if (!semanaLaboral) {
+            return res.status(404).json({ message: "Semana laboral no encontrada" });
+          }
+          
+          // Calculamos el rango de fechas de la semana
+          const fechaInicio = new Date(semanaLaboral.fecha_inicio);
+          const fechaFin = new Date(semanaLaboral.fecha_fin);
+          // Añadimos un día al final para incluir todo el último día
+          fechaFin.setDate(fechaFin.getDate() + 1);
+          
+          // Buscamos turnos de este personal en el rango de fechas de la semana
+          const turnos = await prisma.coccion_turno.findMany({
+            where: {
+              personal_id_personal: idPersonal,
+              fecha: {
+                gte: fechaInicio,
+                lt: fechaFin
+              },
+              coccion: {
+                id_empresa: id_empresa
+              }
+            },
+            include: {
+              coccion: {
+                include: {
+                  horno: true
+                }
+              },
               cargo_coccion: true
             },
             orderBy: {

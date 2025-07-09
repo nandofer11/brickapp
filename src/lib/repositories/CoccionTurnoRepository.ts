@@ -36,7 +36,8 @@ export class CoccionTurnoRepository extends BaseRepository {
     });
   }
 
-  async createCoccionTurno(data: Prisma.coccion_turnoCreateInput) {
+  // Renombrar método para mantener consistencia con el servicio
+  async create(data: Prisma.coccion_turnoCreateInput) {
     return prisma.coccion_turno.create({ data });
   }
 
