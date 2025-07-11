@@ -253,22 +253,39 @@ export default function AsistenciaPage() {
   // Nueva función para cargar turnos registrados
   const fetchTurnosRegistrados = async (idCoccion?: number) => {
     try {
-      setCargandoTurnos(true)
-      const coccionId = idCoccion || selectedCoccion
+      setCargandoTurnos(true);
+      const coccionId = idCoccion || selectedCoccion;
 
       if (!coccionId) {
-        setTurnosRegistrados([])
-        return
+        setTurnosRegistrados([]);
+        return;
       }
 
-      const response = await fetch(`/api/coccion_turno?id_coccion=${coccionId}`)
-      const data = await response.json()
-      setTurnosRegistrados(data)
+      // Recuperar todos los turnos para esta cocción sin filtrar por semana
+      const response = await fetch(`/api/coccion_turno?id_coccion=${coccionId}`);
+      if (!response.ok) {
+        throw new Error("Error al cargar turnos");
+      }
+
+      const data = await response.json();
+
+      // Ordenar turnos por fecha (más recientes primero)
+      const turnosOrdenados = data.sort((a: CoccionTurno, b: CoccionTurno) =>
+        new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+      );
+
+      setTurnosRegistrados(turnosOrdenados);
+
+      // Adicionalmente, recargar los turnos de la semana para actualizar la vista principal
+      if (selectedSemana) {
+        fetchTurnosSemana(selectedSemana);
+      }
+
     } catch (error) {
       console.error("Error al cargar turnos:", error)
       toast.error("Error al cargar turnos registrados")
     } finally {
-      setCargandoTurnos(false)
+      setCargandoTurnos(false);
     }
   }
 
@@ -279,19 +296,77 @@ export default function AsistenciaPage() {
     }
   }, [selectedSemana]);
 
-  // Función para obtener los turnos de la semana seleccionada
+  // Modificamos la función fetchTurnosSemana para incluir turnos de cocciones que están en proceso
+  // aunque hayan comenzado en semanas anteriores
   const fetchTurnosSemana = async (idSemana: number) => {
     try {
-      const response = await fetch(`/api/coccion_turno?id_semana=${idSemana}`);
-      if (!response.ok) {
+      // Primero, obtener todas las cocciones en proceso o programadas
+      // que podrían estar relacionadas con la semana actual
+      const coccionesResponse = await fetch("/api/coccion?estado=En Proceso");
+      if (!coccionesResponse.ok) {
+        throw new Error("Error al cargar cocciones en proceso");
+      }
+      const coccionesEnProceso = await coccionesResponse.json();
+
+      // Obtener los IDs de todas estas cocciones
+      const idsCocciones = coccionesEnProceso.map((c: Coccion) => c.id_coccion);
+
+      // Ahora, obtenemos los turnos tanto por semana como por cocciones en proceso
+      const [turnosPorSemanaResponse, turnosPorCoccionResponse] = await Promise.all([
+        fetch(`/api/coccion_turno?id_semana=${idSemana}`),
+        // Si hay cocciones en proceso, consultamos también sus turnos
+        idsCocciones.length > 0
+          ? fetch(`/api/coccion_turno?ids_coccion=${idsCocciones.join(',')}`)
+          : Promise.resolve(new Response(JSON.stringify([]), { status: 200 }))
+      ]);
+
+      if (!turnosPorSemanaResponse.ok) {
         throw new Error("Error al cargar turnos de la semana");
       }
-      const data = await response.json();
-      setTurnosSemana(data);
+
+      // Obtener los turnos
+      const turnosPorSemana = await turnosPorSemanaResponse.json();
+
+      // Si hay cocciones en proceso, procesamos también sus turnos
+      let turnosPorCoccion = [];
+      if (idsCocciones.length > 0 && turnosPorCoccionResponse.ok) {
+        turnosPorCoccion = await turnosPorCoccionResponse.json();
+      }
+
+      // Combinar ambos conjuntos de turnos, eliminando duplicados
+      const todosLosTurnos = [...turnosPorSemana];
+
+      // Añadir solo turnos de cocciones en proceso que no estén ya en los turnos por semana
+      turnosPorCoccion.forEach((turno: TurnoInfo) => {
+        const yaExiste = todosLosTurnos.some((t: TurnoInfo) =>
+          t.id_coccion_personal === turno.id_coccion_personal
+        );
+        if (!yaExiste) {
+          todosLosTurnos.push(turno);
+        }
+      });
+
+      setTurnosSemana(todosLosTurnos);
+
     } catch (error) {
       console.error("Error cargando turnos de la semana:", error);
+      toast.warning("No se pudieron cargar algunos turnos de cocciones en proceso");
     }
   };
+
+  // Función para obtener los turnos de la semana seleccionada
+  // const fetchTurnosSemana = async (idSemana: number) => {
+  //   try {
+  //     const response = await fetch(`/api/coccion_turno?id_semana=${idSemana}`);
+  //     if (!response.ok) {
+  //       throw new Error("Error al cargar turnos de la semana");
+  //     }
+  //     const data = await response.json();
+  //     setTurnosSemana(data);
+  //   } catch (error) {
+  //     console.error("Error cargando turnos de la semana:", error);
+  //   }
+  // };
 
   // Función para verificar si un personal tiene turno en una fecha específica y obtener el tipo
   const getTurnoForPersonalAndDate = (idPersonal: number, fecha: string) => {
@@ -441,6 +516,11 @@ export default function AsistenciaPage() {
       resetSeleccionPersonal()
       fetchTurnosRegistrados()
 
+      // Importante: Actualizar también los turnos de la semana para la vista principal
+      if (selectedSemana) {
+        fetchTurnosSemana(selectedSemana);
+      }
+
       if (tipoPersonal === "externo") {
         setNombreExterno("")
       }
@@ -478,7 +558,7 @@ export default function AsistenciaPage() {
       setLimitePuestos(0); // Sin límite para otros cargos
     }
 
-    setPuestosSeleccionados(0);
+    setPuestosSeleccionados(0)
   }
 
   // Función para manejar la selección de personal con el límite de puestos
@@ -649,7 +729,7 @@ export default function AsistenciaPage() {
   const daysOfWeek = selectedWeek ? getDaysOfWeek(selectedWeek.fecha_inicio, selectedWeek.fecha_fin) : []
 
   // Modificamos la función handleEditAsistencia
-  const handleEditAsistencia = async (fecha: string) => {
+   const handleEditAsistencia = async (fecha: string) => {
     try {
       if (!selectedSemana) {
         toast.error("Por favor, seleccione una semana")
@@ -675,6 +755,8 @@ export default function AsistenciaPage() {
       if (!response.ok) throw new Error("Error al obtener asistencia")
 
       const asistenciaData = await response.json()
+      
+      console.log("Datos de asistencia recuperados:", asistenciaData);
 
       // Inicializar todas las asistencias como vacías
       const asistenciaSeleccionada: Record<number, { estado: "A" | "I" | "M" | "-"; id_asistencia?: number }> = {}
@@ -687,24 +769,32 @@ export default function AsistenciaPage() {
         }
       })
 
-      // Luego actualizar solo los que tienen asistencia registrada
-      asistenciaData.forEach((a: any) => {
-        if (a.id_personal) {
-          asistenciaSeleccionada[a.id_personal] = {
-            estado: a.estado as "A" | "I" | "M",
-            id_asistencia: a.id_asistencia
+      // Luego actualizar solo los que tienen asistencia registrada para esta fecha específica
+      // y para esta semana específica
+      if (Array.isArray(asistenciaData)) {
+        asistenciaData.forEach((a: any) => {
+          // Verificar que la asistencia corresponda a la semana seleccionada
+          if (a.id_personal && a.id_semana_laboral === selectedSemana) {
+            // Verificar que la fecha coincida (omitir la parte de la hora)
+            const fechaAsistencia = new Date(a.fecha).toISOString().split('T')[0];
+            if (fechaAsistencia === fechaFormateada) {
+              asistenciaSeleccionada[a.id_personal] = {
+                estado: a.estado as "A" | "I" | "M",
+                id_asistencia: a.id_asistencia
+              }
+            }
           }
-        }
-      })
+        })
+      }
 
+      console.log("Estado de asistencia procesado:", asistenciaSeleccionada);
+      
       setSelectedAsistencia(asistenciaSeleccionada)
     } catch (error) {
       console.error("Error cargando asistencia:", error)
       toast.error("Error al cargar la asistencia")
     }
   }
-
-
   // Actualiza la función handleRegisterAsistencia para incluir id_asistencia en modo edición
   const handleRegisterAsistencia = async () => {
     if (!selectedSemana) {
@@ -756,17 +846,17 @@ export default function AsistenciaPage() {
         // Normalizar la fecha seleccionada para comparación (solo año-mes-día)
         const fechaSeleccionadaNormalizada = new Date(selectedDate);
         fechaSeleccionadaNormalizada.setHours(0, 0, 0, 0);
-        
+
         // Verificar específicamente que las asistencias existentes correspondan a la semana seleccionada 
         // Y a la misma fecha (ignorando la hora)
         const asistenciasEnEstaSemanaYFecha = asistenciasExistentes.filter((a: any) => {
           // Verificar semana
           if (a.id_semana_laboral !== selectedSemana) return false;
-          
+
           // Normalizar la fecha de asistencia existente (solo año-mes-día)
           const fechaAsistencia = new Date(a.fecha);
           fechaAsistencia.setHours(0, 0, 0, 0);
-          
+
           // Comparar fechas normalizadas
           return (
             fechaAsistencia.getFullYear() === fechaSeleccionadaNormalizada.getFullYear() &&
@@ -1343,8 +1433,13 @@ export default function AsistenciaPage() {
                   <SelectContent>
                     {cocciones.length > 0 ? (
                       cocciones.map((coccion) => {
-                        const hornoNombre = coccion.horno?.nombre || getNombreHorno(coccion.horno_id_horno)
-                        const coccionId = coccion.id_coccion
+                        const hornoNombre = coccion.horno?.nombre || getNombreHorno(coccion.horno_id_horno);
+                        const coccionId = coccion.id_coccion;
+                        const semanaId = coccion.semana_laboral_id_semana_laboral;
+
+                        // Verificar si es una cocción de una semana anterior
+                        const esCoccionDeSemanaAnterior = semanaId !== selectedSemana;
+
                         return (
                           <SelectItem
                             key={coccion.id_coccion}
@@ -1352,8 +1447,9 @@ export default function AsistenciaPage() {
                             className="text-xs sm:text-sm"
                           >
                             Id: {coccionId} - Horno: {hornoNombre} - {coccion.estado}
+                            {esCoccionDeSemanaAnterior && " 🔄 (Continúa)"}
                           </SelectItem>
-                        )
+                        );
                       })
                     ) : (
                       <SelectItem disabled value="no-data" className="text-xs sm:text-sm">
@@ -1363,13 +1459,29 @@ export default function AsistenciaPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Mostrar información del horno seleccionado */}
-                {hornoActual && (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Horno: {hornoActual.nombre} - Humeadores: {hornoActual.cantidad_humeadores || 0},
-                    Quemadores: {hornoActual.cantidad_quemadores || 0}
-                  </div>
-                )}
+                {/* Mostrar información del horno seleccionado y aviso si es cocción de otra semana */}
+                {selectedCoccion && (() => {
+                  const coccionSeleccionada = cocciones.find(c => c.id_coccion === selectedCoccion);
+                  const esCoccionDeSemanaAnterior = coccionSeleccionada &&
+                    coccionSeleccionada.semana_laboral_id_semana_laboral !== selectedSemana;
+
+                  return (
+                    <div className="mt-1">
+                      {hornoActual && (
+                        <div className="text-xs text-muted-foreground">
+                          Horno: {hornoActual.nombre} - Humeadores: {hornoActual.cantidad_humeadores || 0},
+                          Quemadores: {hornoActual.cantidad_quemadores || 0}
+                        </div>
+                      )}
+
+                      {esCoccionDeSemanaAnterior && (
+                        <div className="text-xs text-amber-600 font-medium mt-1">
+                          ⚠️ Esta cocción comenzó en una semana anterior pero continúa en proceso.
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Selector de Tipo de Personal */}
@@ -1440,7 +1552,8 @@ export default function AsistenciaPage() {
                 {/* Mostrar información de límite de selección */}
                 {limitePuestos > 0 && (
                   <div className="mt-1 text-xs text-primary">
-                    Debe seleccionar {puestosSeleccionados}/{limitePuestos} {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'}
+                    Debe seleccionar {puestosSeleccionados}/{limitePuestos} {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'
+                    }
                   </div>
                 )}
               </div>
@@ -1484,10 +1597,10 @@ export default function AsistenciaPage() {
                           <Label
                             htmlFor={`personal-check-${p.id_personal}`}
                             className={`text-xs sm:text-sm cursor-pointer ${!selectedCargo ||
-                                (limitePuestos > 0 &&
-                                  puestosSeleccionados >= limitePuestos &&
-                                  !personalSeleccionado[p.id_personal]) ?
-                                'text-gray-400' : ''
+                              (limitePuestos > 0 &&
+                                puestosSeleccionados >= limitePuestos &&
+                                !personalSeleccionado[p.id_personal]) ?
+                              'text-gray-400' : ''
                               }`}
                           >
                             {p.nombre_completo}
@@ -1543,11 +1656,13 @@ export default function AsistenciaPage() {
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     <span className="ml-2 text-xs sm:text-sm">Cargando turnos...</span>
                   </div>
+                ) : !selectedCoccion ? (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
+                    Seleccione una cocción para ver los turnos
+                  </div>
                 ) : turnosRegistrados.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
-                    {!selectedCoccion
-                      ? "Seleccione una cocción para ver los turnos"
-                      : "No hay turnos registrados para esta cocción"}
+                    No hay turnos registrados para esta cocción
                   </div>
                 ) : (
                   <div className="h-full overflow-auto">
@@ -1568,7 +1683,9 @@ export default function AsistenciaPage() {
                               {turno.coccion_id_coccion}
                             </TableCell>
                             <TableCell className="text-xs sm:text-sm py-1">
-                              {turno.nombre_horno || getNombreHorno(turno.coccion_id_coccion)}
+                              {turno.nombre_horno || getNombreHorno(
+                                cocciones.find(c => c.id_coccion === turno.coccion_id_coccion)?.horno_id_horno ?? 0
+                              )}
                             </TableCell>
                             <TableCell className="text-xs sm:text-sm py-1">
                               {turno.personal_externo || turno.nombre_personal || "Sin nombre"}
