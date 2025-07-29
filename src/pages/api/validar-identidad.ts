@@ -31,6 +31,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ message: "Tipo de modelo no válido." });
     }
 
+    // Validar formato: RUC debe tener 11 dígitos
     const isRUC = numero.length === 11;
     const isDNI = numero.length === 8;
 
@@ -66,52 +67,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (isRUC) {
-      const url = `https://api.apis.net.pe/v2/sunat/ruc/full?numero=${numero}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${process.env.SUNAT_API_TOKEN || ""}`,
-        },
-      });
+      console.log(`Consultando RUC: ${numero}, Token: ${process.env.SUNAT_API_TOKEN?.substring(0, 10)}...`);
+      
+      const url = `https://api.decolecta.com/v1/sunat/ruc?numero=${numero}`;
+      
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${process.env.SUNAT_API_TOKEN || ""}`,
+          },
+        });
 
-      if (!response.ok) {
-        return res.status(400).json({ message: "Error al consultar RUC en SUNAT." });
+        if (!response.ok) {
+          console.error(`Error API SUNAT: ${response.status} ${response.statusText}`);
+          const errorText = await response.text();
+          console.error(`Respuesta de error: ${errorText}`);
+          return res.status(400).json({ message: `Error al consultar RUC en SUNAT: ${response.status} ${response.statusText}` });
+        }
+
+        const data = await response.json();
+        console.log("Respuesta SUNAT:", JSON.stringify(data).substring(0, 200));
+
+        // Verificar si la respuesta tiene los campos esperados (según el formato que enviaste)
+        if (!data.razon_social && data.razon_social !== "") {
+          return res.status(400).json({ message: "RUC no válido o sin datos de razón social." });
+        }
+
+        // Formatear respuesta con los campos que espera tu aplicación
+        return res.status(200).json({
+          razon_social: data.razon_social,
+          direccion: data.direccion || "-"
+        });
+      } catch (error) {
+        console.error("Error en la solicitud a SUNAT:", error);
+        return res.status(500).json({ message: "Error al comunicarse con el servicio de SUNAT" });
       }
-
-      const data = await response.json();
-
-      if (!data.razonSocial || !data.direccion) {
-        return res.status(400).json({ message: "RUC no válido o sin datos." });
-      }
-
-      return res.status(200).json({
-        razon_social: data.razonSocial,
-        direccion: data.direccion,
-      });
     }
 
     if (isDNI) {
-      const url = `https://api.apis.net.pe/v1/dni?numero=${numero}`;
-      const response = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${process.env.RENIEC_API_TOKEN || ""}`,
-        },
-      });
+      const url = `https://api.decolecta.com/v1/reniec/dni?numero=${numero}`;
+      
+      try {
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${process.env.RENIEC_API_TOKEN || ""}`,
+          },
+        });
 
-      if (!response.ok) {
-        return res.status(400).json({ message: "Error al consultar DNI en RENIEC." });
+        if (!response.ok) {
+          console.error(`Error API RENIEC: ${response.status} ${response.statusText}`);
+          const errorText = await response.text();
+          console.error(`Respuesta de error: ${errorText}`);
+          return res.status(400).json({ message: `Error al consultar DNI en RENIEC: ${response.status} ${response.statusText}` });
+        }
+
+        const data = await response.json();
+        console.log("Respuesta RENIEC:", JSON.stringify(data).substring(0, 200));
+        
+        // Adaptar al formato real de la respuesta
+        if (!data.first_name && !data.first_last_name && !data.second_last_name) {
+          return res.status(400).json({ message: "DNI no válido o sin datos." });
+        }
+
+        return res.status(200).json({
+          nombres: data.first_name,
+          apellido_paterno: data.first_last_name,
+          apellido_materno: data.second_last_name,
+          nombre_completo: data.full_name
+        });
+      } catch (error) {
+        console.error("Error en la solicitud a RENIEC:", error);
+        return res.status(500).json({ message: "Error al comunicarse con el servicio de RENIEC" });
       }
-
-      const data = await response.json();
-
-      if (!data.nombres || !data.apellidoPaterno || !data.apellidoMaterno) {
-        return res.status(400).json({ message: "DNI no válido o sin datos." });
-      }
-
-      return res.status(200).json({
-        nombres: data.nombres,
-        apellido_paterno: data.apellidoPaterno,
-        apellido_materno: data.apellidoMaterno,
-      });
     }
 
     return res.status(200).json({ message: "Documento válido." });
