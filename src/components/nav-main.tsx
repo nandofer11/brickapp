@@ -27,6 +27,7 @@ export function NavMain({
     items?: {
       title: string
       url: string
+      isActive?: boolean
     }[]
   }[]
 }) {
@@ -35,7 +36,8 @@ export function NavMain({
       <SidebarGroupLabel>Menu</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) =>
-          item.items?.length ? (
+          // Verificar si realmente tiene submenús (no arrays vacíos)
+          (item.items && item.items.length > 0) ? (
             <Collapsible
               key={item.title}
               asChild
@@ -44,8 +46,8 @@ export function NavMain({
             >
               <SidebarMenuItem>
                 <CollapsibleTrigger asChild>
-                  <SidebarMenuButton>
-                    {item.icon && <item.icon />}
+                  <SidebarMenuButton className={item.isActive ? "bg-primary/80 text-white hover:bg-primary/30" : ""}>
+                    {item.icon && <item.icon className={item.isActive ? "text-white" : ""} />}
                     <span>{item.title}</span>
                     <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                   </SidebarMenuButton>
@@ -54,9 +56,14 @@ export function NavMain({
                   <SidebarMenuSub>
                     {item.items.map((subItem) => (
                       <SidebarMenuSubItem key={subItem.title}>
-                        <SidebarMenuSubButton asChild>
-                          <Link href={subItem.url}
-                          prefetch={true}>
+                        <SidebarMenuSubButton 
+                          asChild
+                          className={subItem.isActive ? "bg-primary/10 text-primary font-medium" : ""}
+                        >
+                          <Link 
+                            href={subItem.url}
+                            prefetch={true}
+                          >
                             <span>{subItem.title}</span>
                           </Link>
                         </SidebarMenuSubButton>
@@ -70,9 +77,13 @@ export function NavMain({
             // 🟢 Aquí renderizamos los items sin submenús como links normales
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton asChild>
-                <Link prefetch={true} href={item.url} className="flex items-center gap-2 w-full">
-                  {item.icon && <item.icon />}
-                  <span>{item.title}</span>
+                <Link 
+                  prefetch={true} 
+                  href={item.url} 
+                  className={`flex items-center gap-2 w-full ${item.isActive ? "bg-primary/80 text-white hover:bg-primary/30" : ""}`}
+                >
+                  {item.icon && <item.icon className={item.isActive ? "text-white" : ""} />}
+                  <span className={item.isActive ? "text-white" : ""}>{item.title}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

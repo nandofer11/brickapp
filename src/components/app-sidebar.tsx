@@ -1,22 +1,17 @@
 "use client"
 
 import * as React from "react"
+import { usePathname } from "next/navigation"
 import {
-  BookOpen,
-  Bot,
   Command,
-  Frame,
   LifeBuoy,
-  Map,
   PieChart,
-  Send,
   Settings2,
-  DollarSign
+  DollarSign,
+  Settings
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
-import { NavProjects } from "@/components/nav-projects"
-import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
 import {
   Sidebar,
@@ -27,7 +22,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { title } from "process"
 
 const data = {
   user: {
@@ -71,9 +65,9 @@ const data = {
     },
     {
       title: "Asistencia",
-      url: "/admin/asistencia/",
+      url: "/admin/asistencia",
       icon: LifeBuoy,
-      items: [],
+      items: [], // Agregamos un array vacío para consistencia
     },
     {
       title: "Producción",
@@ -112,6 +106,12 @@ const data = {
         },
       ],
     },
+     {
+      title: "Configuración",
+      url: "/admin/configuracion",
+      icon: Settings,
+      items: [], // Agregamos un array vacío para consistencia
+    },
   ],
   // navSecondary: [
   //   {
@@ -145,6 +145,63 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const pathname = usePathname();
+
+  // Función para determinar si un elemento del menú está activo
+  const isMenuItemActive = (item: { url: string; items?: { url: string }[] }) => {
+    // Función auxiliar para normalizar URLs (quitar barra final si existe)
+    const normalizeUrl = (url: string) => url.endsWith('/') ? url.slice(0, -1) : url;
+    
+    // Normalizar URLs para comparación
+    const currentPath = pathname ? normalizeUrl(pathname) : '';
+    const itemUrl = normalizeUrl(item.url);
+    
+    // Determinar si el ítem tiene submenús reales (no arrays vacíos)
+    const hasSubMenus = item.items && item.items.length > 0;
+    
+    // Si la URL coincide exactamente (después de normalizar)
+    if (currentPath === itemUrl) return true;
+    
+    // Para elementos con URL directa (no placeholder "#")
+    if (item.url !== "#") {
+      // Si la ruta actual comienza con la URL del ítem, está activo
+      if (currentPath && currentPath.startsWith(itemUrl)) return true;
+    }
+    
+    // Para elementos con submenús, verificar si alguno de los subítems está activo
+    if (hasSubMenus && item.items?.some(subItem => {
+      const normalizedSubUrl = normalizeUrl(subItem.url);
+      return currentPath && currentPath.startsWith(normalizedSubUrl);
+    })) return true;
+    
+    return false;
+  };
+  
+  // Para depuración - ver la ruta actual
+  console.log("Ruta actual:", pathname);
+
+  // Marcar los elementos activos basados en la ruta actual
+  const navMainWithActive = data.navMain.map(item => {
+    // Determinar si realmente tiene submenús (no array vacíos)
+    const hasSubMenus = item.items && item.items.length > 0;
+    
+    // Función auxiliar para normalizar URLs (igual que en isMenuItemActive)
+    const normalizeUrl = (url: string) => url.endsWith('/') ? url.slice(0, -1) : url;
+    const currentPath = pathname ? normalizeUrl(pathname) : '';
+    
+    return {
+      ...item,
+      // Si tiene array vacío, tratarlo como sin submenú para evaluación de isActive
+      isActive: isMenuItemActive(item),
+      
+      // Si tiene subitems, verificar cuál está activo
+      items: hasSubMenus ? item.items.map(subItem => ({
+        ...subItem,
+        isActive: currentPath ? currentPath.startsWith(normalizeUrl(subItem.url)) : false
+      })) : item.items
+    };
+  });
+  
   return (
     <Sidebar
       className="top-(--header-height) h-[calc(100svh-var(--header-height))]!"
@@ -168,7 +225,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={navMainWithActive} />
         {/* <NavProjects projects={data.projects} />
         <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
       </SidebarContent>
