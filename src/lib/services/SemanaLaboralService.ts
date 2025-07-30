@@ -9,6 +9,10 @@ export class SemanaLaboralService {
     return await semanaLaboralRepository.findAllByIdEmpresa(id_empresa);
   }
 
+   async findByEmpresaAndEstado(id_empresa: number, estado: number) {
+    return await semanaLaboralRepository.findByEmpresaAndEstado(id_empresa, estado);
+  }
+
   async findById(id_semana_laboral: number) {
     return await semanaLaboralRepository.findById(id_semana_laboral);
   }
