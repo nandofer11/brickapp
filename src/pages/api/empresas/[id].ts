@@ -1,117 +1,99 @@
-// import type { NextApiRequest, NextApiResponse } from "next";
-// import { prisma } from "@/lib/prisma";
-// import { getServerSession } from "next-auth/next";
-// import { authOptions } from "../auth/[...nextauth]";
+import { NextApiRequest, NextApiResponse } from "next";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]";
+import { prisma } from "@/lib/prisma";
+import fs from 'fs';
+import path from 'path';
 
-// export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-//   // Verificar autenticación
-//   const session = await getServerSession(req, res, authOptions);
-  
-//   if (!session) {
-//     return res.status(401).json({ message: "No autorizado" });
-//   }
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  try {
+    const session = await getServerSession(req, res, authOptions);
+    if (!session) {
+      return res.status(401).json({ message: "No autorizado: sesión no encontrada" });
+    }
 
-//   // Obtener ID de la empresa
-//   const { id } = req.query;
-  
-//   if (!id || Array.isArray(id)) {
-//     return res.status(400).json({ message: "ID de empresa inválido" });
-//   }
-  
-//   // Convertir a número para usar con Prisma
-//   const id_empresa = parseInt(id, 10);
-  
-//   if (isNaN(id_empresa)) {
-//     return res.status(400).json({ message: "ID debe ser un número válido" });
-//   }
-//   // Verificar permisos: solo administradores o usuarios de la misma empresa
-//   const userEmpresaId = session.user?.id_empresa ? parseInt(session.user.id_empresa) : null;
-//   const esAdministrador = session.user?.rol === "Administrador";
-  
-//   if (!esAdministrador && userEmpresaId !== id_empresa) {
-//     return res.status(403).json({
-//       message: "No tienes permisos para acceder a información de esta empresa" 
-//     });
-//   }
-  
-//   try {
-//     // Comprobar que la empresa existe
-//     const empresa = await prisma.empresa.findUnique({
-//       where: { id_empresa }
-//     });
+    const sessionEmpresaId = Number(session.user?.id_empresa);
     
-//     if (!empresa) {
-//       return res.status(404).json({ message: "Empresa no encontrada" });
-//     }
-    
-//     switch (req.method) {
-//       case "GET":
-//         return res.status(200).json(empresa);
-        
-//       case "PUT":
-//         // Solo administradores pueden modificar empresas
-//         if (!esAdministrador) {
-//           return res.status(403).json({ 
-//             message: "No tienes permisos para modificar la información de la empresa" 
-//           });
-//         }
-        
-//         const { razon_social, direccion, telefono, email, web } = req.body;
-        
-//         // Validación de datos
-//         if (!razon_social) {
-//           return res.status(400).json({ 
-//             message: "La razón social es obligatoria" 
-//           });
-//         }
-        
-//         // Actualizar empresa
-//         const empresaActualizada = await prisma.empresa.update({
-//           where: { id_empresa },
-//           data: {
-//             razon_social,
-//             direccion: direccion || empresa.direccion,
-//             telefono: telefono || empresa.telefono,
-//             email: email || empresa.email,
-//             web: web || empresa.web
-//           }
-//         });
-        
-//         return res.status(200).json(empresaActualizada);
-        
-//       case "DELETE":
-//         // Solo super administradores pueden eliminar empresas (implementar lógica adicional si es necesario)
-//         if (!esAdministrador) {
-//           return res.status(403).json({ 
-//             message: "No tienes permisos para eliminar empresas" 
-//           });
-//         }
-        
-//         // Eliminar empresa
-//         await prisma.empresa.delete({
-//           where: { id_empresa }
-//         });
-        
-//         return res.status(200).json({ message: "Empresa eliminada correctamente" });
-        
-//       default:
-//         res.setHeader("Allow", ["GET", "PUT", "DELETE"]);
-//         return res.status(405).json({ message: `Método ${req.method} no permitido` });
-//     }
-//   } catch (error: any) {
-//     console.error(`Error en operación ${req.method} para empresa ${id}:`, error);
-    
-//     if (error.code === 'P2025') {
-//       return res.status(404).json({ message: "Empresa no encontrada" });
-//     }
-    
-//     if (error.code === 'P2002') {
-//       return res.status(400).json({ message: "Ya existe una empresa con ese RUC" });
-//     }
-    
-//     return res.status(500).json({ 
-//       message: "Error interno del servidor", 
-//       error: error.message 
-//     });
-//   }
-// } 
+    // Obtener el ID de la empresa desde la ruta
+    const { id } = req.query;
+    const empresaId = Number(id);
+
+    // Verificar que el usuario pertenece a esta empresa
+    if (sessionEmpresaId !== empresaId) {
+      return res.status(403).json({ message: "No autorizado: No puede acceder a los datos de otra empresa" });
+    }
+
+    switch (req.method) {
+      case "GET":
+        // Obtener datos de la empresa
+        const empresa = await prisma.empresa.findUnique({
+          where: { id_empresa: empresaId }
+        });
+
+        if (!empresa) {
+          return res.status(404).json({ message: "Empresa no encontrada" });
+        }
+
+        return res.status(200).json(empresa);
+
+      case "PUT":
+        // Actualizar datos de la empresa - solo campos permitidos
+        const { ciudad, telefono, email, web, logo } = req.body;
+
+        // Verificar que no se intenten modificar campos no permitidos
+        // (razon_social, ruc, direccion no se pueden modificar)
+        const update: any = {
+          ...(ciudad !== undefined && { ciudad }),
+          ...(telefono !== undefined && { telefono }),
+          ...(email !== undefined && { email }),
+          ...(web !== undefined && { web })
+        };
+
+        // Procesar la imagen si se envió una nueva
+        if (logo && logo.startsWith('data:image/')) {
+          try {
+            // Extraer información de la imagen en base64
+            const matches = logo.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            
+            if (matches && matches.length === 3) {
+              const imageType = matches[1];
+              const base64Data = matches[2];
+              const extension = imageType.split('/')[1];
+              
+              // Crear directorio si no existe
+              const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'logos');
+              fs.mkdirSync(uploadDir, { recursive: true });
+              
+              // Generar nombre de archivo único
+              const fileName = `logo_${empresaId}_${Date.now()}.${extension}`;
+              const filePath = path.join(uploadDir, fileName);
+              
+              // Guardar la imagen
+              fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+              
+              // Actualizar el path del logo en la base de datos
+              update.logo = `/uploads/logos/${fileName}`;
+            } else {
+              console.error("Formato de imagen inválido");
+            }
+          } catch (error) {
+            console.error("Error procesando la imagen:", error);
+          }
+        }
+
+        const updatedEmpresa = await prisma.empresa.update({
+          where: { id_empresa: empresaId },
+          data: update
+        });
+
+        return res.status(200).json(updatedEmpresa);
+
+      default:
+        res.setHeader("Allow", ["GET", "PUT"]);
+        return res.status(405).end(`Método ${req.method} no permitido.`);
+    }
+  } catch (error) {
+    console.error(`Error en /api/empresas/[id]:`, error);
+    return res.status(500).json({ message: "Error interno del servidor" });
+  }
+}

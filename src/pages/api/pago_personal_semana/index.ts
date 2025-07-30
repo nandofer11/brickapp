@@ -22,12 +22,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const id_semana = parseInt(req.query.id_semana as string, 10);
           const pagos = await PagoPersonalSemanaService.findBySemanaLaboral(id_semana);
           return res.status(200).json(pagos);
-        } 
+        }
         else if (req.query.id) {
           const id = parseInt(req.query.id as string, 10);
           const pago = await PagoPersonalSemanaService.findById(id);
           return res.status(200).json(pago);
-        } 
+        }
         else {
           const pagos = await PagoPersonalSemanaService.findAllByEmpresa(id_empresa);
           return res.status(200).json(pagos);
@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
       case "PUT":
-        const idToUpdate = req.query.id 
+        const idToUpdate = req.query.id
           ? parseInt(req.query.id as string, 10)
           : req.body.id_pago_personal_semana;
 
@@ -63,7 +63,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!idToPatch) {
           return res.status(400).json({ message: "ID requerido para actualizar" });
         }
-        
+
         const patchData = req.body;
         const updated = await PagoPersonalSemanaService.update(idToPatch, patchData);
         return res.status(200).json(updated);
@@ -83,9 +83,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } catch (error) {
     console.error("Error en /api/pago_personal_semana:", error);
-    return res.status(500).json({ 
+    return res.status(500).json({
       message: "Error del servidor",
-      error: error instanceof Error ? error.message : "Error desconocido" 
+      error: error instanceof Error ? error.message : "Error desconocido"
     });
   }
 }

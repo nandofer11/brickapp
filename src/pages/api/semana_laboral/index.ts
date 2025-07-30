@@ -22,8 +22,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const semanaLaboral = await SemanaLaboralService.findById(id);
           return res.status(200).json(semanaLaboral);
         } else {
-          const semanasLaborales = await SemanaLaboralService.findAllByIdEmpresa(id_empresa);
-          return res.status(200).json(semanasLaborales);
+           // Verificar si hay un filtro de estado en la consulta
+          const estado = req.query.estado ? parseInt(req.query.estado as string, 10) : undefined;
+          
+          // Si hay un filtro de estado, usar findByEmpresaAndEstado
+          if (estado !== undefined) {
+            const semanasLaborales = await SemanaLaboralService.findByEmpresaAndEstado(id_empresa, estado);
+            return res.status(200).json(semanasLaborales);
+          } else {
+            // Si no hay filtro, devolver todas
+            const semanasLaborales = await SemanaLaboralService.findAllByIdEmpresa(id_empresa);
+            return res.status(200).json(semanasLaborales);
+          }
         }
 
       case "POST":

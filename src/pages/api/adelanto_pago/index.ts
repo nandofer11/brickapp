@@ -36,7 +36,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
         return res.status(201).json(newAdelanto);
 
-      case "PUT":
+       case "PUT":
         const idToUpdate = req.query.id
           ? parseInt(req.query.id as string, 10)
           : req.body.id_adelanto_pago;
@@ -53,6 +53,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         });
         return res.status(200).json(updated);
 
+
       case "PATCH":
         // Añadir soporte explícito para PATCH para actualizaciones parciales
         const idToPatch = parseInt(req.query.id as string, 10);
@@ -61,13 +62,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         console.log(`Actualizando parcialmente adelanto ${idToPatch} con datos:`, req.body);
-        
+
         // Actualizar solo los campos proporcionados
         const patchResult = await AdelantoPagoService.updateAdelanto(idToPatch, {
           ...req.body,
           updated_at: new Date(),
         });
-        
+
         return res.status(200).json(patchResult);
 
       case "DELETE":
@@ -86,9 +87,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   } catch (error) {
     console.error("Error en /api/adelanto_pago:", error);
-    return res.status(500).json({ 
-      message: "Error interno del servidor", 
-      error: error instanceof Error ? error.message : "Error desconocido" 
+    return res.status(500).json({
+      message: "Error interno del servidor",
+      error: error instanceof Error ? error.message : "Error desconocido"
     });
   }
 }
