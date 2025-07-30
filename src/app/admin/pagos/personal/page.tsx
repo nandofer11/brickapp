@@ -116,7 +116,7 @@ interface ResumenPago {
   total_adelantos: number;
   total_descuentos: number;
   total_final: number;
-  estado_pago: "Falta Pagar" | "Pagado";
+  estado_pago: "Pendiente" | "Pagado";
   pago_aplicado?: 'normal' | 'reducido';
 }
 
@@ -211,6 +211,10 @@ export default function PagoPersonalPage() {
   const [isMultipleSelection, setIsMultipleSelection] = useState(false);
   const [selectedPersonal, setSelectedPersonal] = useState<number[]>([]);
   const [tareasExtra, setTareasExtra] = useState<TareaExtra[]>([]);
+  
+  // Estados para la eliminación de pagos
+  const [showConfirmDeletePagoModal, setShowConfirmDeletePagoModal] = useState(false);
+  const [pagoToDelete, setPagoToDelete] = useState<number | null>(null);
 
   // estado para manejar la selección de filas en la tabla principal 
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
@@ -246,10 +250,19 @@ export default function PagoPersonalPage() {
       semana: string;
       horno: string;
       turnos: {
+        fecha?: string;
         cargo: string;
         costo: number;
       }[];
       total_coccion: number;
+      turnosPorDia?: {
+        fecha: string;
+        turnos: {
+          cargo: string;
+          costo: number;
+        }[];
+      }[];
+      esCoccionDeOtraSemana?: boolean; // Indica si es una cocción de otra semana
     }[];
     totales: {
       asistencia: number;
@@ -258,6 +271,7 @@ export default function PagoPersonalPage() {
       adelantos: number;
       descuentos: number;
       final: number;
+      final_pagado: number;
     };
   }
 
@@ -389,17 +403,17 @@ export default function PagoPersonalPage() {
     fechaInicioSemana.setHours(0, 0, 0, 0);
     fechaFinSemana.setHours(23, 59, 59, 999); // Fin del día
 
-    console.log(`Rango de fechas para semana ${idSemana}:`, 
+    console.log(`Rango de fechas para semana ${idSemana}:`,
       `${fechaInicioSemana.toISOString()} - ${fechaFinSemana.toISOString()}`);
 
     // Filtrar datos por la semana seleccionada
     const asistenciasSemana = asistencias.filter((a) => a.id_semana_laboral.toString() === idSemana);
-    const adelantosSemana = adelantos.filter((a) => a.id_semana_laboral.toString() === idSemana);
+    const adelantosPendientes = adelantos.filter((a) => a.estado === "Pendiente");
     const tareasExtraSemana = tareasExtra.filter((t) => t.id_semana_laboral.toString() === idSemana);
 
     // Ya no necesitamos filtrar los turnos por fecha, pues la API ya los devuelve filtrados por el rango correcto
     const turnosSemana = Array.isArray(turnos) ? turnos : [];
-    
+
     // Crear un registro de turnos por personal para diagnóstico
     const turnosPorPersonal = turnosSemana.reduce((acc, turno) => {
       const idPersonal = turno.personal_id_personal;
@@ -415,7 +429,7 @@ export default function PagoPersonalPage() {
       }
       return acc;
     }, {});
-    
+
     console.log("Resumen de turnos por personal:", turnosPorPersonal);
 
     // Crear el resumen completo
@@ -452,9 +466,10 @@ export default function PagoPersonalPage() {
         (medios_dias * (pagoDiarioAplicado / 2));
 
       // Calcular adelantos
-      const adelantosPersonal = adelantosSemana.filter(
+      const adelantosPersonal = adelantosPendientes.filter(
         (a) => a.id_personal === p.id_personal
       );
+
       const total_adelantos = adelantosPersonal.reduce(
         (sum, adelanto) => sum + Number(adelanto.monto),
         0
@@ -470,25 +485,25 @@ export default function PagoPersonalPage() {
       );
 
       // Calcular total de cocción usando turnos - estos ya vienen filtrados por fecha desde la API
-      const turnosPersonal = turnosSemana.filter(turno => 
+      const turnosPersonal = turnosSemana.filter(turno =>
         turno.personal_id_personal === p.id_personal
       );
-      
+
       console.log(`Personal ${p.nombre_completo} - Turnos encontrados: ${turnosPersonal.length}`);
-      
+
       let total_coccion = 0;
-      
+
       // Sumar el costo de cada turno
       turnosPersonal.forEach(turno => {
         if (turno.cargo_coccion && turno.cargo_coccion.costo_cargo) {
           const costoCargo = Number(turno.cargo_coccion.costo_cargo);
           total_coccion += costoCargo;
-          
+
           // Mostrar detalles de cada turno para diagnóstico
           console.log(`Turno ${turno.id_coccion_personal} - ${turno.cargo_coccion.nombre_cargo} - ${new Date(turno.fecha).toLocaleDateString()}: S/. ${costoCargo}`);
         }
       });
-      
+
       console.log(`Personal ${p.nombre_completo} - Total cocción: S/. ${total_coccion}`);
 
       // Asumimos que total_descuentos ya está calculado o es 0
@@ -509,7 +524,7 @@ export default function PagoPersonalPage() {
         total_adelantos,
         total_descuentos,
         total_final,
-        estado_pago: "Falta Pagar",
+        estado_pago: "Pendiente",
         pago_aplicado: aplicaPagoReducido ? 'reducido' : 'normal'
       };
     });
@@ -646,7 +661,7 @@ export default function PagoPersonalPage() {
         total_adelantos: 0,
         total_descuentos: 0,
         total_final: 0,
-        estado_pago: "Falta Pagar"
+        estado_pago: "Pendiente"
       }));
 
       setResumenPagos(resumen);
@@ -1084,15 +1099,15 @@ export default function PagoPersonalPage() {
 
         // Asegurarse que todos los valores son números
         const pagoDiarioNormal = personalObj ?
-          (typeof personalObj.pago_diario_normal === 'number' ?
-            personalObj.pago_diario_normal :
-            Number(personalObj.pago_diario_normal))
+          (typeof personalObj.pago_diario_normal === 'number'
+            ? personalObj.pago_diario_normal
+            : Number(personalObj.pago_diario_normal))
           : 0;
 
         const pagoDiarioReducido = aplicaPagoReducido && personalObj?.pago_diario_reducido ?
-          (typeof personalObj.pago_diario_reducido === 'number' ?
-            personalObj.pago_diario_reducido :
-            Number(personalObj.pago_diario_reducido))
+          (typeof personalObj.pago_diario_reducido === 'number'
+            ? personalObj.pago_diario_reducido
+            : Number(personalObj.pago_diario_reducido))
           : 0;
 
         // Determinar qué pago aplicar
@@ -1177,122 +1192,97 @@ export default function PagoPersonalPage() {
       const resumenObj = resumenPagos.find(r => r.id_personal === idPersonal);
       if (!resumenObj) throw new Error("No se encontró el resumen de pago");
 
-      // Obtener la semana activa (estado 1)
-      const semanaActiva = semanasLaboral.find(s => s.estado === 1);
-      if (!semanaActiva) throw new Error("No se encontró la semana activa");
+      // Obtener la semana actual seleccionada
+      const semanaActiva = semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada);
+      if (!semanaActiva) throw new Error("No se encontró la semana seleccionada");
       const idSemanaActiva = semanaActiva.id_semana_laboral.toString();
 
-      // Definir rango de fechas para filtrar turnos
-      // const fechaInicio = new Date(semanaActiva.fecha_inicio);
-      // const fechaFin = new Date(semanaActiva.fecha_fin);
-      // fechaInicio.setHours(0, 0, 0, 0);
-      // fechaFin.setHours(23, 59, 59, 999);
+      // Definir rango de fechas para la semana actual
+      const fechaInicio = new Date(semanaActiva.fecha_inicio);
+      const fechaFin = new Date(semanaActiva.fecha_fin);
+      // Ajustar para incluir el día completo
+      fechaInicio.setHours(0, 0, 0, 0);
+      fechaFin.setHours(23, 59, 59, 999);
 
       // Obtener asistencias específicamente para este personal y esta semana activa
       const asistenciasResponse = await fetch(`/api/asistencia?id_personal=${idPersonal}&id_semana=${idSemanaActiva}`);
       const asistenciasData = await asistenciasResponse.json();
 
-      // Filtrar asistencias dentro del rango de fechas de la semana activa
-      const fechaInicio = new Date(semanaActiva.fecha_inicio);
-      const fechaFin = new Date(semanaActiva.fecha_fin);
-      // Añadir un día a fechaFin para incluir el último día completo
-      fechaFin.setDate(fechaFin.getDate() + 1);
+      // Procesar asistencias para crear asistenciasFormateadas
+      const asistenciasFormateadas = asistenciasData.map((asistencia: any) => {
+        const fecha = new Date(asistencia.fecha);
+        const diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const diaSemana = diasSemana[fecha.getDay()];
+        const fechaFormateada = formatDate(asistencia.fecha);
 
-      // Crear un mapa para eliminar duplicados por fecha y aplicar priorización de estados
-      const asistenciasPorFecha = new Map<string, string>();
-
-      asistenciasData.forEach((a: any) => {
-        if (!a.fecha) return; // Ignorar registros sin fecha
-
-        const fechaAsistencia = new Date(a.fecha);
-
-        // Solo procesar si está dentro del rango de fechas y corresponde al personal
-        if (fechaAsistencia >= fechaInicio &&
-          fechaAsistencia < fechaFin &&
-          a.id_personal === idPersonal) {
-
-          const fechaStr = formatDate(a.fecha);
-          const estado = a.estado === 'A' ? 'Completo' : a.estado === 'M' ? 'Medio día' : a.estado;
-
-          // Aplicar reglas de priorización si ya existe esa fecha
-          if (asistenciasPorFecha.has(fechaStr)) {
-            const estadoActual = asistenciasPorFecha.get(fechaStr);
-
-            // Reglas de prioridad: Completo > Medio día > otros estados
-            if (estadoActual !== 'Completo') {
-              if (estado === 'Completo') {
-                asistenciasPorFecha.set(fechaStr, estado);
-              } else if (estadoActual !== 'Medio día' && estado === 'Medio día') {
-                asistenciasPorFecha.set(fechaStr, estado);
-              }
-            }
-          } else {
-            // Si es la primera asistencia para esta fecha
-            asistenciasPorFecha.set(fechaStr, estado);
-          }
+        let estado;
+        switch (asistencia.estado) {
+          case 'A':
+            estado = 'Completo';
+            break;
+          case 'M':
+            estado = 'Medio día';
+            break;
+          case 'I':
+            estado = 'Inasistencia';
+            break;
+          default:
+            estado = asistencia.estado;
         }
+
+        return {
+          fecha: fechaFormateada,
+          estado,
+          diaSemana,
+        };
       });
 
-      // Para cada día de la semana, obtener la fecha y estado desde el mapa
-      // Asumimos que la semana comienza el lunes
-      const diasSemanaEspanol = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-      const asistenciasFormateadas = [];
+      // Ordenar asistencias por fecha
+      asistenciasFormateadas.sort((a: any, b: any) => {
+        const fechaA = new Date(a.fecha.split('/').reverse().join('-'));
+        const fechaB = new Date(b.fecha.split('/').reverse().join('-'));
+        return fechaA.getTime() - fechaB.getTime();
+      });
 
-      // Clonar fecha inicio para iterar sobre los días de la semana
-      let fechaActual = new Date(fechaInicio);
-
-      // Iterar por cada día de la semana hasta llegar a fecha fin
-      while (fechaActual < fechaFin) {
-        // Generar la fecha formateada como DD/MM/YYYY para buscar en el mapa
-        const fechaFormateada = formatDate(fechaActual);
-
-        // Crear una nueva fecha con los componentes correctos para que calcule bien el día de la semana
-        // Este es el paso clave para corregir el problema con el día de la semana
-        const [dia, mes, anio] = fechaFormateada.split('/').map(Number);
-        const fechaCorrecta = new Date(anio, mes - 1, dia); // Mes es 0-indexado en JS
-        const diaSemana = diasSemanaEspanol[fechaCorrecta.getDay()];
-
-        const estado = asistenciasPorFecha.get(fechaFormateada) || 'No registrado';
-
-        asistenciasFormateadas.push({
-          fecha: fechaFormateada,
-          diaSemana: diaSemana,
-          fechaCompleta: `${diaSemana} ${fechaFormateada}`,
-          estado: estado
-        });
-
-        // Avanzar al siguiente día
-        fechaActual.setDate(fechaActual.getDate() + 1);
-      }
-
-      // Filtrar adelantos para este personal en esta semana activa
+      // Filtrar adelantos y tareas extra para esta semana
       const adelantosPersonal = adelantos.filter(
         a => a.id_personal === idPersonal && a.id_semana_laboral.toString() === idSemanaActiva
       );
 
-      // Filtrar tareas extra para este personal en esta semana activa
       const tareasPersonal = tareasExtra.filter(
         t => t.id_personal === idPersonal && t.id_semana_laboral.toString() === idSemanaActiva
       );
 
-      // Obtener datos de cocción para esta semana activa
-      const coccionesResponse = await fetch(`/api/coccion?id_semana=${idSemanaActiva}`);
-      const coccionesData = await coccionesResponse.json();
-
-      // Obtener detalles de turnos de cocción donde participó el personal
-      const turnosResponse = await fetch(`/api/coccion_turno?id_personal=${idPersonal}&id_semana=${idSemanaActiva}`);
+      // IMPORTANTE: Obtener los turnos de cocción directamente desde la API para la semana seleccionada
+      const turnosResponse = await fetch(`/api/coccion_turno?id_semana=${idSemanaActiva}&id_personal=${idPersonal}`);
       const turnosData = await turnosResponse.json();
 
-      // Filtrar turnos por fecha - asegurar que solo se incluyan los de la semana actual
-      const turnosFiltrados = turnosData.filter((turno: CoccionTurno) => {
+      console.log(`Turnos obtenidos para personal ${idPersonal} en semana ${idSemanaActiva}:`, turnosData);
+
+      // Filtrar los turnos para asegurarnos que solo incluimos los que tienen fecha dentro del rango de la semana
+      const turnosFiltradosPorFecha = turnosData.filter((turno: any) => {
         const fechaTurno = new Date(turno.fecha);
-        fechaTurno.setHours(0, 0, 0, 0);
+        fechaTurno.setHours(0, 0, 0, 0); // Normalizar la hora
         return fechaTurno >= fechaInicio && fechaTurno <= fechaFin;
       });
 
-      // Crear objeto con detalles de cocción agrupados por cocción
+      console.log(`Turnos filtrados por fecha (${fechaInicio.toISOString()} - ${fechaFin.toISOString()}):`,
+        turnosFiltradosPorFecha);
+
+      // Obtener datos de cocción relacionados con estos turnos
+      const idsCocciones = [...new Set(turnosFiltradosPorFecha.map((t: any) => t.coccion_id_coccion))];
+
+      // Obtener solo las cocciones relacionadas con los turnos filtrados
+      const coccionesResponse = await fetch(`/api/coccion?ids=${idsCocciones.join(',')}`);
+      const coccionesData = await coccionesResponse.json();
+
+      console.log(`Cocciones obtenidas para los turnos filtrados:`, coccionesData);
+
+      // Agrupar los turnos por cocción para mostrarlos organizados
       const detallesCocciones = coccionesData.reduce((acc: any[], coccion: Coccion) => {
-        const turnosCoccion = turnosFiltrados.filter((turno: CoccionTurno) =>
+        // Filtrar los turnos para esta cocción específica donde participó el personal
+        // y que están dentro del rango de fechas de la semana actual
+        const turnosCoccion = turnosFiltradosPorFecha.filter((turno: CoccionTurno) =>
           turno.coccion_id_coccion === coccion.id_coccion &&
           turno.personal_id_personal === idPersonal
         );
@@ -1302,23 +1292,98 @@ export default function PagoPersonalPage() {
             const costoCargo = turno.cargo_coccion?.costo_cargo;
             return sum + (costoCargo ? Number(costoCargo) : 0);
           }, 0);
-          const hornoInfo = turnosData.find((h: any) => h.id_horno === coccion.horno_id_horno);
-          const nombreHorno = hornoInfo ? hornoInfo.nombre : 'No especificado';
+
+          // Obtener información del horno (si está disponible)
+          const nombreHorno = coccion.horno_id_horno ? `Horno ${coccion.horno_id_horno}` : 'No especificado';
+
+          // Agrupar turnos por fecha para mostrarlos mejor organizados
+          const turnosPorFecha = turnosCoccion.reduce((grupos: any, turno: CoccionTurno) => {
+            // Registrar cada fecha para diagnóstico
+            const fechaOriginal = turno.fecha;
+            const fechaFormateada = formatDate(turno.fecha);
+
+            console.log(`Procesando turno ${turno.id_coccion_personal}: Fecha original=${fechaOriginal}, Fecha formateada=${fechaFormateada}`);
+
+            if (!grupos[fechaFormateada]) {
+              grupos[fechaFormateada] = [];
+            }
+
+            grupos[fechaFormateada].push({
+              cargo: turno.cargo_coccion?.nombre_cargo || 'Desconocido',
+              costo: turno.cargo_coccion ? Number(turno.cargo_coccion.costo_cargo) : 0
+            });
+
+            return grupos;
+          }, {});
+
+          // Crear un arreglo de turnos agrupado por fecha
+          const turnosAgrupados: any[] = [];
+          Object.entries(turnosPorFecha).forEach(([fecha, turnos]: [string, any]) => {
+            console.log(`Grupo de fecha ${fecha} contiene ${(turnos as any[]).length} turnos`);
+            turnosAgrupados.push({
+              fecha,
+              turnos
+            });
+          });
+
+          // Ordenar turnosAgrupados por fecha (más reciente primero)
+          turnosAgrupados.sort((a, b) => {
+            // Convertir fechas DD/MM/YYYY a objetos Date para comparación
+            const [diaA, mesA, yearA] = a.fecha.split('/');
+            const [diaB, mesB, yearB] = b.fecha.split('/');
+
+            const dateA = new Date(Number(yearA), Number(mesA) - 1, Number(diaA));
+            const dateB = new Date(Number(yearB), Number(mesB) - 1, Number(diaB));
+
+            return dateB.getTime() - dateA.getTime();
+          });
+
+          // IMPORTANTE: Mostramos la semana actual, no la de la cocción
+          const semanaInfo = `${formatDate(semanaActiva.fecha_inicio)} - ${formatDate(semanaActiva.fecha_fin)}`;
+
           acc.push({
+            id_coccion: coccion.id_coccion,
             fecha_encendido: coccion.fecha_encendido,
-            semana: `${formatDate(semanaActiva.fecha_inicio)} - ${formatDate(semanaActiva.fecha_fin)}`,
+            // Nota informativa si la cocción es de otra semana
+            semana: coccion.semana_laboral_id_semana_laboral.toString() !== idSemanaActiva ?
+              `${semanaInfo} (Cocción iniciada en semana ${coccion.semana_laboral_id_semana_laboral})` :
+              semanaInfo,
             horno: nombreHorno,
             turnos: turnosCoccion.map((turno: CoccionTurno) => ({
+              fecha: formatDate(turno.fecha),
               cargo: turno.cargo_coccion?.nombre_cargo || 'Desconocido',
               costo: turno.cargo_coccion ? Number(turno.cargo_coccion.costo_cargo) : 0
             })),
-            total_coccion: totalCoccion
+            turnosPorDia: turnosAgrupados,
+            total_coccion: totalCoccion,
+            // Indicador visual si la cocción es de otra semana
+            esCoccionDeOtraSemana: coccion.semana_laboral_id_semana_laboral.toString() !== idSemanaActiva
           });
         }
         return acc;
       }, []);
 
+      console.log(`Detalles de cocciones procesados:`, detallesCocciones);
+
       // Crear el objeto completo de detalles
+      // Buscar si existe un pago realizado para este personal en esta semana
+      const pagoRealizado = pagosRealizados.find(
+        p => p.id_personal === idPersonal && 
+        p.id_semana_laboral.toString() === idSemanaActiva
+      );
+
+      // Calcular total final sin descuentos (suma de asistencia, tareas extra y cocción)
+      const totalFinalSinDescuento = resumenObj.total_asistencia + 
+        resumenObj.total_tareas_extra + 
+        resumenObj.total_coccion;
+      
+      // Total final pagado es el monto que figura en el pago realizado, si existe
+      // Si el personal no ha sido pagado, asignamos el valor del monto sin descuentos 
+      // (la interfaz mostrará un guion pero necesitamos un valor numérico para la interfaz)
+      const totalFinalPagado = pagoRealizado ? 
+        Number(pagoRealizado.total_pago_final) : 
+        Number(totalFinalSinDescuento);
+
       const detalles: DetallePersonal = {
         personal: personalObj,
         asistencias: asistenciasFormateadas,
@@ -1331,7 +1396,8 @@ export default function PagoPersonalPage() {
           coccion: resumenObj.total_coccion,
           adelantos: resumenObj.total_adelantos,
           descuentos: resumenObj.total_descuentos,
-          final: resumenObj.total_final
+          final: totalFinalSinDescuento,
+          final_pagado: totalFinalPagado
         }
       };
 
@@ -1341,12 +1407,32 @@ export default function PagoPersonalPage() {
     } catch (error) {
       console.error("Error al cargar detalles:", error);
       toast.error("Error al cargar los detalles del pago");
-    } finally {
+    } finally { 
       setLoadingDetalles(false);
     }
   };
 
-  //función handlePagoClick para no inicializar automáticamente los adelantos como descuentos
+  // Función para cerrar el modal de detalles
+  const handleCloseDetalleModal = () => {
+    setDetalleModalOpen(false);
+    setDetallePersonal(null);
+  };
+
+  // Función para abrir el modal de detalles y cargar la información del personal
+  const handleOpenDetalleModal = (idPersonal: number) => {
+    setLoadingDetalles(true);
+    setSelectedRow(idPersonal);
+    cargarDetallesPersonal(idPersonal);
+  };
+
+  // Función para abrir el modal de pago y cargar la información del resumen de pago
+  const handleOpenPagoModal = (resumen: ResumenPago) => {
+    setSelectedPago(resumen);
+    setDescuentosSeleccionados([]); // Reiniciar descuentos seleccionados
+    setPagoModalOpen(true);
+  };
+
+  // Arreglar funciones que faltan
   function handlePagoClick(resumen: ResumenPago) {
     // Limpiar los descuentos seleccionados
     setDescuentosSeleccionados([]);
@@ -1362,119 +1448,98 @@ export default function PagoPersonalPage() {
 
     // Establecer el pago seleccionado sin descuentos aplicados inicialmente
     setSelectedPago(pagoSinDescuentos);
-    
-    // Cargar todos los adelantos pendientes del personal seleccionado
-    cargarAdelantosPendientes(resumen.id_personal).then(adelantosPendientes => {
-      // Actualizar los adelantos con los pendientes de todas las semanas
-      setAdelantos(prevAdelantos => {
-        // Filtrar los adelantos actuales que no sean del personal seleccionado
-        const adelantosOtroPersonal = prevAdelantos.filter(a => a.id_personal !== resumen.id_personal);
-        // Combinar con los nuevos adelantos pendientes obtenidos
-        return [...adelantosOtroPersonal, ...adelantosPendientes];
-      });
-      
-      setPagoModalOpen(true);
-    });
+
+    // Abrir modal de pago
+    setPagoModalOpen(true);
   }
 
-  // Función para cargar adelantos pendientes de un personal específico
-  const cargarAdelantosPendientes = async (idPersonal: number) => {
-    try {
-      console.log(`Cargando todos los adelantos pendientes para personal ID: ${idPersonal}`);
-      const response = await fetch(`/api/adelanto_pago?id_personal=${idPersonal}&estado=Pendiente`);
-      if (!response.ok) throw new Error("Error al cargar adelantos pendientes");
-      
-      const adelantosPendientes = await response.json();
-      console.log("Adelantos pendientes encontrados:", adelantosPendientes.length);
-      return adelantosPendientes;
-    } catch (error) {
-      console.error("Error al cargar adelantos pendientes:", error);
-      toast.error("Error al cargar adelantos pendientes");
-      return [];
-    }
-  };
-
-  // Modificar el modal de descuentos para mostrar todos los adelantos pendientes
-  <Dialog
-    open={descuentosModalOpen}
-    onOpenChange={(open) => {
-      if (!open) {
-        handleCloseDescuentosModal();
-      } else if (selectedPago) {
-        // Cargar adelantos pendientes cuando se abre el modal
-        cargarAdelantosPendientes(selectedPago.id_personal).then(adelantosPendientes => {
-          setAdelantos(prevAdelantos => {
-            const adelantosOtroPersonal = prevAdelantos.filter(a => a.id_personal !== selectedPago.id_personal);
-            return [...adelantosOtroPersonal, ...adelantosPendientes];
-          });
-        });
-      }
-    }}
-  >
-    {/* ...existing code... */}
-  </Dialog>
-
-  function puedesCerrarSemana() {
-    // Solo se puede cerrar si hay una semana seleccionada y está activa (estado === 1)
-    if (!semanaSeleccionada) return false;
-    const semana = semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada);
-    if (!semana || semana.estado !== 1) return false;
-
-    // Debe haber al menos un personal pendiente de pago (sin pago realizado)
-    const pendientes = resumenPagos.filter(r =>
+  // Añadir las funciones que faltan
+  function puedesCerrarSemana(): boolean {
+    // Verificar si hay pagos pendientes
+    const pagosPendientes = resumenPagos.filter(r =>
       !pagosRealizados.some(p =>
         p.id_personal === r.id_personal &&
         p.id_semana_laboral.toString() === semanaSeleccionada
       )
     );
-    // Si no hay pendientes, se puede cerrar la semana
-    return pendientes.length === 0;
+
+    // Solo se puede cerrar si no hay pagos pendientes
+    return pagosPendientes.length === 0;
   }
 
-  // Estado y función para mostrar/ocultar el modal de cierre de semana
   const [showCloseModal, setShowCloseModal] = useState(false);
-
-  // Estado para controlar el cierre de semana
   const [isClosingSemana, setIsClosingSemana] = useState(false);
 
-  async function confirmCerrarSemana(event: React.MouseEvent<HTMLButtonElement, MouseEvent>): Promise<void> {
-    event.preventDefault();
-    if (!semanaSeleccionada) {
-      toast.error("No hay semana seleccionada");
-      return;
-    }
-    setIsClosingSemana(true);
+  async function confirmCerrarSemana() {
     try {
-      // Llamada a la API para cerrar la semana laboral
-      const response = await fetch(`/api/semana_laboral/cerrar?id=${semanaSeleccionada}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
+      setIsClosingSemana(true);
+
+      // Usar el mismo enfoque que en el dashboard
+      const response = await fetch(`/api/semana_laboral`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id_semana_laboral: Number(semanaSeleccionada),
+          estado: 0 // Actualizar estado a "cerrado"
+        })
       });
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Error al cerrar la semana");
+        throw new Error("Error al cerrar la semana");
       }
-      toast.success("Semana laboral cerrada correctamente");
+
+      toast.success("Semana cerrada correctamente");
       setShowCloseModal(false);
-      // Recargar semanas laborales y datos
+
+      // Recargar las semanas laborales
       await fetchSemanasLaborales();
-      if (semanaSeleccionada) {
-        await cargarDatosCompletos(semanaSeleccionada);
-        await fetchPagosRealizados(semanaSeleccionada);
-      }
+
     } catch (error) {
-      console.error("Error al cerrar la semana:", error);
-      toast.error(error instanceof Error ? error.message : "Error al cerrar la semana");
+      console.error("Error al cerrar semana:", error);
+      toast.error("Error al cerrar la semana");
     } finally {
       setIsClosingSemana(false);
     }
+  }
+
+  async function handleApplyDescuentos() {
+    if (!selectedPago) return;
+
+    // Calcular el total de descuentos
+    const totalDescuentos = descuentosSeleccionados.reduce((sum, d) => sum + Number(d.monto), 0);
+
+    // Actualizar el pago seleccionado con los descuentos
+    setSelectedPago({
+      ...selectedPago,
+      total_descuentos: totalDescuentos,
+      total_final: selectedPago.total_asistencia +
+        selectedPago.total_tareas_extra +
+        selectedPago.total_coccion -
+        totalDescuentos
+    });
+
+    // Cerrar el modal de descuentos
+    setDescuentosModalOpen(false);
   }
 
   function handleClosePagoModal() {
     setPagoModalOpen(false);
     setSelectedPago(null);
     setDescuentosSeleccionados([]);
-    setDescuentoTemp({ monto: '', motivo: '' });
+  }
+
+  async function cargarAdelantosPendientes(idPersonal: number) {
+    try {
+      const response = await fetch(`/api/adelanto_pago?id_personal=${idPersonal}&estado=Pendiente`);
+      if (!response.ok) throw new Error("Error al cargar adelantos pendientes");
+
+      const adelantos = await response.json();
+      return adelantos;
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error("Error al cargar adelantos pendientes");
+      return [];
+    }
   }
 
   async function handlePagoSubmit(event: React.MouseEvent<HTMLButtonElement, MouseEvent>) {
@@ -1566,31 +1631,40 @@ export default function PagoPersonalPage() {
     }
   }
 
-  function handleApplyDescuentos(event: React.MouseEvent<HTMLButtonElement, MouseEvent>): void {
-    event.preventDefault();
-    // Sumar todos los descuentos seleccionados
-    const totalDescuentos = descuentosSeleccionados.reduce(
-      (sum, d) => sum + (Number(d.monto) || 0),
-      0
-    );
+  // Función para eliminar un pago
+  const handleDeletePago = async () => {
+    if (!pagoToDelete) return;
 
-    // Actualizar el total de descuentos y el total final en el pago seleccionado
-    if (selectedPago) {
-      setSelectedPago({
-        ...selectedPago,
-        total_descuentos: totalDescuentos,
-        total_final:
-          selectedPago.total_asistencia +
-          selectedPago.total_tareas_extra +
-          selectedPago.total_coccion -
-          totalDescuentos
+    try {
+      setIsSubmitting(true);
+      // Eliminar el pago
+      const response = await fetch(`/api/pago_personal_semana?id=${pagoToDelete}`, {
+        method: "DELETE"
       });
-    }
 
-    setDescuentosModalOpen(false);
-    setDescuentoTemp({ monto: '', motivo: '' });
+      if (!response.ok) {
+        throw new Error("Error al eliminar el pago");
+      }
+
+      toast.success("Pago eliminado correctamente");
+      
+      // Cerrar el modal y limpiar estados
+      setShowConfirmDeletePagoModal(false);
+      setPagoToDelete(null);
+
+      // Recargar datos
+      await fetchPagosRealizados(semanaSeleccionada);
+      await cargarDatosCompletos(semanaSeleccionada);
+    } catch (error) {
+      console.error("Error al eliminar el pago:", error);
+      toast.error(error instanceof Error ? error.message : "Error al eliminar el pago");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
+
+  // Corregir el error en la tabla duplicada
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex flex-col gap-4">
@@ -1628,7 +1702,7 @@ export default function PagoPersonalPage() {
             <CardContent className="p-3">
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle className="text-sm font-medium">Total</CardTitle>
+                  <CardTitle className="text-sm font-medium">Total sin descuento</CardTitle>
                   <CardDescription className="text-[11px] text-muted-foreground">
                     Asistencia, T.Extra, Cocción
                   </CardDescription>
@@ -1904,6 +1978,16 @@ export default function PagoPersonalPage() {
                                 <Eye className="h-4 w-4" />
                               )}
                             </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                setPagoToDelete(pago.id_pago_personal_semana);
+                                setShowConfirmDeletePagoModal(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -2062,7 +2146,6 @@ export default function PagoPersonalPage() {
                         </TableCell>
                         <TableCell>
                           <Badge
-
                             variant={adelanto.estado === "Pendiente" ? "destructive" : "default"}
                             className={adelanto.estado === "Pendiente"
                               ? "bg-red-50 text-red-600 hover:bg-red-50"
@@ -2625,7 +2708,7 @@ export default function PagoPersonalPage() {
                         // Mostrar TODOS los adelantos pendientes del personal seleccionado
                         const esPersonalSeleccionado = selectedPago && a.id_personal === selectedPago.id_personal;
                         const estaPendiente = a.estado === "Pendiente";
-                        
+
                         return esPersonalSeleccionado && estaPendiente;
                       })
                       .sort((a, b) => {
@@ -2639,7 +2722,7 @@ export default function PagoPersonalPage() {
                         // Obtener la información de la semana para mostrarla en la tabla
                         const semanaInfo = semanasLaboral.find(s => s.id_semana_laboral === adelanto.id_semana_laboral);
                         const esSemanaActual = adelanto.id_semana_laboral.toString() === semanaSeleccionada;
-                        
+
                         return (
                           <TableRow key={adelanto.id_adelanto_pago} className={esSemanaActual ? "bg-blue-50" : ""}>
                             <TableCell>
@@ -2660,8 +2743,8 @@ export default function PagoPersonalPage() {
                                           id: adelanto.id_adelanto_pago,
                                           tipo: 'adelanto',
                                           monto: adelanto.monto,
-                                          motivo: (adelanto.comentario || 'Adelanto de pago') + 
-                                                (esSemanaActual ? '' : ` (Semana ${formatDate(semanaInfo?.fecha_inicio || '')})`)
+                                          motivo: (adelanto.comentario || 'Adelanto de pago') +
+                                            (esSemanaActual ? '' : ` (Semana ${formatDate(semanaInfo?.fecha_inicio || '')})`)
                                         }
                                       ]);
                                     }
@@ -2695,17 +2778,17 @@ export default function PagoPersonalPage() {
                           </TableRow>
                         );
                       })}
-                    {adelantos.filter(a => 
-                      selectedPago && 
-                      a.id_personal === selectedPago.id_personal && 
+                    {adelantos.filter(a =>
+                      selectedPago &&
+                      a.id_personal === selectedPago.id_personal &&
                       a.estado === "Pendiente"
                     ).length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center py-3 text-muted-foreground">
-                          No hay adelantos pendientes
-                        </TableCell>
-                      </TableRow>
-                    )}
+                        <TableRow>
+                          <TableCell colSpan={5} className="text-center py-3 text-muted-foreground">
+                            No hay adelantos pendientes
+                          </TableCell>
+                        </TableRow>
+                      )}
                   </TableBody>
                 </Table>
               </div>
@@ -2954,22 +3037,45 @@ export default function PagoPersonalPage() {
                   {detallePersonal?.cocciones && detallePersonal.cocciones.length > 0 ? (
                     <div className="text-xs space-y-2">
                       {detallePersonal.cocciones.map((coccion, idx) => (
-                        <div key={idx} className="border rounded p-2 bg-gray-50/50">
+                        <div key={idx} className={`border rounded p-2 ${coccion.esCoccionDeOtraSemana ? 'bg-amber-50/60' : 'bg-gray-50/50'}`}>
                           <div className="flex justify-between mb-1">
                             <div>
-                              <span className="font-medium">Fecha encendido: {formatDate(coccion.fecha_encendido)}</span>
+                              <span className="font-medium">
+                                Fecha encendido: {formatDate(coccion.fecha_encendido)}
+                                {coccion.esCoccionDeOtraSemana &&
+                                  <Badge variant="outline" className="ml-2 bg-amber-100 text-amber-700 border-amber-200 text-[9px]">
+                                    Otra semana
+                                  </Badge>
+                                }
+                              </span>
                               <span className="text-muted-foreground"> • {coccion.horno}</span>
                             </div>
                             <div className="font-medium">S/. {coccion.total_coccion.toFixed(2)}</div>
                           </div>
-                          <div className="space-y-0.5">
-                            {coccion.turnos.map((turno, tIdx) => (
-                              <div key={tIdx} className="flex justify-between text-[10px] px-1">
-                                <span>{ }</span>
-                                <span>{turno.cargo}</span>
-                                <span>S/. {turno.costo.toFixed(2)}</span>
-                              </div>
-                            ))}
+                          <div className="space-y-1">
+                            {/* Agrupar por fecha los turnos */}
+                            {coccion.turnosPorDia ? (
+                              coccion.turnosPorDia.map((diaTurno: any, dIdx: number) => (
+                                <div key={dIdx} className="border-t pt-1">
+                                  <div className="text-[11px] font-medium">{diaTurno.fecha}</div>
+                                  {diaTurno.turnos.map((turno: any, tIdx: number) => (
+                                    <div key={tIdx} className="flex justify-between text-[10px] px-2">
+                                      <span>{turno.cargo}</span>
+                                      <span>S/. {turno.costo.toFixed(2)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))
+                            ) : (
+                              // Fallback utilizando también formatDate para las fechas individuales
+                              coccion.turnos.map((turno: any, tIdx: number) => (
+                                <div key={tIdx} className="flex justify-between text-[10px] px-1">
+                                  <span>{turno.fecha}</span>
+                                  <span>{turno.cargo}</span>
+                                  <span>S/. {turno.costo.toFixed(2)}</span>
+                                </div>
+                              ))
+                            )}
                           </div>
                         </div>
                       ))}
@@ -3031,17 +3137,21 @@ export default function PagoPersonalPage() {
                         <td>Total Cocción:</td>
                         <td className="text-right">S/. {detallePersonal?.totales.coccion.toFixed(2)}</td>
                       </tr>
-                      <tr>
-                        <td>Total Adelantos:</td>
-                        <td className="text-right">S/. {detallePersonal?.totales.adelantos.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td>Total Descuentos:</td>
-                        <td className="text-right">S/. {detallePersonal?.totales.descuentos.toFixed(2)}</td>
-                      </tr>
                       <tr className="font-bold border-t">
-                        <td className="pt-2">TOTAL FINAL:</td>
+                        <td className="pt-2">TOTAL FINAL SIN DESCUENTOS:</td>
                         <td className="text-right pt-2">S/. {detallePersonal?.totales.final.toFixed(2)}</td>
+                      </tr>
+                      <tr className="font-bold text-emerald-600">
+                        <td className="pt-1">TOTAL FINAL PAGADO:</td>
+                        <td className="text-right pt-1">
+                          {pagosRealizados.some(p => 
+                            p.id_personal === detallePersonal?.personal?.id_personal &&
+                            p.id_semana_laboral.toString() === semanaSeleccionada
+                          ) 
+                            ? `S/. ${Number(detallePersonal?.totales.final_pagado).toFixed(2)}` 
+                            : "-"
+                          }
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -3070,6 +3180,35 @@ export default function PagoPersonalPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de confirmación para eliminar pago */}
+      <AlertDialog open={showConfirmDeletePagoModal} onOpenChange={setShowConfirmDeletePagoModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará permanentemente el registro de pago.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600"
+              onClick={handleDeletePago}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : (
+                "Eliminar Pago"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
