@@ -19,6 +19,17 @@ export class SemanaLaboralRepository extends BaseRepository {
       where: { id_semana_laboral },
     });
   }
+  
+  async findByEmpresaAndEstado(id_empresa: number, estado: number) {
+    return prisma.semana_laboral.findMany({
+      where: { 
+        id_empresa,
+        estado 
+      },
+      orderBy: { id_semana_laboral: "asc" },
+    });
+  }
+
 
   async createSemanaLaboral(data: Prisma.semana_laboralCreateInput) {
     return prisma.semana_laboral.create({ data });
