@@ -134,6 +134,11 @@ export default function AsistenciaPage() {
   const [personalSeleccionado, setPersonalSeleccionado] = useState<Record<number, boolean>>({})
   const [turnosRegistrados, setTurnosRegistrados] = useState<CoccionTurno[]>([])
   const [cargandoTurnos, setCargandoTurnos] = useState(false)
+  
+  // Estado para el modal de confirmación de eliminación de turno
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [turnoToDelete, setTurnoToDelete] = useState<number | null>(null)
+  const [deletingTurno, setDeletingTurno] = useState(false)
 
   // Nuevos estados para manejar la lógica de límites de humeadores/quemadores
   const [hornoActual, setHornoActual] = useState<Horno | null>(null)
@@ -630,6 +635,48 @@ export default function AsistenciaPage() {
     const semana = semanas.find(s => s.id_semana_laboral === id_semana_laboral)
     if (!semana) return ''
     return `S: ${formatDate(semana.fecha_inicio, false)} al ${formatDate(semana.fecha_fin, false)}`
+  }
+  
+  // Función para eliminar un turno
+  const handleDeleteTurno = async () => {
+    if (!turnoToDelete) return;
+    
+    try {
+      setDeletingTurno(true);
+      
+      const response = await fetch(`/api/coccion_turno?id=${turnoToDelete}`, {
+        method: "DELETE",
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Error al eliminar el turno");
+      }
+      
+      toast.success("Turno eliminado correctamente");
+      
+      // Actualizar la lista de turnos
+      fetchTurnosRegistrados();
+      
+      // Actualizar también los turnos de la semana para la vista principal
+      if (selectedSemana) {
+        fetchTurnosSemana(selectedSemana);
+      }
+      
+    } catch (error) {
+      console.error("Error al eliminar turno:", error);
+      toast.error(`Error al eliminar turno: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setDeletingTurno(false);
+      setDeleteModalOpen(false);
+      setTurnoToDelete(null);
+    }
+  }
+  
+  // Función para mostrar el modal de confirmación de eliminación
+  const confirmDeleteTurno = (idTurno: number) => {
+    setTurnoToDelete(idTurno);
+    setDeleteModalOpen(true);
   }
 
   // Filtrar cargos según el horno seleccionado
@@ -1674,6 +1721,7 @@ export default function AsistenciaPage() {
                           <TableHead className="text-xs sm:text-sm">Personal</TableHead>
                           <TableHead className="text-xs sm:text-sm">Cargo</TableHead>
                           <TableHead className="text-xs sm:text-sm">Fecha</TableHead>
+                          <TableHead className="text-xs sm:text-sm">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1696,6 +1744,17 @@ export default function AsistenciaPage() {
                             <TableCell className="text-xs sm:text-sm py-1">
                               {formatDate(turno.fecha)}
                             </TableCell>
+                            <TableCell className="text-xs sm:text-sm py-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className="h-7 w-7" 
+                                onClick={() => confirmDeleteTurno(turno.id_coccion_personal)}
+                                title="Eliminar turno"
+                              >
+                                <X className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1713,6 +1772,39 @@ export default function AsistenciaPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para eliminar turno */}
+      <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea eliminar este turno? Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteModalOpen(false)} 
+              disabled={deletingTurno}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteTurno} 
+              disabled={deletingTurno}
+            >
+              {deletingTurno ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Eliminando...
+                </>
+              ) : 'Eliminar'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
