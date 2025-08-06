@@ -115,6 +115,10 @@ export default function Page() {
 
     const dayOfWeek = nextMonday.getDay(); // 0 es domingo, 6 es sábado
 
+    // Calcular cuántos días debemos añadir para llegar al siguiente lunes
+    // Si es domingo (0), sumamos 1 día
+    // Si es sábado (6), sumamos 2 días
+    // Para cualquier otro día, sumamos días hasta el siguiente lunes (8-dayOfWeek)
     let daysToAdd;
 
     if (dayOfWeek === 0) { // Domingo
@@ -143,12 +147,19 @@ export default function Page() {
       throw new Error("Ya existe una semana laboral activa");
     }
 
+    // Ordenar las semanas por fecha de inicio (más reciente primero)
+    const semanasOrdenadas = semanas.sort((a: SemanaLaboral, b: SemanaLaboral) => 
+      new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime()
+    );
+
     // Verificar continuidad con última semana
-    const lastSemana = semanas.length > 0 ? semanas[semanas.length - 1] : null;
+    const lastSemana = semanasOrdenadas.length > 0 ? semanasOrdenadas[0] : null;
     if (lastSemana) {
+      // Fecha fin de la última semana
       const lastEndDate = new Date(lastSemana.fecha_fin);
       lastEndDate.setHours(0, 0, 0, 0); // Resetear hora para comparación correcta
 
+      // Calcular el siguiente lunes después de la fecha fin
       const expectedNextMonday = getNextMonday(lastEndDate);
 
       // Normalizar las fechas para comparación (solo año, mes, día)

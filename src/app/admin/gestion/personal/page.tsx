@@ -140,15 +140,15 @@ export default function PersonalPage() {
         }
 
         const esEdicion = !!currentPersonal.id_personal;
-      const inputRucDeshabilitado = document.getElementById("ruc")?.getAttribute("disabled") === "";
+        const inputRucDeshabilitado = document.getElementById("ruc")?.getAttribute("disabled") === "";
 
-      if (!esEdicion || !inputRucDeshabilitado) {
-        if (!currentPersonal.razon_social?.trim()) {
-          toast.error("Debe validar el RUC ingresado");
-          document.getElementById("ruc")?.focus();
-          return;
+        if (!esEdicion || !inputRucDeshabilitado) {
+          if (!currentPersonal.razon_social?.trim()) {
+            toast.error("Debe validar el RUC ingresado");
+            document.getElementById("ruc")?.focus();
+            return;
+          }
         }
-      }
 
         // Validar que el nombre del DNI coincida con la razón social del RUC
         // const nombreDNI = currentPersonal.nombre_completo.trim().toLowerCase();
@@ -300,11 +300,17 @@ export default function PersonalPage() {
 
       const data = await res.json();
 
-      if (data.nombres && data.apellido_paterno && data.apellido_materno) {
-        const nombreCompleto = ` ${data.nombres} ${data.apellido_paterno} ${data.apellido_materno} `;
+      if (data.nombre_completo) {
+        setCurrentPersonal((prev) => ({ ...prev!, nombre_completo: data.nombre_completo }));
+        toast.success("DNI validado correctamente.");
+      }
+      // Si no hay nombre_completo pero tenemos los componentes individuales
+      else if (data.nombres && data.apellido_paterno && data.apellido_materno) {
+        const nombreCompleto = `${data.apellido_paterno} ${data.apellido_materno} ${data.nombres}`;
         setCurrentPersonal((prev) => ({ ...prev!, nombre_completo: nombreCompleto }));
         toast.success("DNI validado correctamente.");
-      } else {
+      }
+      else {
         toast.error("DNI no válido o no encontrado.");
         setCurrentPersonal((prev) => ({ ...prev!, dni: "" }));
       }
@@ -334,11 +340,12 @@ export default function PersonalPage() {
     }
 
     try {
+      setValidatingRuc(true);
       const res = await fetch("/api/validar-identidad", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tipo: "personal", // <- el modelo al que pertenece el RUC
+          tipo: "personal",
           numero: currentPersonal.ruc,
         }),
       });
@@ -354,6 +361,7 @@ export default function PersonalPage() {
         setCurrentPersonal((prev) => ({
           ...prev!,
           razon_social: data.razon_social,
+          ...(data.direccion && data.direccion !== '-' ? { direccion: data.direccion } : {})
         }));
         toast.success("RUC validado correctamente.");
       } else {
@@ -365,8 +373,10 @@ export default function PersonalPage() {
       if (error instanceof Error) {
         toast.error(error.message);
       } else {
-        toast.error("Error desconocido al validar el RUC.");
+        toast.error("Error desconocido.");
       }
+    } finally {
+      setValidatingRuc(false);
     }
   };
 
@@ -489,7 +499,8 @@ export default function PersonalPage() {
                           <TableHead className="w-28 ">Ciudad</TableHead>
                           <TableHead className="w-40 ">Dirección</TableHead>
                           <TableHead className="w-28 ">Celular</TableHead>
-                          <TableHead className="w-28 ">Pago Diario</TableHead>
+                          <TableHead className="w-28 ">Pago Normal</TableHead>
+                          <TableHead className="w-28 ">Pago Reducido</TableHead>
                           <TableHead className="w-28 ">F. Ingreso</TableHead>
                           <TableHead className="w-24 ">Estado</TableHead>
                           <TableHead className="w-24 text-right ">Acciones</TableHead>
@@ -512,6 +523,7 @@ export default function PersonalPage() {
                             <TableCell>{p.direccion || "-"}</TableCell>
                             <TableCell>{p.celular || "-"}</TableCell>
                             <TableCell>S/. {p.pago_diario_normal}</TableCell>
+                            <TableCell>{p.pago_diario_reducido ? `S/. ${p.pago_diario_reducido}` : "-"}</TableCell>
                             <TableCell>{formatDate(p.fecha_ingreso)}</TableCell>
                             <TableCell>
                               <Badge
@@ -650,12 +662,12 @@ export default function PersonalPage() {
                         const value = e.target.value.replace(/\D/g, "")
                         setCurrentPersonal({ ...currentPersonal!, ruc: value })
                       }}
-                      disabled={!!currentPersonal?.id_personal && !!currentPersonal?.ruc}
+                      disabled={false}
                     />
                     <Button
                       onClick={validateRUC}
                       size="icon"
-                      disabled={validatingRuc || (!!currentPersonal?.id_personal && !!currentPersonal?.ruc)}
+                      disabled={validatingRuc}
                       className=""
                     >
                       {validatingRuc ? (
@@ -733,6 +745,20 @@ export default function PersonalPage() {
                     value={currentPersonal?.pago_diario_normal ?? ""}
                     onChange={(e) =>
                       setCurrentPersonal((prev) => ({ ...prev!, pago_diario_normal: Number(e.target.value) }))
+                    }
+                  />
+                </div>
+
+
+                {/* Pago Diario Reducido - Agregar este campo */}
+                <div className="space-y-2">
+                  <Label htmlFor="pago_reducido">Pago Diario Reducido (S/.)</Label>
+                  <Input
+                    id="pago_reducido"
+                    type="number"
+                    value={currentPersonal?.pago_diario_reducido ?? ""}
+                    onChange={(e) =>
+                      setCurrentPersonal((prev) => ({ ...prev!, pago_diario_reducido: Number(e.target.value) }))
                     }
                   />
                 </div>
