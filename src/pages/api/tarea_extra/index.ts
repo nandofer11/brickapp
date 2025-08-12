@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import TareaExtraService from "@/lib/services/TareaExtraService";
+import { prisma } from "@/lib/prisma";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
@@ -21,6 +22,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const id = parseInt(req.query.id as string, 10);
           const tarea = await TareaExtraService.findById(id);
           return res.status(200).json(tarea);
+        } else if (req.query.fechaInicio && req.query.fechaFin) {
+          // Filtrar por rango de fechas
+          const fechaInicio = new Date(req.query.fechaInicio as string);
+          const fechaFin = new Date(req.query.fechaFin as string);
+          // Ajustar fecha fin para incluir todo el día
+          fechaFin.setHours(23, 59, 59, 999);
+          
+          // Obtener tareas extras filtradas por fecha
+          const tareasPorFecha = await prisma.tarea_extra.findMany({
+            where: {
+              fecha: {
+                gte: fechaInicio,
+                lte: fechaFin
+              },
+              personal: {
+                id_empresa: id_empresa
+              }
+            },
+            include: {
+              personal: true,
+              semana_laboral: true
+            },
+            orderBy: {
+              fecha: 'desc'
+            }
+          });
+          
+          return res.status(200).json(tareasPorFecha);
         } else {
           const tareas = await TareaExtraService.findAllByEmpresa(id_empresa);
           return res.status(200).json(tareas);

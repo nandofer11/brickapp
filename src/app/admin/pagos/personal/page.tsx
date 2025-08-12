@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { toast } from "react-toastify";
-import { PlusCircle, Loader2, DollarSign, ClipboardList, Edit, Trash2, AlertTriangle, Eye, CreditCard, Check, AlertCircle } from "lucide-react";
+import { PlusCircle, Loader2, DollarSign, ClipboardList, Edit, Trash2, AlertTriangle, Eye, CreditCard, Check, AlertCircle, Printer } from "lucide-react";
 import { useAuthContext } from "@/context/AuthContext";
 
 import {
@@ -88,6 +88,10 @@ interface AdelantoPersonal {
   monto: number;
   comentario: string;
   estado: "Pendiente" | "Cancelado";
+  personal?: {
+    nombre_completo: string;
+    estado: number;
+  };
 }
 
 // Actualizar las interfaces para incluir las relaciones
@@ -179,8 +183,23 @@ interface PagoRealizado {
 }
 
 export default function PagoPersonalPage() {
-  const { empresa } = useAuthContext();
+  // Extiende el tipo de empresa para incluir logo
+  interface Empresa {
+    id_empresa: number;
+    razon_social: string;
+    ruc: string;
+    direccion: string;
+    logo?: string; // Asegura que 'logo' está presente
+  }
+  // Forzar el tipo de empresa en el contexto para incluir logo
+  const { empresa } = useAuthContext() as { empresa: Empresa };
+  // Estado para almacenar la URL del logo validada
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  // Estado para controlar si el logo se ha cargado correctamente
+  const [logoLoaded, setLogoLoaded] = useState<boolean>(false);
+
   const [personal, setPersonal] = useState<Personal[]>([]);
+  const [todosPersonal, setTodosPersonal] = useState<Personal[]>([]); // Nuevo estado para todo el personal
   const [resumenPagos, setResumenPagos] = useState<ResumenPago[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -192,6 +211,19 @@ export default function PagoPersonalPage() {
   // Nueva estado para pagos realizados
   const [pagosRealizados, setPagosRealizados] = useState<PagoRealizado[]>([]);
   const [loadingPagosRealizados, setLoadingPagosRealizados] = useState(false);
+
+  // Añadir la propiedad updated_at al tipo AdelantoPersonal
+  interface AdelantoPersonal {
+    id_adelanto_pago: number;
+    id_personal: number;
+    id_semana_laboral: number;
+    fecha: string;
+    monto: number;
+    comentario?: string;
+    estado: string;
+    personal?: Personal;
+    updated_at?: string; // <-- Agregado para evitar error de propiedad inexistente
+  }
 
   // Estados para el modal de adelanto
   const [adelantoModalOpen, setAdelantoModalOpen] = useState(false);
@@ -211,7 +243,7 @@ export default function PagoPersonalPage() {
   const [isMultipleSelection, setIsMultipleSelection] = useState(false);
   const [selectedPersonal, setSelectedPersonal] = useState<number[]>([]);
   const [tareasExtra, setTareasExtra] = useState<TareaExtra[]>([]);
-  
+
   // Estados para la eliminación de pagos
   const [showConfirmDeletePagoModal, setShowConfirmDeletePagoModal] = useState(false);
   const [pagoToDelete, setPagoToDelete] = useState<number | null>(null);
@@ -245,6 +277,7 @@ export default function PagoPersonalPage() {
     }[];
     tareasExtra: TareaExtra[];
     adelantos: AdelantoPersonal[];
+    adelantosCancelados?: AdelantoPersonal[]; // Adelantos que fueron cancelados en este pago
     cocciones: {
       fecha_encendido: string;
       semana: string;
@@ -269,6 +302,7 @@ export default function PagoPersonalPage() {
       tareas_extra: number;
       coccion: number;
       adelantos: number;
+      adelantosCancelados?: number; // Total de adelantos cancelados en este pago
       descuentos: number;
       final: number;
       final_pagado: number;
@@ -279,6 +313,87 @@ export default function PagoPersonalPage() {
   const [detalleModalOpen, setDetalleModalOpen] = useState(false);
   const [detallePersonal, setDetallePersonal] = useState<DetallePersonal | null>(null);
   const [loadingDetalles, setLoadingDetalles] = useState(false);
+  const impresionRef = useRef<HTMLDivElement>(null);
+
+  // Función para verificar si una imagen existe
+  const checkImageExists = async (url: string): Promise<boolean> => {
+    if (!url) return false;
+
+    // Normalizar la URL para que siempre comience con "/"
+    const normalizedUrl = url.startsWith('/') ? url : `/${url}`;
+
+    try {
+      // Utilizar una promesa para manejar el tiempo de espera
+      const result = await new Promise<boolean>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+
+        // Agregar un timestamp para evitar el caché del navegador
+        const cacheBuster = `?t=${new Date().getTime()}`;
+        img.src = `${normalizedUrl}${cacheBuster}`;
+
+        // Establecer un timeout de 5 segundos
+        setTimeout(() => resolve(false), 5000);
+      });
+
+      console.log(`Verificación de imagen ${normalizedUrl}: ${result ? 'Existe' : 'No existe'}`);
+      return result;
+    } catch (error) {
+      console.error(`Error al verificar la imagen ${url}:`, error);
+      return false;
+    }
+  };
+
+  // Función para cargar los datos completos de la empresa, incluyendo el logo
+  const fetchEmpresaData = async () => {
+    if (!empresa?.id_empresa) return;
+
+    try {
+      const response = await fetch(`/api/empresas?id=${empresa.id_empresa}`);
+
+      if (!response.ok) {
+        console.error("Error al cargar los datos de la empresa");
+        return;
+      }
+
+      const data = await response.json();
+      // Si la respuesta es un array, tomamos el primer elemento
+      const empresaInfo = Array.isArray(data) && data.length > 0 ? data[0] : data;
+
+      // Actualizar el logo y datos de la empresa en el componente
+      if (empresaInfo?.logo) {
+        // Normalizar la ruta del logo
+        const rawLogoUrl = empresaInfo.logo.startsWith('/') ? empresaInfo.logo : `/${empresaInfo.logo}`;
+
+        // Verificar si la imagen existe
+        const imageExists = await checkImageExists(rawLogoUrl);
+
+        if (imageExists) {
+          // Actualizar el estado local de logoUrl
+          setLogoUrl(rawLogoUrl);
+          setLogoLoaded(true);
+
+          // También actualizar el objeto empresa para compatibilidad
+          // @ts-ignore - Forzar la actualización del objeto empresa
+          empresa.logo = empresaInfo.logo;
+          console.log("Logo cargado correctamente:", rawLogoUrl);
+        } else {
+          console.warn("La imagen del logo no existe en la ruta:", rawLogoUrl);
+          setLogoUrl(null);
+          setLogoLoaded(false);
+        }
+      } else {
+        console.warn("La empresa no tiene un logo definido");
+        setLogoUrl(null);
+        setLogoLoaded(false);
+      }
+    } catch (error) {
+      console.error("Error al cargar datos de la empresa:", error);
+      setLogoUrl(null);
+      setLogoLoaded(false);
+    }
+  };
 
   // Función para obtener la fecha y hora actual en formato peruano
   const getCurrentDateTime = () => {
@@ -290,8 +405,151 @@ export default function PagoPersonalPage() {
     });
   };
 
+  // Función para imprimir el detalle de pago en formato ticket
+  const imprimirDetalle = () => {
+    if (!detallePersonal || !impresionRef.current) {
+      toast.error("No se puede imprimir el detalle");
+      return;
+    }
+
+    try {
+      toast.info("Preparando ticket para impresión...");
+
+      // Usar el estado logoUrl en lugar de empresa.logo directamente
+      // Esto asegura que usamos la URL validada previamente
+      const validLogoUrl = logoLoaded && logoUrl ? logoUrl : null;
+      console.log("URL de logo para impresión:", validLogoUrl);
+
+      // Crear estilos específicos para impresora térmica
+      const printStyles = `
+        <style>
+          @page {
+            size: 80mm auto;
+            margin: 2mm;
+          }
+          body {
+            font-family: Arial, sans-serif;
+            font-size: 10px;
+            width: 76mm;
+            margin: 0;
+            padding: 2mm;
+          }
+          .text-center { text-align: center; }
+          .mb-0 { margin-bottom: 0; }
+          .mb-1 { margin-bottom: 1mm; }
+          .mb-2 { margin-bottom: 2mm; }
+          .pb-1 { padding-bottom: 1mm; }
+          .pb-2 { padding-bottom: 2mm; }
+          .pt-1 { padding-top: 1mm; }
+          .pt-2 { padding-top: 2mm; }
+          .border-t { border-top: 1px solid #000; }
+          .border-b { border-bottom: 1px solid #000; }
+          .font-bold { font-weight: bold; }
+          .font-semibold { font-weight: 600; }
+          .text-xs { font-size: 8px; }
+          .text-sm { font-size: 10px; }
+          .text-base { font-size: 12px; }
+          .text-right { text-align: right; }
+          .grid { display: grid; }
+          .grid-cols-2 { grid-template-columns: 1fr 1fr; }
+          .gap-1 { gap: 1mm; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { padding: 1mm 0; text-align: left; }
+          p { margin: 0.5mm 0; }
+          .mt-1 { margin-top: 1mm; }
+          .mt-2 { margin-top: 2mm; }
+          .mt-3 { margin-top: 3mm; }
+          .mt-5 { margin-top: 5mm; }
+          .mx-auto { margin-left: auto; margin-right: auto; }
+          .w-32 { width: 32mm; }
+          .divider { border-top: 1px dashed #000; margin: 2mm 0; }
+          hr { border: none; border-top: 1px dashed #000; margin: 2mm 0; }
+          .ticket-header { text-align: center; margin-bottom: 3mm; }
+          .section-title { font-weight: bold; text-align: center; margin: 1mm 0; border-bottom: 1px solid #000; }
+          .info-row { display: flex; justify-content: space-between; }
+          .info-label { font-weight: bold; }
+          .footer { text-align: center; font-size: 8px; margin-top: 3mm; }
+          .ticket-totals { border-top: 1px solid #000; margin-top: 2mm; padding-top: 2mm; }
+          /* Estilos para el logo */
+          .logo-container { text-align: center; margin-bottom: 2mm; }
+          img.logo { max-height: 10mm; max-width: 70mm; object-fit: contain; }
+        </style>
+      `;
+
+      // Crear una nueva ventana para la impresión
+      const printWindow = window.open('', '', 'height=600,width=800');
+
+      if (!printWindow) {
+        toast.error("Por favor, permita ventanas emergentes para imprimir");
+        return;
+      }
+
+      printWindow.document.write('<html><head><title>Detalle de Pago Semanal</title>');
+      printWindow.document.write(printStyles);
+      printWindow.document.write('</head><body>');
+
+      // Clonar el contenido para evitar modificar el original
+      const content = impresionRef.current.innerHTML;
+
+      // Insertar el contenido en la ventana de impresión
+      printWindow.document.write(content);
+      printWindow.document.write('</body></html>');
+
+      // Verificar si hay imágenes en el contenido
+      const images = printWindow.document.querySelectorAll('img');
+      let imagesLoaded = 0;
+      const totalImages = images.length;
+
+      // Si hay imágenes, esperar a que se carguen
+      if (totalImages > 0) {
+        images.forEach(img => {
+          img.onload = () => {
+            imagesLoaded++;
+            console.log(`Imagen cargada: ${imagesLoaded}/${totalImages}`);
+
+            // Si todas las imágenes están cargadas, imprimir
+            if (imagesLoaded === totalImages) {
+              setTimeout(() => {
+                printWindow.print();
+              }, 200);
+            }
+          };
+
+          img.onerror = () => {
+            imagesLoaded++;
+            console.error(`Error al cargar imagen: ${img.src}`);
+            // Si todas las imágenes han terminado (incluso con error), imprimir
+            if (imagesLoaded === totalImages) {
+              setTimeout(() => {
+                printWindow.print();
+              }, 200);
+            }
+          };
+        });
+      } else {
+        // Si no hay imágenes, imprimir directamente
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      }
+
+      printWindow.document.close();
+      printWindow.focus();
+
+      // Esperar a que cargue todos los recursos antes de imprimir
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+
+    } catch (error) {
+      console.error("Error al imprimir:", error);
+      toast.error("Error al preparar la impresión");
+    }
+  };
+
   useEffect(() => {
     fetchSemanasLaborales();
+    fetchEmpresaData(); // Cargar los datos de la empresa al inicio
   }, []);
 
   // Efecto para cargar datos cuando se selecciona una semana
@@ -339,8 +597,8 @@ export default function PagoPersonalPage() {
       ] = await Promise.all([
         fetch("/api/personal"),
         fetch(`/api/asistencia?id_semana=${idSemana}`),
-        fetch("/api/adelanto_pago"),
-        fetch("/api/tarea_extra"),
+        fetch("/api/adelanto_pago?estado=Pendiente"),
+        fetch(`/api/tarea_extra?id_semana=${idSemana}`),
         // La API ahora filtrará por rango de fechas de la semana, no solo por id_semana de la cocción
         fetch(`/api/coccion_turno?id_semana=${idSemana}`)
       ]);
@@ -535,7 +793,8 @@ export default function PagoPersonalPage() {
   //Función para cargar las semanas laborales
   const fetchSemanasLaborales = async () => {
     try {
-      const response = await fetch("/api/semana_laboral?estado=1");
+      // Solicitar todas las semanas con un límite de 10 para asegurar obtener suficientes
+      const response = await fetch("/api/semana_laboral?limit=10");
       const data = await response.json();
 
       // Ordenar semanas por fecha de inicio (más recientes primero)
@@ -555,6 +814,14 @@ export default function PagoPersonalPage() {
       if (semanaActiva) {
         // Asignar la semana seleccionada (esto disparará el useEffect para cargar datos)
         setSemanaSeleccionada(semanaActiva.id_semana_laboral.toString());
+      } else if (semanasRecientes.length > 0) {
+        // Si no hay semana activa pero hay semanas, seleccionar la más reciente
+        setSemanaSeleccionada(semanasRecientes[0].id_semana_laboral.toString());
+      } else {
+        // Si no hay semanas, limpiar la selección y mostrar el estado de carga como completado
+        setSemanaSeleccionada("");
+        setIsLoading(false);
+        console.log("No hay semanas laborales disponibles");
       }
     } catch (error) {
       console.error("Error al cargar semanas laborales:", error);
@@ -644,7 +911,10 @@ export default function PagoPersonalPage() {
       const response = await fetch("/api/personal");
       const data = await response.json();
 
-      // Filtrar solo personal activo
+      // Guardar todo el personal (activos e inactivos)
+      setTodosPersonal(data);
+
+      // Filtrar solo personal activo para los pagos
       const personalActivo = data.filter((p: Personal) => p.estado === 1);
       setPersonal(personalActivo);
 
@@ -675,7 +945,7 @@ export default function PagoPersonalPage() {
 
   const fetchAdelantos = async (idSemana: string) => {
     try {
-      const response = await fetch("/api/adelanto_pago");
+      const response = await fetch("/api/adelanto_pago?estado=Pendiente");
       const data = await response.json();
       // Convertir monto a número para cada adelanto
       const adelantosProcessed = data.map((adelanto: AdelantoPersonal) => ({
@@ -854,21 +1124,17 @@ export default function PagoPersonalPage() {
   // Agregar la función fetchTareasExtra
   const fetchTareasExtra = async (idSemana: string) => {
     try {
-      const response = await fetch("/api/tarea_extra");
+      const response = await fetch(`/api/tarea_extra?id_semana=${idSemana}`);
       if (!response.ok) throw new Error("Error al obtener tareas extras");
 
       const data = await response.json();
 
-      // Filtrar por semana seleccionada
-      const tareasFiltradas = data.filter(
-        (tarea: TareaExtra) => tarea.id_semana_laboral.toString() === idSemana
-      );
-
-      setTareasExtra(tareasFiltradas);
+      // Guardar todas las tareas de la semana seleccionada
+      setTareasExtra(data);
 
       // Actualizar los totales en el resumen de pagos
       setResumenPagos(prev => prev.map(resumen => {
-        const tareasPorPersonal: TareaExtra[] = tareasFiltradas.filter(
+        const tareasPorPersonal: TareaExtra[] = data.filter(
           (tarea: TareaExtra) => tarea.id_personal === resumen.id_personal
         );
         const totalTareasExtra = tareasPorPersonal.reduce(
@@ -1051,8 +1317,8 @@ export default function PagoPersonalPage() {
       // Actualizar la llamada para obtener los turnos en lugar de cocciones
       const [asistenciasResponse, adelantosResponse, tareasExtraResponse, turnosResponse] = await Promise.all([
         fetch(`/api/asistencia?id_semana=${idSemana}`),
-        fetch("/api/adelanto_pago"),
-        fetch("/api/tarea_extra"),
+        fetch("/api/adelanto_pago?estado=Pendiente"),
+        fetch(`/api/tarea_extra?id_semana=${idSemana}`),
         fetch(`/api/coccion_turno?id_semana=${idSemana}`) // Cambiar a coccion_turno
       ]);
 
@@ -1078,9 +1344,8 @@ export default function PagoPersonalPage() {
       const adelantosSemana = adelantos.filter((a: any) =>
         a.id_semana_laboral.toString() === idSemana
       );
-      const tareasExtraSemana = tareasExtra.filter((t: any) =>
-        t.id_semana_laboral.toString() === idSemana
-      );
+      // Ya no necesitamos filtrar tareasExtra porque ya vienen filtradas desde la API
+      const tareasExtraSemana = tareasExtra;
 
       // Actualizar el resumen en una sola operación
       setResumenPagos(prev => prev.map(resumen => {
@@ -1184,6 +1449,10 @@ export default function PagoPersonalPage() {
     try {
       setLoadingDetalles(true);
 
+      // Verificar si existe el logo de la empresa
+      console.log("Empresa data:", empresa);
+      console.log("Logo de la empresa:", empresa?.logo);
+
       // Obtener el objeto de personal
       const personalObj = personal.find(p => p.id_personal === idPersonal);
       if (!personalObj) throw new Error("No se encontró el personal");
@@ -1244,9 +1513,9 @@ export default function PagoPersonalPage() {
         return fechaA.getTime() - fechaB.getTime();
       });
 
-      // Filtrar adelantos y tareas extra para esta semana
+      // Filtrar adelantos pendientes del personal (mostrar todos, no solo los de esta semana)
       const adelantosPersonal = adelantos.filter(
-        a => a.id_personal === idPersonal && a.id_semana_laboral.toString() === idSemanaActiva
+        a => a.id_personal === idPersonal && a.estado === "Pendiente"
       );
 
       const tareasPersonal = tareasExtra.filter(
@@ -1368,35 +1637,100 @@ export default function PagoPersonalPage() {
       // Crear el objeto completo de detalles
       // Buscar si existe un pago realizado para este personal en esta semana
       const pagoRealizado = pagosRealizados.find(
-        p => p.id_personal === idPersonal && 
-        p.id_semana_laboral.toString() === idSemanaActiva
+        p => p.id_personal === idPersonal &&
+          p.id_semana_laboral.toString() === idSemanaActiva
       );
 
       // Calcular total final sin descuentos (suma de asistencia, tareas extra y cocción)
-      const totalFinalSinDescuento = resumenObj.total_asistencia + 
-        resumenObj.total_tareas_extra + 
+      const totalFinalSinDescuento = resumenObj.total_asistencia +
+        resumenObj.total_tareas_extra +
         resumenObj.total_coccion;
-      
+
       // Total final pagado es el monto que figura en el pago realizado, si existe
       // Si el personal no ha sido pagado, asignamos el valor del monto sin descuentos 
       // (la interfaz mostrará un guion pero necesitamos un valor numérico para la interfaz)
-      const totalFinalPagado = pagoRealizado ? 
-        Number(pagoRealizado.total_pago_final) : 
+      const totalFinalPagado = pagoRealizado ?
+        Number(pagoRealizado.total_pago_final) :
         Number(totalFinalSinDescuento);
+
+      // Para obtener adelantos cancelados, necesitamos hacer una consulta adicional
+      let adelantosCancelados: AdelantoPersonal[] = [];
+      let totalAdelantosCancelados = 0;
+
+      // Si hay un pago realizado, consultamos los adelantos cancelados asociados a ese pago
+      if (pagoRealizado) {
+        try {
+          // Necesitamos un enfoque más preciso para obtener los adelantos cancelados
+          // específicamente para este personal y en relación con este pago
+          
+          // 1. Consultar TODOS los adelantos cancelados de este personal específico
+          const adelantosCanceladosResponse = await fetch(`/api/adelanto_pago?id_personal=${idPersonal}&estado=Cancelado`);
+          if (adelantosCanceladosResponse.ok) {
+            const adelantosCanceladosData = await adelantosCanceladosResponse.json();
+            
+            console.log(`Todos los adelantos cancelados para personal ${idPersonal}:`, adelantosCanceladosData);
+            
+            // 2. Filtrar solo los adelantos de este personal específico (doble verificación)
+            const adelantosDelPersonal = adelantosCanceladosData.filter((adelanto: AdelantoPersonal) => 
+              adelanto.id_personal === idPersonal
+            );
+            
+            // 3. Obtener la fecha exacta del pago realizado
+            const fechaPago = new Date(pagoRealizado.fecha_pago);
+            
+            // 4. Obtener la fecha de actualización (cuando se marcó como cancelado)
+            // Para un rango de tiempo razonable alrededor de la fecha de pago (1 día antes/después)
+            const fechaInicioPago = new Date(fechaPago);
+            fechaInicioPago.setDate(fechaInicioPago.getDate() - 1);
+            const fechaFinPago = new Date(fechaPago);
+            fechaFinPago.setDate(fechaFinPago.getDate() + 1);
+            
+            // 5. Solo incluir adelantos cuya fecha de actualización esté dentro de este rango
+            // esto indica que probablemente fueron cancelados como parte de este pago
+            adelantosCancelados = adelantosDelPersonal.filter((adelanto: AdelantoPersonal) => {
+              if (!adelanto.updated_at) return false;
+              
+              const fechaActualizacion = new Date(adelanto.updated_at);
+              const dentroDeFechasPago = fechaActualizacion >= fechaInicioPago && 
+                                        fechaActualizacion <= fechaFinPago;
+                                        
+              console.log(`Adelanto ${adelanto.id_adelanto_pago} actualizado el ${fechaActualizacion.toISOString()}. ¿Dentro de rango de pago (${fechaInicioPago.toISOString()} - ${fechaFinPago.toISOString()})? ${dentroDeFechasPago ? 'SÍ' : 'NO'}`);
+              
+              return dentroDeFechasPago;
+            });
+
+            console.log(`Adelantos cancelados FILTRADOS para el personal ${idPersonal} en pago del ${fechaPago.toISOString()}:`, adelantosCancelados);
+
+            // Calcular total de adelantos cancelados con este pago específico
+            totalAdelantosCancelados = adelantosCancelados.reduce(
+              (sum, adelanto) => sum + Number(adelanto.monto), 0
+            );
+          }
+        } catch (error) {
+          console.error("Error al cargar adelantos cancelados:", error);
+        }
+      }
+
+      // Calcular total de adelantos pendientes
+      const totalAdelantosPendientes = adelantosPersonal.reduce(
+        (sum, adelanto) => sum + Number(adelanto.monto), 0
+      );
 
       const detalles: DetallePersonal = {
         personal: personalObj,
         asistencias: asistenciasFormateadas,
         tareasExtra: tareasPersonal,
         adelantos: adelantosPersonal,
+        adelantosCancelados: adelantosCancelados,
         cocciones: detallesCocciones,
         totales: {
           asistencia: resumenObj.total_asistencia,
           tareas_extra: resumenObj.total_tareas_extra,
           coccion: resumenObj.total_coccion,
-          adelantos: resumenObj.total_adelantos,
+          adelantos: totalAdelantosPendientes, // Usar el total calculado de adelantos pendientes
+          adelantosCancelados: totalAdelantosCancelados, // Total de adelantos cancelados
           descuentos: resumenObj.total_descuentos,
-          final: totalFinalSinDescuento,
+          final: totalFinalSinDescuento - totalAdelantosPendientes, // Restar los adelantos pendientes
           final_pagado: totalFinalPagado
         }
       };
@@ -1407,7 +1741,7 @@ export default function PagoPersonalPage() {
     } catch (error) {
       console.error("Error al cargar detalles:", error);
       toast.error("Error al cargar los detalles del pago");
-    } finally { 
+    } finally {
       setLoadingDetalles(false);
     }
   };
@@ -1419,9 +1753,14 @@ export default function PagoPersonalPage() {
   };
 
   // Función para abrir el modal de detalles y cargar la información del personal
-  const handleOpenDetalleModal = (idPersonal: number) => {
+  const handleOpenDetalleModal = async (idPersonal: number) => {
     setLoadingDetalles(true);
     setSelectedRow(idPersonal);
+
+    // Primero cargar los datos de la empresa para asegurar que tenemos el logo
+    await fetchEmpresaData();
+
+    // Luego cargar los detalles del personal
     cargarDetallesPersonal(idPersonal);
   };
 
@@ -1455,6 +1794,20 @@ export default function PagoPersonalPage() {
 
   // Añadir las funciones que faltan
   function puedesCerrarSemana(): boolean {
+    // Verificar primero si hay una semana activa seleccionada
+    if (!semanaSeleccionada) {
+      return false;
+    }
+
+    // Verificar si la semana seleccionada está activa (estado = 1)
+    const semanaActiva = semanasLaboral.find(s =>
+      s.id_semana_laboral.toString() === semanaSeleccionada && s.estado === 1
+    );
+
+    if (!semanaActiva) {
+      return false;
+    }
+
     // Verificar si hay pagos pendientes
     const pagosPendientes = resumenPagos.filter(r =>
       !pagosRealizados.some(p =>
@@ -1647,7 +2000,7 @@ export default function PagoPersonalPage() {
       }
 
       toast.success("Pago eliminado correctamente");
-      
+
       // Cerrar el modal y limpiar estados
       setShowConfirmDeletePagoModal(false);
       setPagoToDelete(null);
@@ -1679,7 +2032,7 @@ export default function PagoPersonalPage() {
         <div className="w-full md:w-[300px]">
           <Label>Semana Laboral</Label>
           <Select value={semanaSeleccionada} onValueChange={setSemanaSeleccionada}>
-            <SelectTrigger>
+            <SelectTrigger className="w-[240px]">
               <SelectValue placeholder="Seleccione una semana" />
             </SelectTrigger>
             <SelectContent>
@@ -1687,9 +2040,10 @@ export default function PagoPersonalPage() {
                 <SelectItem
                   key={semana.id_semana_laboral}
                   value={semana.id_semana_laboral.toString()}
+                  className={semana.estado === 1 ? "font-semibold" : ""}
                 >
                   {formatDate(semana.fecha_inicio)} - {formatDate(semana.fecha_fin)}
-                  {semana.estado === 1 ? " (Activa)" : ""}
+                  {semana.estado === 1 ? " ✓ (Activa)" : ""}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1760,6 +2114,7 @@ export default function PagoPersonalPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead rowSpan={2} className="align-bottom text-center">ID</TableHead>
                   <TableHead rowSpan={2} className="align-bottom">Personal</TableHead>
                   <TableHead colSpan={2} className="text-center border-b">Asistencia</TableHead>
                   <TableHead colSpan={2} className="text-center border-b">P. actual</TableHead>
@@ -1808,6 +2163,7 @@ export default function PagoPersonalPage() {
                         }`}
                       onClick={() => setSelectedRow(resumen.id_personal)}
                     >
+                      <TableCell className="text-center">{resumen.id_personal}</TableCell>
                       <TableCell className="font-medium">{resumen.nombre_completo}</TableCell>
                       <TableCell className="text-center">{resumen.dias_completos}</TableCell>
                       <TableCell className="text-center">{resumen.medios_dias}</TableCell>
@@ -1889,7 +2245,17 @@ export default function PagoPersonalPage() {
                     </TableCell>
                   </TableRow>
                 )}
-                {!isLoading && resumenPagos.filter(r =>
+                {!isLoading && !semanaSeleccionada && (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-8">
+                      <div className="flex justify-center items-center">
+                        <AlertCircle className="h-6 w-6 text-amber-500" />
+                        <span className="ml-2 text-amber-600 font-medium">No hay ninguna semana laboral activa para realizar pagos</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!isLoading && semanaSeleccionada && resumenPagos.filter(r =>
                   !pagosRealizados.some(p => p.id_personal === r.id_personal &&
                     p.id_semana_laboral.toString() === semanaSeleccionada)
                 ).length === 0 && (
@@ -1912,6 +2278,7 @@ export default function PagoPersonalPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>ID</TableHead>
                   <TableHead>Personal</TableHead>
                   <TableHead className="text-center">Fecha de pago</TableHead>
                   <TableHead className="text-right">Asistencia</TableHead>
@@ -1932,6 +2299,7 @@ export default function PagoPersonalPage() {
 
                     return (
                       <TableRow key={pago.id_pago_personal_semana}>
+                        <TableCell className="text-center">{pago.id_personal}</TableCell>
                         <TableCell className="font-medium">
                           {personalObj?.nombre_completo || `Personal ID: ${pago.id_personal}`}
                         </TableCell>
@@ -2135,11 +2503,13 @@ export default function PagoPersonalPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {adelantos.map((adelanto) => (
+                    {adelantos.filter(adelanto => adelanto.estado === "Pendiente").map((adelanto) => (
                       <TableRow key={adelanto.id_adelanto_pago}>
                         <TableCell>{formatDate(adelanto.fecha)}</TableCell>
                         <TableCell>
-                          {personal.find(p => p.id_personal === adelanto.id_personal)?.nombre_completo}
+                          {adelanto.personal?.nombre_completo ||
+                            todosPersonal.find(p => p.id_personal === adelanto.id_personal)?.nombre_completo ||
+                            "Personal no encontrado"}
                         </TableCell>
                         <TableCell className="text-right">
                           {(typeof adelanto.monto === 'number' ? adelanto.monto : Number(adelanto.monto)).toFixed(2)}
@@ -2375,8 +2745,8 @@ export default function PagoPersonalPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tareasExtra.length > 0 ? (
-                      tareasExtra.map((tarea) => (
+                    {semanaSeleccionada && tareasExtra.length > 0 ? (
+                      tareasExtra.filter(tarea => tarea.id_semana_laboral.toString() === semanaSeleccionada).map((tarea) => (
                         <TableRow key={tarea.id_tarea_extra}>
                           <TableCell>{formatDate(tarea.fecha)}</TableCell>
                           <TableCell>{tarea.personal?.nombre_completo}</TableCell>
@@ -2418,7 +2788,7 @@ export default function PagoPersonalPage() {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={5} className="text-center">
-                          No hay tareas extras registradas
+                          No hay tareas extras para la semana seleccionada
                         </TableCell>
                       </TableRow>
                     )}
@@ -2909,21 +3279,48 @@ export default function PagoPersonalPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Detalle de Pago - Actualizar para mostrar qué tipo de pago se aplicó */}
+      {/* Modal de Detalle de Pago - Optimizado para impresora térmica de 80mm */}
       <Dialog open={detalleModalOpen} onOpenChange={setDetalleModalOpen}>
-        <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] overflow-y-auto p-0 bg-white print:shadow-none">
+        <DialogContent className="sm:max-w-[350px] w-[95vw] max-h-[90vh] overflow-y-auto p-0 bg-white print:shadow-none print:max-w-[80mm] print:w-[80mm]">
           <DialogTitle className="sr-only">Detalle de Pago</DialogTitle>
-          {/* Contenedor principal del recibo */}
-          <div className="flex flex-col divide-y print:divide-black">
-            {/* Cabecera del recibo con logo y título */}
-            <div className="bg-gray-50 p-4 text-center border-b print:bg-white">
-              <h2 className="font-bold text-lg">DETALLE DE PAGO SEMANAL</h2>
-              <p className="text-sm text-muted-foreground mb-0">
-                {semanasLaboral.find(s => s.estado === 1)
-                  ? `Semana: ${formatDate(semanasLaboral.find(s => s.estado === 1)!.fecha_inicio)} - 
-                    ${formatDate(semanasLaboral.find(s => s.estado === 1)!.fecha_fin)}`
+          {/* Contenedor principal del recibo - Ticket estilo impresora térmica */}
+          <div ref={impresionRef} className="flex flex-col text-[11px] print:text-[9pt]">
+            {/* Cabecera del ticket */}
+            <div className="bg-white p-2 text-center print:bg-white">
+              {/* Logo de la empresa */}
+              {logoLoaded && logoUrl ? (
+                <div className="flex justify-center mb-2 logo-container">
+                  <img
+                    src={`${logoUrl}?t=${new Date().getTime()}`}
+                    alt={`Logo de ${empresa?.razon_social || 'la empresa'}`}
+                    className="h-10 object-contain print:h-14 mx-auto logo"
+                    onLoad={() => console.log("Logo cargado en el modal")}
+                    onError={(e) => {
+                      console.error("Error al cargar la imagen en el modal:", e);
+                      setLogoLoaded(false);
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex justify-center mb-2">
+                  <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
+                    <span className="text-gray-500 text-xs">Logo</span>
+                  </div>
+                </div>
+              )}
+              <p className="text-xs mb-0">
+                {empresa?.razon_social || "EMPRESA"} - RUC: {empresa?.ruc || ""}
+              </p>
+              <p className="text-xs text-muted-foreground mb-0">
+                {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)
+                  ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - 
+                    ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}`
                   : "Semana no seleccionada"}
               </p>
+              <p className="text-xs">{getCurrentDateTime()}</p>
+              <h2 className="py-2 font-bold text-base print:text-[14pt]">DETALLE DE PAGO SEMANAL</h2>
+
+              <div className="my-1 border-t border-dashed border-black"></div>
             </div>
 
             {loadingDetalles ? (
@@ -2934,249 +3331,263 @@ export default function PagoPersonalPage() {
             ) : (
               <>
                 {/* Información del trabajador */}
-                <div className="p-4 border-b">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      <tr>
-                        <td className="font-medium w-1/4">Personal:</td>
-                        <td>{detallePersonal?.personal?.nombre_completo}</td>
-                      </tr>
-                      <tr>
-                        <td className="font-medium">DNI:</td>
-                        <td>{detallePersonal?.personal?.dni}</td>
-                      </tr>
-                      <tr>
-                        <td className="font-medium">Fecha:</td>
-                        <td>{new Date().toLocaleDateString('es-PE')}</td>
-                      </tr>
-                      <tr>
-                        <td className="font-medium">Pago diario:</td>
-                        <td>
-                          <span className="font-medium">
-                            {resumenPagos.find(r => r.id_personal === detallePersonal?.personal?.id_personal)?.pago_aplicado === 'reducido' ? (
-                              <>
-                                <span className="bg-yellow-100 px-2 py-0.5 rounded mr-1">REDUCIDA</span>
-                                S/. {typeof detallePersonal?.personal?.pago_diario_reducido === 'number'
-                                  ? detallePersonal.personal.pago_diario_reducido.toFixed(2)
-                                  : (detallePersonal?.personal?.pago_diario_reducido || '-')}
-                              </>
-                            ) : (
-                              <>
-                                <span className="bg-green-100 px-2 py-0.5 rounded mr-1">NORMAL</span>
-                                S/.  {typeof detallePersonal?.personal?.pago_diario_normal === 'number'
-                                  ? detallePersonal.personal.pago_diario_normal.toFixed(2)
-                                  : (detallePersonal?.personal?.pago_diario_normal || '-')}
-                              </>
-                            )}
-                          </span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Sección de asistencias */}
-                <div className="px-4 py-3">
-                  <h3 className="font-semibold text-sm border-b pb-1 mb-2">ASISTENCIA</h3>
-                  <div className="text-xs grid grid-cols-7 gap-1 mb-2">
-                    {detallePersonal?.asistencias.map((asistencia, index) => (
-                      <div key={index} className="border rounded text-center p-1 bg-gray-50/50">
-                        <div className="font-medium">{asistencia.diaSemana}</div>
-                        <div className="text-[10px] text-muted-foreground">{asistencia.fecha}</div>
-                        <div className={`mt-1 text-[10px] font-medium py-0.5 rounded ${asistencia.estado === 'Completo'
-                          ? 'bg-green-100 text-green-800'
-                          : asistencia.estado === 'Medio día'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-gray-100 text-gray-800'
-                          }`}>
-                          {asistencia.estado === 'Completo'
-                            ? 'Asistencia'
-                            : asistencia.estado === 'Medio día'
-                              ? 'Medio día'
-                              : asistencia.estado === 'I'
-                                ? 'Inasistencia'
-                                : asistencia.estado}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span>Días completos: {detallePersonal?.asistencias.filter(a => a.estado === 'Completo').length || 0}</span>
-                    <span>Medio día: {detallePersonal?.asistencias.filter(a => a.estado === 'Medio día').length || 0}</span>
-                    <span className="font-semibold">Total: S/. {detallePersonal?.totales.asistencia.toFixed(2)}</span>
+                <div className="p-2 border-t border-dashed border-black print:border-dashed print:border-black">
+                  <div className="text-center font-bold mb-1">DATOS DEL TRABAJADOR</div>
+                  <div className="flex flex-col text-xs space-y-0.5">
+                    <div className="flex justify-between">
+                      <span className="font-medium">Personal:</span>
+                      <span className="text-right">{detallePersonal?.personal?.nombre_completo}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium">DNI:</span>
+                      <span>{detallePersonal?.personal?.dni}</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Sección de tareas extras */}
-                <div className="px-4 py-3">
-                  <h3 className="font-semibold text-sm border-b pb-1 mb-2">TAREAS EXTRA</h3>
+                {/* Sección de asistencias - simplificada para ticket */}
+                <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
+                  <div className="text-center font-bold mb-1">ASISTENCIA</div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="text-center">
+                      <div className="font-medium">Días completos</div>
+                      <div>{detallePersonal?.asistencias.filter(a => a.estado === 'Completo').length || 0}</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-medium">Medios días</div>
+                      <div>{detallePersonal?.asistencias.filter(a => a.estado === 'Medio día').length || 0}</div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                    <span>Total: S/.{detallePersonal?.totales.asistencia.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* Sección de tareas extras - simplificada para ticket */}
+                <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
+                  <div className="text-center font-bold mb-1">TAREAS EXTRA</div>
                   {detallePersonal?.tareasExtra && detallePersonal.tareasExtra.length > 0 ? (
-                    <div className="text-xs space-y-1">
-                      {detallePersonal.tareasExtra.map((tarea, idx) => (
-                        <div key={idx} className="flex justify-between items-center">
-                          <div>
-                            <span className="font-medium">{formatDate(tarea.fecha)}</span> - {tarea.descripcion}
+                    <div className="text-[9px]">
+                      {/* Encabezado de columnas */}
+                      <div className="grid grid-cols-3 mb-1">
+                        <div className="font-medium">Fecha</div>
+                        <div className="font-medium">Descripción</div>
+                        <div className="font-medium text-right">Monto</div>
+                      </div>
+                      {/* Filas de datos */}
+                      {[...detallePersonal.tareasExtra]
+                        .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                        .map((tarea, idx) => (
+                          <div key={idx} className="grid grid-cols-3 mb-0.5">
+                            <div>{formatDate(tarea.fecha)}</div>
+                            <div className="truncate">{tarea.descripcion || 'Sin desc.'}</div>
+                            <div className="text-right">S/.{Number(tarea.monto).toFixed(2)}</div>
                           </div>
-                          <div>S/. {Number(tarea.monto).toFixed(2)}</div>
-                        </div>
-                      ))}
-                      <div className="flex justify-end font-semibold pt-1">
-                        Total: S/. {detallePersonal?.totales.tareas_extra.toFixed(2)}
+                        ))}
+                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                        Total: S/.{detallePersonal?.totales.tareas_extra.toFixed(2)}
                       </div>
                     </div>
                   ) : (
-                    <div className="text-xs text-center text-muted-foreground py-1">
+                    <div className="text-[9px] text-center text-muted-foreground py-0.5">
                       No hay tareas extra registradas
                     </div>
                   )}
                 </div>
 
-                {/* Sección de turnos de cocción */}
-                <div className="px-4 py-3">
-                  <h3 className="font-semibold text-sm border-b pb-1 mb-2">SERVICIOS DE COCCIÓN</h3>
+                {/* Sección de turnos de cocción - con información detallada */}
+                <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
+                  <div className="text-center font-bold mb-1">SERVICIOS DE COCCIÓN</div>
                   {detallePersonal?.cocciones && detallePersonal.cocciones.length > 0 ? (
-                    <div className="text-xs space-y-2">
-                      {detallePersonal.cocciones.map((coccion, idx) => (
-                        <div key={idx} className={`border rounded p-2 ${coccion.esCoccionDeOtraSemana ? 'bg-amber-50/60' : 'bg-gray-50/50'}`}>
-                          <div className="flex justify-between mb-1">
-                            <div>
-                              <span className="font-medium">
-                                Fecha encendido: {formatDate(coccion.fecha_encendido)}
-                                {coccion.esCoccionDeOtraSemana &&
-                                  <Badge variant="outline" className="ml-2 bg-amber-100 text-amber-700 border-amber-200 text-[9px]">
-                                    Otra semana
-                                  </Badge>
-                                }
-                              </span>
-                              <span className="text-muted-foreground"> • {coccion.horno}</span>
+                    <div className="text-[9px]">
+                      {/* Ordenar cocciones por fecha de encendido (más antiguas primero) */}
+                      {[...detallePersonal.cocciones]
+                        .sort((a, b) => new Date(a.fecha_encendido).getTime() - new Date(b.fecha_encendido).getTime())
+                        .map((coccion, idx) => (
+                        <div key={idx} className="mb-2 border-b border-dashed border-black pb-1">
+                          {/* Primera fila: Información de la cocción (fecha y horno) */}
+                          <div className="flex justify-between items-center mb-1 pb-1 border-b border-dashed border-black">
+                            <div className="font-medium">
+                              F.cocción: {formatDate(coccion.fecha_encendido)}
                             </div>
-                            <div className="font-medium">S/. {coccion.total_coccion.toFixed(2)}</div>
+                            <div className={coccion.esCoccionDeOtraSemana ? "text-orange-600 font-medium" : "font-medium"}>
+                              Horno: {coccion.horno || '-'}
+                            </div>
                           </div>
-                          <div className="space-y-1">
-                            {/* Agrupar por fecha los turnos */}
-                            {coccion.turnosPorDia ? (
-                              coccion.turnosPorDia.map((diaTurno: any, dIdx: number) => (
-                                <div key={dIdx} className="border-t pt-1">
-                                  <div className="text-[11px] font-medium">{diaTurno.fecha}</div>
-                                  {diaTurno.turnos.map((turno: any, tIdx: number) => (
-                                    <div key={tIdx} className="flex justify-between text-[10px] px-2">
-                                      <span>{turno.cargo}</span>
-                                      <span>S/. {turno.costo.toFixed(2)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ))
-                            ) : (
-                              // Fallback utilizando también formatDate para las fechas individuales
-                              coccion.turnos.map((turno: any, tIdx: number) => (
-                                <div key={tIdx} className="flex justify-between text-[10px] px-1">
-                                  <span>{turno.fecha}</span>
-                                  <span>{turno.cargo}</span>
-                                  <span>S/. {turno.costo.toFixed(2)}</span>
-                                </div>
-                              ))
-                            )}
+                          
+                          {/* Segunda fila: Detalles de los turnos en 3 columnas */}
+                          <div className="grid grid-cols-3 mb-1">
+                            <div className="font-medium">Fecha</div>
+                            <div className="font-medium">Cargo</div>
+                            <div className="font-medium text-right">Monto</div>
+                          </div>
+                          
+                          {/* Filas de datos de turnos */}
+                          {[...coccion.turnos]
+                            .sort((a, b) => {
+                              // Convertir fechas DD/MM/YYYY a objetos Date para comparación
+                              if (!a.fecha || !b.fecha) return 0;
+                              const [diaA, mesA, yearA] = a.fecha.split('/');
+                              const [diaB, mesB, yearB] = b.fecha.split('/');
+                              const dateA = new Date(Number(yearA), Number(mesA) - 1, Number(diaA));
+                              const dateB = new Date(Number(yearB), Number(mesB) - 1, Number(diaB));
+                              return dateA.getTime() - dateB.getTime();
+                            })
+                            .map((turno, turnoIdx) => (
+                            <div key={turnoIdx} className="grid grid-cols-3 mb-0.5">
+                              <div>{turno.fecha}</div>
+                              <div className="truncate">{turno.cargo}</div>
+                              <div className="text-right">S/.{turno.costo.toFixed(2)}</div>
+                            </div>
+                          ))}
+                          
+                          {/* Total por cocción */}
+                          <div className="flex justify-end font-medium text-[9px] mt-1 pt-1 border-t border-dashed border-black">
+                            Subtotal: S/.{coccion.total_coccion.toFixed(2)}
                           </div>
                         </div>
                       ))}
-                      <div className="flex justify-end font-semibold pt-1">
-                        Total: S/. {detallePersonal?.totales.coccion.toFixed(2)}
+
+                      {/* Total general de todas las cocciones */}
+                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                        Total: S/.{detallePersonal?.totales.coccion.toFixed(2)}
                       </div>
                     </div>
                   ) : (
-                    <div className="text-xs text-center text-muted-foreground py-1">
+                    <div className="text-[9px] text-center text-muted-foreground py-0.5">
                       No hay servicios de cocción registrados
                     </div>
                   )}
                 </div>
 
-                {/* Sección de adelantos */}
-                <div className="px-4 py-3">
-                  <h3 className="font-semibold text-sm border-b pb-1 mb-2">ADELANTOS</h3>
+                {/* Sección de adelantos - simplificada para ticket */}
+                <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
+                  <div className="text-center font-bold mb-1">ADELANTOS PENDIENTES</div>
                   {detallePersonal?.adelantos && detallePersonal.adelantos.length > 0 ? (
-                    <div className="text-xs space-y-1">
-                      {detallePersonal.adelantos.map((adelanto, idx) => (
-                        <div key={idx} className="flex justify-between items-center">
-                          <div>
-                            <span className="font-medium">{formatDate(adelanto.fecha)}</span> -
-                            {adelanto.comentario || 'Sin descripción'}
-                            <span className={`ml-1 px-1 py-0.5 rounded text-[10px] ${adelanto.estado === "Pendiente"
-                              ? 'bg-red-50 text-red-600'
-                              : 'bg-green-50 text-green-600'
-                              }`}>
-                              {adelanto.estado}
-                            </span>
-                          </div>
-                          <div>S/. {Number(adelanto.monto).toFixed(2)}</div>
+                    <div className="text-[9px]">
+                      {/* Encabezado de columnas */}
+                      <div className="grid grid-cols-3 mb-1">
+                        <div className="font-medium">Fecha</div>
+                        <div className="font-medium">Descripción</div>
+                        <div className="font-medium text-right">Monto</div>
+                      </div>
+                      {/* Filas de datos */}
+                      {detallePersonal.adelantos
+                        .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                        .map((adelanto, idx) => (
+                        <div key={idx} className="grid grid-cols-3 mb-0.5">
+                          <div>{formatDate(adelanto.fecha)}</div>
+                          <div className="truncate">{adelanto.comentario || 'Sin desc.'}</div>
+                          <div className="text-right text-red-600 font-medium">S/.{Number(adelanto.monto).toFixed(2)}</div>
                         </div>
                       ))}
-                      <div className="flex justify-end font-semibold pt-1">
-                        Total: S/. {detallePersonal?.totales.adelantos.toFixed(2)}
+                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                        <span className="text-red-600">Total Pendiente: S/.{detallePersonal?.totales.adelantos.toFixed(2)}</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-xs text-center text-muted-foreground py-1">
-                      No hay adelantos registrados
+                    <div className="text-[9px] text-center text-muted-foreground py-0.5">
+                      No hay adelantos pendientes
                     </div>
                   )}
                 </div>
+                
+                {/* Sección de adelantos cancelados - solo visible si hay datos */}
+                {detallePersonal?.adelantosCancelados && detallePersonal.adelantosCancelados.length > 0 && (
+                  <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
+                    <div className="text-center font-bold mb-1">ADELANTOS CANCELADOS EN ESTE PAGO</div>
+                    <div className="text-[9px]">
+                      {/* Encabezado de columnas */}
+                      <div className="grid grid-cols-3 mb-1">
+                        <div className="font-medium">Fecha</div>
+                        <div className="font-medium">Descripción</div>
+                        <div className="font-medium text-right">Monto</div>
+                      </div>
+                      {/* Filas de datos */}
+                      {detallePersonal.adelantosCancelados
+                        .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                        .map((adelanto, idx) => (
+                        <div key={idx} className="grid grid-cols-3 mb-0.5">
+                          <div>{formatDate(adelanto.fecha)}</div>
+                          <div className="truncate">{adelanto.comentario || 'Sin desc.'}</div>
+                          <div className="text-right text-green-600 font-medium">S/.{Number(adelanto.monto).toFixed(2)}</div>
+                        </div>
+                      ))}
+                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                        <span className="text-green-600">Total Cancelado: S/.{detallePersonal?.totales.adelantosCancelados?.toFixed(2) || '0.00'}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Resumen final */}
-                <div className="p-4 bg-gray-50 print:bg-white">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      <tr>
-                        <td>Total Asistencia:</td>
-                        <td className="text-right">S/. {detallePersonal?.totales.asistencia.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td>Total Tareas Extra:</td>
-                        <td className="text-right">S/. {detallePersonal?.totales.tareas_extra.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td>Total Cocción:</td>
-                        <td className="text-right">S/. {detallePersonal?.totales.coccion.toFixed(2)}</td>
-                      </tr>
-                      <tr className="font-bold border-t">
-                        <td className="pt-2">TOTAL FINAL SIN DESCUENTOS:</td>
-                        <td className="text-right pt-2">S/. {detallePersonal?.totales.final.toFixed(2)}</td>
-                      </tr>
-                      <tr className="font-bold text-emerald-600">
-                        <td className="pt-1">TOTAL FINAL PAGADO:</td>
-                        <td className="text-right pt-1">
-                          {pagosRealizados.some(p => 
-                            p.id_personal === detallePersonal?.personal?.id_personal &&
-                            p.id_semana_laboral.toString() === semanaSeleccionada
-                          ) 
-                            ? `S/. ${Number(detallePersonal?.totales.final_pagado).toFixed(2)}` 
-                            : "-"
-                          }
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div className="p-2 print:bg-white border-t border-dashed border-black">
+                  <div className="flex flex-col text-[11px] space-y-0.5">
+                    <div className="flex justify-between">
+                      <span>Total Asistencia:</span>
+                      <span>S/.{detallePersonal?.totales.asistencia.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Tareas Extra:</span>
+                      <span>S/.{detallePersonal?.totales.tareas_extra.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total Cocción:</span>
+                      <span>S/.{detallePersonal?.totales.coccion.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-red-600">
+                      <span>Adelantos Pendientes:</span>
+                      <span>S/.{detallePersonal?.totales.adelantos.toFixed(2)}</span>
+                    </div>
+                    {detallePersonal?.totales.adelantosCancelados && detallePersonal.totales.adelantosCancelados > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Adelantos Cancelados:</span>
+                        <span>S/.{detallePersonal.totales.adelantosCancelados.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold border-t border-dashed border-black pt-1 mt-1">
+                      <span>TOTAL A PAGAR:</span>
+                      <span>S/.{detallePersonal?.totales.final.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-emerald-600 print:text-black">
+                      <span>TOTAL PAGADO:</span>
+                      <span>
+                        {pagosRealizados.some(p =>
+                          p.id_personal === detallePersonal?.personal?.id_personal &&
+                          p.id_semana_laboral.toString() === semanaSeleccionada
+                        )
+                          ? `S/.${Number(detallePersonal?.totales.final_pagado).toFixed(2)}`
+                          : "-"
+                        }
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
 
             {/* Pie de página */}
-            <div className="p-4 text-center text-xs text-muted-foreground">
-              <p>Este documento es un detalle informativo y no constituye un comprobante oficial de pago.</p>
+            <div className="p-2 text-center text-[8px] text-muted-foreground print:text-black border-t border-dashed border-black">
+              <p>Documento informativo - No constituye comprobante oficial de pago</p>
+              <p>Gracias por su trabajo</p>
+              <p className="pt-2">* * * * * * * * * *</p>
             </div>
           </div>
 
           {/* Botones de acción */}
-          <div className="flex justify-end gap-2 p-4 border-t">
+          <div className="flex justify-end gap-2 p-2 border-t">
             <Button variant="outline" size="sm" onClick={() => setDetalleModalOpen(false)}>
               Cerrar
             </Button>
-            <Button
-              size="sm"
-              onClick={() => window.print()}
-              className="print:hidden"
-            >
-              Imprimir
-            </Button>
+            {activeTab === "realizados" && (
+              <Button
+                size="sm"
+                onClick={imprimirDetalle}
+                className="print:hidden"
+              >
+                <Printer className="h-3 w-3 mr-1" /> Imprimir
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

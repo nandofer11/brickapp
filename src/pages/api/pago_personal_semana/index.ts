@@ -17,8 +17,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     switch (req.method) {
       case "GET":
+        // Buscar por rango de fechas
+        if (req.query.fechaInicio && req.query.fechaFin) {
+          const fechaInicio = req.query.fechaInicio as string;
+          const fechaFin = req.query.fechaFin as string;
+          const pagos = await PagoPersonalSemanaService.findByFechaRango(fechaInicio, fechaFin, id_empresa);
+          return res.status(200).json(pagos);
+        }
         // Añadir soporte para buscar por id_semana
-        if (req.query.id_semana) {
+        else if (req.query.id_semana) {
           const id_semana = parseInt(req.query.id_semana as string, 10);
           const pagos = await PagoPersonalSemanaService.findBySemanaLaboral(id_semana);
           return res.status(200).json(pagos);

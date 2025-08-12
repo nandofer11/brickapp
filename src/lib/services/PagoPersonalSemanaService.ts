@@ -8,6 +8,42 @@ export class PagoPersonalSemanaService {
     return repository.findAllByEmpresa(id_empresa);
   }
 
+  // Método para buscar pagos por rango de fechas
+  async findByFechaRango(fechaInicio: string, fechaFin: string, id_empresa: number) {
+    try {
+      const fechaInicioObj = new Date(fechaInicio);
+      const fechaFinObj = new Date(fechaFin);
+      
+      // Ajustar la hora para incluir todo el día
+      fechaInicioObj.setHours(0, 0, 0, 0);
+      fechaFinObj.setHours(23, 59, 59, 999);
+
+      const pagos = await repository.findMany({
+        where: {
+          fecha_pago: {
+            gte: fechaInicioObj,
+            lte: fechaFinObj
+          },
+          personal: {
+            id_empresa: Number(id_empresa)
+          },
+          estado: "Pagado"  // Solo incluir pagos con estado "Pagado"
+        },
+        include: {
+          personal: true,
+          semana_laboral: true
+        },
+        orderBy: {
+          fecha_pago: 'asc'
+        }
+      });
+      return pagos;
+    } catch (error) {
+      console.error("Error al buscar pagos por rango de fechas:", error);
+      throw new Error("Error al buscar pagos por rango de fechas");
+    }
+  }
+
   // Agregar método para buscar por id_semana_laboral
   async findBySemanaLaboral(id_semana: number) {
     try {

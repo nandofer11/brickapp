@@ -14,6 +14,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     switch (req.method) {
       case "GET":
+        // Filtrar por rango de fechas específico
+        if (req.query.fechaInicio && req.query.fechaFin) {
+          const fechaInicio = new Date(req.query.fechaInicio as string);
+          const fechaFin = new Date(req.query.fechaFin as string);
+          // Ajustar fecha fin para incluir todo el día
+          fechaFin.setHours(23, 59, 59, 999);
+          
+          const turnosPorRangoFecha = await prisma.coccion_turno.findMany({
+            where: {
+              fecha: {
+                gte: fechaInicio,
+                lte: fechaFin
+              },
+              coccion: {
+                id_empresa: id_empresa
+              }
+            },
+            include: {
+              coccion: true,
+              cargo_coccion: true
+            },
+            orderBy: {
+              fecha: 'asc'
+            }
+          });
+          
+          console.log(`Turnos en rango ${fechaInicio.toISOString()} a ${fechaFin.toISOString()}: ${turnosPorRangoFecha.length}`);
+          return res.status(200).json(turnosPorRangoFecha);
+        }
+        
         // Consulta turnos por id_semana si se proporciona el parámetro
         if (req.query.id_semana) {
           const id_semana = parseInt(req.query.id_semana as string, 10);
