@@ -23,6 +23,10 @@ export class DescuentoPersonalService {
   async deleteDescuento(id: number) {
     return descuentoRepo.deleteDescuento(id);
   }
+
+  async findByPersonalAndFecha(id_personal: number, fechaInicio: Date, fechaFin: Date) {
+    return descuentoRepo.findByPersonalAndFecha(id_personal, fechaInicio, fechaFin);
+  }
 }
 
 export default new DescuentoPersonalService();

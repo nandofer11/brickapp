@@ -48,4 +48,29 @@ export class AdelantoPagoRepository extends BaseRepository {
       where: { id_adelanto_pago: id },
     });
   }
+
+  async findByPersonalAndFecha(id_personal: number, fechaInicio: Date, fechaFin: Date, estado?: string) {
+    const whereClause: any = {
+      id_personal,
+      fecha: {
+        gte: fechaInicio,
+        lte: fechaFin,
+      },
+    };
+    
+    if (estado) {
+      whereClause.estado = estado;
+    }
+    
+    return prisma.adelanto_pago.findMany({
+      where: whereClause,
+      include: {
+        personal: true,
+        semana_laboral: true,
+      },
+      orderBy: {
+        fecha: "desc",
+      },
+    });
+  }
 }

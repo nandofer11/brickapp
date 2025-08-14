@@ -21,6 +21,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const id = parseInt(req.query.id as string, 10);
           const adelanto = await AdelantoPagoService.findById(id);
           return res.status(200).json(adelanto);
+        } else if (req.query.id_personal && req.query.fecha_inicio && req.query.fecha_fin) {
+          // Buscar por personal y rango de fechas
+          const idPersonal = parseInt(req.query.id_personal as string, 10);
+          const fechaInicio = new Date(req.query.fecha_inicio as string);
+          const fechaFin = new Date(req.query.fecha_fin as string);
+          const estado = req.query.estado as string | undefined;
+          
+          const adelantos = await AdelantoPagoService.findByPersonalAndFecha(
+            idPersonal, 
+            fechaInicio, 
+            fechaFin,
+            estado
+          );
+          return res.status(200).json(adelantos);
         } else {
           const adelantos = await AdelantoPagoService.findAllByEmpresa(id_empresa);
           return res.status(200).json(adelantos);

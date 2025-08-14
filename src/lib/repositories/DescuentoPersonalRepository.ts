@@ -54,4 +54,20 @@ export class DescuentoPersonalRepository extends BaseRepository {
       where: { id_descuento_personal: id },
     });
   }
+
+  async findByPersonalAndFecha(id_personal: number, fechaInicio: Date, fechaFin: Date) {
+    return prisma.descuento_personal.findMany({
+      where: {
+        id_personal,
+        fecha: {
+          gte: fechaInicio,
+          lte: fechaFin,
+        }
+      },
+      include: {
+        personal: true,
+        semana_laboral: true,
+      },
+    });
+  }
 }

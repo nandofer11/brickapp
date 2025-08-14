@@ -23,6 +23,10 @@ export class AdelantoPagoService {
   async deleteAdelanto(id_adelanto_pago: number) {
     return adelantoPagoRepository.deleteAdelanto(id_adelanto_pago);
   }
+
+  async findByPersonalAndFecha(id_personal: number, fechaInicio: Date, fechaFin: Date, estado?: string) {
+    return adelantoPagoRepository.findByPersonalAndFecha(id_personal, fechaInicio, fechaFin, estado);
+  }
 }
 
 export default new AdelantoPagoService();

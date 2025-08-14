@@ -5,6 +5,109 @@ import { toast } from "react-toastify";
 import { PlusCircle, Loader2, DollarSign, ClipboardList, Edit, Trash2, AlertTriangle, Eye, CreditCard, Check, AlertCircle, Printer } from "lucide-react";
 import { useAuthContext } from "@/context/AuthContext";
 
+// Estilos inline para impresión térmica
+const thermalPrintStyles = `
+@media print {
+  /* Configuración general para ticket térmico */
+  body {
+    font-family: Arial, Helvetica, sans-serif !important;
+    font-size: 8pt !important;
+    width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 2mm 0 !important; /* Reducido de 4mm a 2mm */
+  }
+  
+  /* Contenedor principal con márgenes laterales */
+  .flex.flex-col.text-\\[11px\\] {
+    padding-left: 6mm !important; /* Reducido de 8mm a 6mm */
+    padding-right: 6mm !important; /* Reducido de 8mm a 6mm */
+    padding-top: 2mm !important; /* Reducido de 4mm a 2mm */
+  }
+  
+  /* Hacer todas las líneas continuas, delgadas y bien visibles */
+  .border-t, .border-b, .border-dashed, .border-gray-500, .border-gray-300, .border-gray-100 {
+    border-color: #555 !important;
+    border-width: 0.5px !important;
+    border-style: solid !important;
+  }
+  
+  /* Asegurar que las líneas divisorias sean visibles pero con menor margen */
+  .my-1.border-t.border-dashed {
+    border-top: 0.5px solid #555 !important;
+    margin-top: 1mm !important; /* Reducido de 2mm a 1mm */
+    margin-bottom: 1mm !important; /* Reducido de 2mm a 1mm */
+    display: block !important;
+    height: 0 !important;
+    width: 100% !important;
+    visibility: visible !important;
+  }
+  }
+  
+  /* Ajustes para tablas de impresión térmica */
+  .thermal-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: fixed !important;
+    margin-bottom: 1mm !important; /* Reducido de 2mm a 1mm */
+  }
+  
+  .thermal-table th,
+  .thermal-table td {
+    padding: 0.5px 2px !important; /* Reducido de 1px a 0.5px */
+    text-align: left !important;
+    font-size: 9pt !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    border: none !important;
+  }
+  
+  /* Eliminar todos los bordes de las tablas */
+  .thermal-table tr,
+  .thermal-table tr.border-b,
+  .thermal-table tr.border-dashed,
+  .thermal-table thead tr {
+    border: none !important;
+    border-bottom: none !important;
+  }
+  
+  .thermal-table th {
+    font-weight: bold !important;
+    padding-bottom: 1px !important; /* Reducido de 2px a 1px */
+  }
+  
+  /* Ancho fijo para columnas */
+  .col-fecha { width: 30% !important; text-align: left !important; }
+  .col-cargo { width: 40% !important; text-align: left !important; }
+  .col-monto { width: 30% !important; text-align: right !important; }
+  
+  /* Alineaciones */
+  .t-right { text-align: right !important; }
+  .t-center { text-align: center !important; }
+  
+  /* Divisores */
+  .t-divider {
+    border-top: 0.5px solid #555 !important;
+    margin: 2px 0 !important;
+    height: 0 !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+  
+  /* Separadores de secciones principales */
+  .border-t-2.border-dashed.border-black,
+  .border-t.border-dashed.border-gray-500 {
+    border-top: 0.7px solid #333 !important;
+    margin-top: 3mm !important;
+    margin-bottom: 2mm !important;
+    padding-top: 1mm !important;
+    height: 0 !important;
+    visibility: visible !important;
+    display: block !important;
+  }
+}
+`;
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,8 +151,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
-  CardHeader,
   CardTitle,
 } from "@/components/ui/card"
 
@@ -80,19 +181,6 @@ interface Personal {
   updated_at: string;
 }
 
-interface AdelantoPersonal {
-  id_adelanto_pago?: number;
-  id_personal: number;
-  id_semana_laboral: number;
-  fecha: string;
-  monto: number;
-  comentario: string;
-  estado: "Pendiente" | "Cancelado";
-  personal?: {
-    nombre_completo: string;
-    estado: number;
-  };
-}
 
 // Actualizar las interfaces para incluir las relaciones
 interface TareaExtra {
@@ -157,6 +245,10 @@ interface Coccion {
   quema?: boolean;
   id_empresa?: number;
   semana_laboral?: SemanaLaboral;
+  horno?: {
+    id_horno: number;
+    nombre: string;
+  };
   coccion_turno?: CoccionTurno[]; // Actualizado de coccion_personal a coccion_turno
 }
 
@@ -423,56 +515,92 @@ export default function PagoPersonalPage() {
       // Crear estilos específicos para impresora térmica
       const printStyles = `
         <style>
+          /* Configuraciones básicas para impresora térmica */
           @page {
             size: 80mm auto;
             margin: 2mm;
           }
           body {
-            font-family: Arial, sans-serif;
-            font-size: 10px;
-            width: 76mm;
-            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 8pt;
+            width: 80mm;
+            margin: 0 auto;
             padding: 2mm;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            color-adjust: exact;
+            text-rendering: optimizeLegibility;
           }
+          
+          /* Estilos específicos para líneas divisorias */
+          .border-t, .border-dashed, .border-gray-500 {
+            border-top: 0.5px solid #555 !important;
+            display: block !important;
+            height: 0 !important;
+            margin: 2mm 0 !important;
+            visibility: visible !important;
+            width: 100% !important;
+          }
+          
+          /* Estilos para tablas */
+          table.thermal-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 3mm;
+          }
+          
+          table.thermal-table tr {
+            border-bottom: 0.5px solid #555;
+          }
+          
+          /* Estilo para tablas térmicas */
+          .thermal-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          
+          .thermal-table th,
+          .thermal-table td {
+            padding: 1px;
+            text-align: left;
+            font-size: 8pt;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          
+          /* Columnas con anchos fijos para servicios de cocción */
+          .thermal-table .col-fecha { width: 30%; }
+          .thermal-table .col-cargo { width: 40%; }
+          .thermal-table .col-monto { width: 30%; text-align: right; }
+          
+          /* Divisores y espaciado */
+          .t-divider { border-top: 1px dashed #000; margin: 2px 0; }
+          
+          /* Alineaciones */
+          .t-right { text-align: right; }
+          .t-center { text-align: center; }
+          
+          /* Estilos adicionales */
           .text-center { text-align: center; }
           .mb-0 { margin-bottom: 0; }
           .mb-1 { margin-bottom: 1mm; }
-          .mb-2 { margin-bottom: 2mm; }
-          .pb-1 { padding-bottom: 1mm; }
-          .pb-2 { padding-bottom: 2mm; }
-          .pt-1 { padding-top: 1mm; }
-          .pt-2 { padding-top: 2mm; }
-          .border-t { border-top: 1px solid #000; }
-          .border-b { border-bottom: 1px solid #000; }
+          .divider { border-top: 1px dashed #000; margin: 2mm 0; }
           .font-bold { font-weight: bold; }
           .font-semibold { font-weight: 600; }
-          .text-xs { font-size: 8px; }
-          .text-sm { font-size: 10px; }
-          .text-base { font-size: 12px; }
-          .text-right { text-align: right; }
-          .grid { display: grid; }
-          .grid-cols-2 { grid-template-columns: 1fr 1fr; }
-          .gap-1 { gap: 1mm; }
-          table { width: 100%; border-collapse: collapse; }
-          th, td { padding: 1mm 0; text-align: left; }
-          p { margin: 0.5mm 0; }
-          .mt-1 { margin-top: 1mm; }
-          .mt-2 { margin-top: 2mm; }
-          .mt-3 { margin-top: 3mm; }
-          .mt-5 { margin-top: 5mm; }
-          .mx-auto { margin-left: auto; margin-right: auto; }
-          .w-32 { width: 32mm; }
-          .divider { border-top: 1px dashed #000; margin: 2mm 0; }
-          hr { border: none; border-top: 1px dashed #000; margin: 2mm 0; }
-          .ticket-header { text-align: center; margin-bottom: 3mm; }
-          .section-title { font-weight: bold; text-align: center; margin: 1mm 0; border-bottom: 1px solid #000; }
-          .info-row { display: flex; justify-content: space-between; }
-          .info-label { font-weight: bold; }
-          .footer { text-align: center; font-size: 8px; margin-top: 3mm; }
-          .ticket-totals { border-top: 1px solid #000; margin-top: 2mm; padding-top: 2mm; }
+          
           /* Estilos para el logo */
           .logo-container { text-align: center; margin-bottom: 2mm; }
           img.logo { max-height: 10mm; max-width: 70mm; object-fit: contain; }
+          
+          /* Comandos ESC/POS emulados con CSS */
+          .escpos-bold { font-weight: bold; }
+          .escpos-center { text-align: center; }
+          .escpos-right { text-align: right; }
+          .escpos-normal { font-weight: normal; }
+          
+          ${thermalPrintStyles}
         </style>
       `;
 
@@ -491,8 +619,43 @@ export default function PagoPersonalPage() {
       // Clonar el contenido para evitar modificar el original
       const content = impresionRef.current.innerHTML;
 
-      // Insertar el contenido en la ventana de impresión
-      printWindow.document.write(content);
+      // Aplicar algunas transformaciones para optimizar la impresión térmica
+      let enhancedContent = content;
+      
+      // Añadir un contenedor con margen para asegurar espaciado en todos los lados y aplicar fuente Arial globalmente
+      enhancedContent = `<div style="padding: 4mm; margin: 2mm auto; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact;">${enhancedContent}</div>`;
+      
+      // Mejorar la visibilidad de las líneas divisorias
+      enhancedContent = enhancedContent.replace(/<div class="my-1 border-t border-dashed border-gray-500 print:my-0.5"><\/div>/g, 
+        '<div style="border-top: 0.5px solid #555; margin: 3mm 0; height: 0; display: block; visibility: visible; width: 100%"></div>');
+      
+      // Mejorar la línea divisoria antes del total a pagar
+      enhancedContent = enhancedContent.replace(/<div class="my-3 border-t border-dashed border-gray-500 print:my-5"><\/div>/g, 
+        '<div style="border-top: 0.7px solid #333; margin: 8mm 0; height: 0; display: block; visibility: visible; width: 100%"></div>');
+      
+      // Inyectar comandos ESC/POS como clases CSS para una mejor impresión
+      enhancedContent = enhancedContent.replace(/<div class="text-center font-bold/g, '<div style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;" class="text-center font-bold escpos-center escpos-bold');
+      enhancedContent = enhancedContent.replace(/<div class="flex justify-end/g, '<div style="font-family: Arial, Helvetica, sans-serif;" class="flex justify-end escpos-right');
+      
+      // Asegurar que las clases de impresión térmica estén correctamente aplicadas
+      enhancedContent = enhancedContent.replace(/<th class="col-fecha/g, '<th style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;" class="col-fecha font-bold');
+      enhancedContent = enhancedContent.replace(/<th class="col-cargo/g, '<th style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;" class="col-cargo font-bold');
+      enhancedContent = enhancedContent.replace(/<th class="col-monto/g, '<th style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;" class="col-monto font-bold');
+      
+      // Aplicar fuente a las celdas de la tabla
+      enhancedContent = enhancedContent.replace(/<td class="/g, '<td style="font-family: Arial, Helvetica, sans-serif;" class="');
+      
+      // Mejorar estilos para el total a pagar y total pagado
+      enhancedContent = enhancedContent.replace(/TOTAL A PAGAR:/g, '<span style="font-size: 12pt; font-weight: bold;">TOTAL A PAGAR:</span>');
+      enhancedContent = enhancedContent.replace(/TOTAL PAGADO:/g, '<span style="font-size: 12pt; font-weight: bold; margin-top: 6mm; display: block;">TOTAL PAGADO:</span>');
+      
+      // Forzar el estilo de los divisores directamente en el HTML
+      enhancedContent = enhancedContent.replace(/<div class="my-1 border-t/g, '<div style="border-top: 0.5px solid #333; margin: 3mm 0; display: block; height: 0; width: 100%;" class="my-1 border-t');
+      
+      // No aplicar bordes a las filas de las tablas
+      
+      // Insertar el contenido mejorado en la ventana de impresión
+      printWindow.document.write(enhancedContent);
       printWindow.document.write('</body></html>');
 
       // Verificar si hay imágenes en el contenido
@@ -829,119 +992,6 @@ export default function PagoPersonalPage() {
     }
   };
 
-  // Modificar la función debeRecibirPagoReducido para enfocarse correctamente en las inasistencias (estado "I")
-  const debeRecibirPagoReducido = (idPersonal: number, asistenciasSemana: any[]): boolean => {
-    // Obtener el personal específico
-    const personalObj = personal.find(p => p.id_personal === idPersonal);
-
-    // Si no tiene pago_diario_reducido configurado, siempre retorna false (siempre pago normal)
-    if (!personalObj?.pago_diario_reducido || personalObj.pago_diario_reducido <= 0) {
-      return false;
-    }
-
-    // Filtrar asistencias para este personal
-    const asistenciasPersonal = asistenciasSemana.filter(a => a.id_personal === idPersonal);
-
-    // Verificar si tiene alguna inasistencia (I) en la semana
-    const tieneInasistencia = asistenciasPersonal.some(a => a.estado === 'I');
-
-    // Si tiene al menos una inasistencia (I), aplicar pago reducido
-    return tieneInasistencia;
-  };
-
-  // Modificar la función fetchAsistenciaSemana
-  const fetchAsistenciaSemana = async (idSemana: string) => {
-    if (!idSemana) return;
-
-    try {
-      const response = await fetch(`/api/asistencia?id_semana=${idSemana}`);
-      const asistencias = await response.json();
-
-      // Ya no es necesario filtrar por semana porque la API ya lo hace
-      const asistenciasSemana = asistencias;
-
-      // Procesar resumen por persona
-      setResumenPagos(prev => prev.map(resumen => {
-        // Filtrar asistencias del trabajador
-        const asistenciasPersonal = asistenciasSemana.filter((a: any) =>
-          a.id_personal === resumen.id_personal
-        );
-
-        // Contar días
-        const dias_completos = asistenciasPersonal.filter((a: any) => a.estado === "A").length;
-        const medios_dias = asistenciasPersonal.filter((a: any) => a.estado === "M").length;
-
-        // Determinar si aplica pago reducido
-        const aplicaPagoReducido = debeRecibirPagoReducido(resumen.id_personal, asistenciasSemana);
-
-        // Calcular pago por asistencia - CORREGIDO
-        const personalObj = personal.find(p => p.id_personal === resumen.id_personal);
-
-        // Convertir explícitamente a números
-        const pagoDiarioNormal = personalObj ? Number(personalObj.pago_diario_normal) : 0;
-        const pagoDiarioReducido = aplicaPagoReducido && personalObj?.pago_diario_reducido ?
-          Number(personalObj.pago_diario_reducido) : 0;
-
-        // Determinar qué pago aplicar
-        const pagoDiarioAplicado = aplicaPagoReducido && pagoDiarioReducido > 0 ?
-          pagoDiarioReducido : pagoDiarioNormal;
-
-        // Calcular total asistencia correctamente
-        const totalAsistencia = (dias_completos * pagoDiarioAplicado) +
-          (medios_dias * (pagoDiarioAplicado / 2));
-
-        return {
-          ...resumen,
-          dias_completos,
-          medios_dias,
-          total_asistencia: totalAsistencia,
-          pago_aplicado: aplicaPagoReducido ? 'reducido' : 'normal'
-        };
-      }));
-
-    } catch (error) {
-      console.error("Error al cargar asistencias:", error);
-      toast.error("Error al cargar las asistencias");
-    }
-  };
-
-  const fetchPersonal = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/personal");
-      const data = await response.json();
-
-      // Guardar todo el personal (activos e inactivos)
-      setTodosPersonal(data);
-
-      // Filtrar solo personal activo para los pagos
-      const personalActivo = data.filter((p: Personal) => p.estado === 1);
-      setPersonal(personalActivo);
-
-      // Crear el resumen de pagos basado en el personal activo
-      const resumen: ResumenPago[] = personalActivo.map((p: Personal): ResumenPago => ({
-        id_personal: p.id_personal,
-        nombre_completo: p.nombre_completo,
-        pago_diario_normal: p.pago_diario_normal,
-        dias_completos: 0,
-        medios_dias: 0,
-        total_asistencia: 0,
-        total_tareas_extra: 0,
-        total_coccion: 0,
-        total_adelantos: 0,
-        total_descuentos: 0,
-        total_final: 0,
-        estado_pago: "Pendiente"
-      }));
-
-      setResumenPagos(resumen);
-    } catch (error) {
-      console.error("Error al cargar personal:", error);
-      toast.error("Error al cargar personal");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const fetchAdelantos = async (idSemana: string) => {
     try {
@@ -1297,146 +1347,6 @@ export default function PagoPersonalPage() {
     }
   };
 
-  // Crear una función para actualizar el resumen de forma centralizada
-  const actualizarResumenPagos = async (idSemana: string) => {
-    try {
-      setIsLoading(true);
-
-      // Obtener el rango de fechas de la semana seleccionada
-      const semanaSeleccionadaObj = semanasLaboral.find(s => s.id_semana_laboral.toString() === idSemana);
-      if (!semanaSeleccionadaObj) {
-        console.error("No se encontró la semana seleccionada");
-        setIsLoading(false);
-        return;
-      }
-      const fechaInicio = new Date(semanaSeleccionadaObj.fecha_inicio);
-      const fechaFin = new Date(semanaSeleccionadaObj.fecha_fin);
-      fechaInicio.setHours(0, 0, 0, 0);
-      fechaFin.setHours(23, 59, 59, 999);
-
-      // Actualizar la llamada para obtener los turnos en lugar de cocciones
-      const [asistenciasResponse, adelantosResponse, tareasExtraResponse, turnosResponse] = await Promise.all([
-        fetch(`/api/asistencia?id_semana=${idSemana}`),
-        fetch("/api/adelanto_pago?estado=Pendiente"),
-        fetch(`/api/tarea_extra?id_semana=${idSemana}`),
-        fetch(`/api/coccion_turno?id_semana=${idSemana}`) // Cambiar a coccion_turno
-      ]);
-
-      const [asistencias, adelantos, tareasExtra, turnos] = await Promise.all([
-        asistenciasResponse.json(),
-        adelantosResponse.json(),
-        tareasExtraResponse.json(),
-        turnosResponse.json()
-      ]);
-
-      // Asegurar que turnos sea un array y filtrar por fecha
-      const turnosSemana = Array.isArray(turnos) ? turnos.filter((turno: CoccionTurno) => {
-        // Convertir la fecha del turno a objeto Date
-        const fechaTurno = new Date(turno.fecha);
-        fechaTurno.setHours(0, 0, 0, 0);
-        return fechaTurno >= fechaInicio && fechaTurno <= fechaFin;
-      }) : [];
-
-      // Filtrar datos por semana
-      const asistenciasSemana = asistencias.filter((a: any) =>
-        a.id_semana_laboral.toString() === idSemana
-      );
-      const adelantosSemana = adelantos.filter((a: any) =>
-        a.id_semana_laboral.toString() === idSemana
-      );
-      // Ya no necesitamos filtrar tareasExtra porque ya vienen filtradas desde la API
-      const tareasExtraSemana = tareasExtra;
-
-      // Actualizar el resumen en una sola operación
-      setResumenPagos(prev => prev.map(resumen => {
-        // Calcular asistencias
-        const asistenciasPersonal = asistenciasSemana.filter((a: any) =>
-          a.id_personal === resumen.id_personal
-        );
-        const dias_completos = asistenciasPersonal.filter((a: any) => a.estado === "A").length;
-        const medios_dias = asistenciasPersonal.filter((a: any) => a.estado === "M").length;
-
-        // Determinar si aplica pago reducido
-        const aplicaPagoReducido = debeRecibirPagoReducido(resumen.id_personal, asistenciasSemana);
-
-        // Calcular pago por asistencia - CORREGIDO
-        const personalObj = personal.find(p => p.id_personal === resumen.id_personal);
-
-        // Asegurarse que todos los valores son números
-        const pagoDiarioNormal = personalObj ?
-          (typeof personalObj.pago_diario_normal === 'number'
-            ? personalObj.pago_diario_normal
-            : Number(personalObj.pago_diario_normal))
-          : 0;
-
-        const pagoDiarioReducido = aplicaPagoReducido && personalObj?.pago_diario_reducido ?
-          (typeof personalObj.pago_diario_reducido === 'number'
-            ? personalObj.pago_diario_reducido
-            : Number(personalObj.pago_diario_reducido))
-          : 0;
-
-        // Determinar qué pago aplicar
-        const pagoDiarioAplicado = aplicaPagoReducido && pagoDiarioReducido > 0 ?
-          pagoDiarioReducido :
-          pagoDiarioNormal;
-
-        // Calcular total asistencia correctamente
-        const total_asistencia = (dias_completos * pagoDiarioAplicado) +
-          (medios_dias * (pagoDiarioAplicado / 2));
-
-        // Calcular adelantos
-        const adelantosPersonal = adelantosSemana.filter(
-          (a: any) => a.id_personal === resumen.id_personal
-        );
-        const total_adelantos = adelantosPersonal.reduce(
-          (sum: number, adelanto: any) => sum + Number(adelanto.monto),
-          0
-        );
-
-        // Calcular tareas extra
-        const tareasPersonal = tareasExtraSemana.filter(
-          (t: any) => t.id_personal === resumen.id_personal
-        );
-        const total_tareas_extra = tareasPersonal.reduce(
-          (sum: number, tarea: any) => sum + Number(tarea.monto),
-          0
-        );
-
-        // Calcular total de cocción usando turnos filtrados por fecha
-        const total_coccion = turnosSemana.reduce((sum: number, turno: CoccionTurno) => {
-          // Solo considerar turnos de este personal (personal interno)
-          if (turno.personal_id_personal === resumen.id_personal) {
-            // Obtener el costo del cargo del turno
-            const costoCargo = turno.cargo_coccion?.costo_cargo;
-            return sum + (costoCargo ? Number(costoCargo) : 0);
-          }
-          return sum;
-        }, 0);
-
-        // Calcular total final SIN descontar adelantos (solo descuentos)
-        const total_final = total_asistencia + total_tareas_extra + total_coccion - resumen.total_descuentos;
-
-        return {
-          ...resumen,
-          dias_completos,
-          medios_dias,
-          total_asistencia,
-          total_tareas_extra,
-          total_adelantos,
-          total_coccion,
-          total_final,
-          pago_aplicado: aplicaPagoReducido ? 'reducido' : 'normal'
-        };
-      }));
-
-    } catch (error) {
-      console.error("Error al actualizar resumen:", error);
-      toast.error("Error al actualizar los datos");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Función para manejar el cierre del modal de descuentos
   const handleCloseDescuentosModal = () => {
     setDescuentosModalOpen(false);
@@ -1563,7 +1473,7 @@ export default function PagoPersonalPage() {
           }, 0);
 
           // Obtener información del horno (si está disponible)
-          const nombreHorno = coccion.horno_id_horno ? `Horno ${coccion.horno_id_horno}` : 'No especificado';
+          const nombreHorno = coccion.horno?.nombre || (coccion.horno_id_horno ? `Horno ${coccion.horno_id_horno}` : 'No especificado');
 
           // Agrupar turnos por fecha para mostrarlos mejor organizados
           const turnosPorFecha = turnosCoccion.reduce((grupos: any, turno: CoccionTurno) => {
@@ -1662,40 +1572,40 @@ export default function PagoPersonalPage() {
         try {
           // Necesitamos un enfoque más preciso para obtener los adelantos cancelados
           // específicamente para este personal y en relación con este pago
-          
+
           // 1. Consultar TODOS los adelantos cancelados de este personal específico
           const adelantosCanceladosResponse = await fetch(`/api/adelanto_pago?id_personal=${idPersonal}&estado=Cancelado`);
           if (adelantosCanceladosResponse.ok) {
             const adelantosCanceladosData = await adelantosCanceladosResponse.json();
-            
+
             console.log(`Todos los adelantos cancelados para personal ${idPersonal}:`, adelantosCanceladosData);
-            
+
             // 2. Filtrar solo los adelantos de este personal específico (doble verificación)
-            const adelantosDelPersonal = adelantosCanceladosData.filter((adelanto: AdelantoPersonal) => 
+            const adelantosDelPersonal = adelantosCanceladosData.filter((adelanto: AdelantoPersonal) =>
               adelanto.id_personal === idPersonal
             );
-            
+
             // 3. Obtener la fecha exacta del pago realizado
             const fechaPago = new Date(pagoRealizado.fecha_pago);
-            
+
             // 4. Obtener la fecha de actualización (cuando se marcó como cancelado)
             // Para un rango de tiempo razonable alrededor de la fecha de pago (1 día antes/después)
             const fechaInicioPago = new Date(fechaPago);
             fechaInicioPago.setDate(fechaInicioPago.getDate() - 1);
             const fechaFinPago = new Date(fechaPago);
             fechaFinPago.setDate(fechaFinPago.getDate() + 1);
-            
+
             // 5. Solo incluir adelantos cuya fecha de actualización esté dentro de este rango
             // esto indica que probablemente fueron cancelados como parte de este pago
             adelantosCancelados = adelantosDelPersonal.filter((adelanto: AdelantoPersonal) => {
               if (!adelanto.updated_at) return false;
-              
+
               const fechaActualizacion = new Date(adelanto.updated_at);
-              const dentroDeFechasPago = fechaActualizacion >= fechaInicioPago && 
-                                        fechaActualizacion <= fechaFinPago;
-                                        
+              const dentroDeFechasPago = fechaActualizacion >= fechaInicioPago &&
+                fechaActualizacion <= fechaFinPago;
+
               console.log(`Adelanto ${adelanto.id_adelanto_pago} actualizado el ${fechaActualizacion.toISOString()}. ¿Dentro de rango de pago (${fechaInicioPago.toISOString()} - ${fechaFinPago.toISOString()})? ${dentroDeFechasPago ? 'SÍ' : 'NO'}`);
-              
+
               return dentroDeFechasPago;
             });
 
@@ -1951,14 +1861,20 @@ export default function PagoPersonalPage() {
         throw new Error(errorData.message || "Error al procesar el pago");
       }
 
-      // 2. Marcar adelantos aplicados como "Cancelado"
+      // Obtener los datos del pago recién creado
+      const nuevoPago = await response.json();
+
+      // 2. Marcar adelantos aplicados como "Cancelado" y guardar referencia al pago
       if (adelantosAplicados.length > 0) {
         await Promise.all(
           adelantosAplicados.map(async (id) => {
             await fetch(`/api/adelanto_pago?id=${id}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ estado: "Cancelado" })
+              body: JSON.stringify({ 
+                estado: "Cancelado",
+                comentario: `Cancelado por pago #${nuevoPago.id_pago_personal_semana}`
+              })
             });
           })
         );
@@ -1990,6 +1906,77 @@ export default function PagoPersonalPage() {
 
     try {
       setIsSubmitting(true);
+      
+      // Primero obtener detalles del pago para saber qué revertir
+      const pagoResponse = await fetch(`/api/pago_personal_semana?id=${pagoToDelete}`);
+      if (!pagoResponse.ok) {
+        throw new Error("Error al obtener detalles del pago");
+      }
+      
+      const pagoData = await pagoResponse.json();
+      console.log("Datos del pago a eliminar:", pagoData);
+      
+      // Buscar adelantos con comentario que menciona este pago
+      const busquedaComentario = `Cancelado por pago #${pagoToDelete}`;
+      const adelantosResponse = await fetch(
+        `/api/adelanto_pago?id_personal=${pagoData.id_personal}&estado=Cancelado`
+      );
+      
+      let adelantosARevertir = [];
+      if (adelantosResponse.ok) {
+        const adelantos = await adelantosResponse.json();
+        
+        // Filtrar manualmente por el comentario que incluye el ID del pago
+        adelantosARevertir = adelantos.filter((adelanto: any) => 
+          adelanto.comentario && adelanto.comentario.includes(busquedaComentario)
+        );
+        
+        console.log("Adelantos a revertir encontrados por comentario:", adelantosARevertir);
+      }
+      
+      // Si no encontramos adelantos por comentario, intentamos con el rango de fechas
+      if (adelantosARevertir.length === 0) {
+        console.log("No se encontraron adelantos por comentario, intentando con fechas...");
+        
+        const fechaPago = new Date(pagoData.fecha_pago);
+        const rangoInicio = new Date(fechaPago);
+        rangoInicio.setHours(rangoInicio.getHours() - 24);
+        const rangoFin = new Date(fechaPago);
+        rangoFin.setHours(rangoFin.getHours() + 24);
+        
+        // Obtener todos los adelantos cancelados del personal
+        const todosAdelantosResponse = await fetch(
+          `/api/adelanto_pago?id_personal=${pagoData.id_personal}&estado=Cancelado`
+        );
+        
+        if (todosAdelantosResponse.ok) {
+          const todosAdelantos = await todosAdelantosResponse.json();
+          
+          // Filtrar por fecha de actualización
+          adelantosARevertir = todosAdelantos.filter((adelanto: any) => {
+            if (!adelanto.updated_at) return false;
+            const fechaActualizacion = new Date(adelanto.updated_at);
+            return fechaActualizacion >= rangoInicio && fechaActualizacion <= rangoFin;
+          });
+          
+          console.log("Adelantos a revertir encontrados por fecha:", adelantosARevertir);
+        }
+      }
+      
+      // Obtener descuentos aplicados con este pago
+      const fechaInicioSemana = new Date(pagoData.semana_laboral.fecha_inicio);
+      const fechaFinSemana = new Date(pagoData.semana_laboral.fecha_fin);
+      
+      const descuentosResponse = await fetch(
+        `/api/descuento_personal?id_personal=${pagoData.id_personal}&fecha_inicio=${fechaInicioSemana.toISOString()}&fecha_fin=${fechaFinSemana.toISOString()}`
+      );
+      
+      let descuentosAplicados = [];
+      if (descuentosResponse.ok) {
+        descuentosAplicados = await descuentosResponse.json();
+        console.log("Descuentos a eliminar:", descuentosAplicados);
+      }
+      
       // Eliminar el pago
       const response = await fetch(`/api/pago_personal_semana?id=${pagoToDelete}`, {
         method: "DELETE"
@@ -1997,6 +1984,58 @@ export default function PagoPersonalPage() {
 
       if (!response.ok) {
         throw new Error("Error al eliminar el pago");
+      }
+      
+      // Revertir adelantos cancelados a "Pendiente"
+      let resultadosReversos = [];
+      if (adelantosARevertir.length > 0) {
+        resultadosReversos = await Promise.all(
+          adelantosARevertir.map(async (adelanto: any) => {
+            console.log(`Revirtiendo adelanto #${adelanto.id_adelanto_pago} a Pendiente`);
+            const resp = await fetch(`/api/adelanto_pago?id=${adelanto.id_adelanto_pago}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                estado: "Pendiente",
+                comentario: adelanto.comentario ? `${adelanto.comentario} - Revertido a Pendiente` : "Revertido a Pendiente"
+              })
+            });
+            
+            if (!resp.ok) {
+              console.error(`Error al revertir adelanto #${adelanto.id_adelanto_pago}:`, await resp.text());
+              return false;
+            }
+            return true;
+          })
+        );
+        
+        console.log("Resultados de reversión de adelantos:", resultadosReversos);
+        
+        if (resultadosReversos.some(r => r === false)) {
+          toast.warning("Algunos adelantos no pudieron ser revertidos correctamente");
+        } else if (resultadosReversos.length > 0) {
+          toast.success(`${resultadosReversos.length} adelantos revertidos a Pendiente`);
+        }
+      } else {
+        console.log("No se encontraron adelantos para revertir");
+      }
+      
+      // Eliminar descuentos asociados a este pago
+      if (descuentosAplicados.length > 0) {
+        const resultadosDescuentos = await Promise.all(
+          descuentosAplicados.map(async (descuento: any) => {
+            const resp = await fetch(`/api/descuento_personal?id=${descuento.id_descuento_personal}`, {
+              method: "DELETE"
+            });
+            return resp.ok;
+          })
+        );
+        
+        if (resultadosDescuentos.some(r => r === false)) {
+          toast.warning("Algunos descuentos no pudieron ser eliminados");
+        } else if (resultadosDescuentos.length > 0) {
+          toast.success(`${resultadosDescuentos.length} descuentos eliminados`);
+        }
       }
 
       toast.success("Pago eliminado correctamente");
@@ -3284,46 +3323,46 @@ export default function PagoPersonalPage() {
         <DialogContent className="sm:max-w-[350px] w-[95vw] max-h-[90vh] overflow-y-auto p-0 bg-white print:shadow-none print:max-w-[80mm] print:w-[80mm]">
           <DialogTitle className="sr-only">Detalle de Pago</DialogTitle>
           {/* Contenedor principal del recibo - Ticket estilo impresora térmica */}
-          <div ref={impresionRef} className="flex flex-col text-[11px] print:text-[9pt]">
+          <div ref={impresionRef} className="flex flex-col text-[11px] print:text-[9pt] print:m-0 print:p-4 print:w-full">
             {/* Cabecera del ticket */}
-            <div className="bg-white p-2 text-center print:bg-white">
-              {/* Logo de la empresa */}
-              {logoLoaded && logoUrl ? (
-                <div className="flex justify-center mb-2 logo-container">
-                  <img
-                    src={`${logoUrl}?t=${new Date().getTime()}`}
-                    alt={`Logo de ${empresa?.razon_social || 'la empresa'}`}
-                    className="h-10 object-contain print:h-14 mx-auto logo"
-                    onLoad={() => console.log("Logo cargado en el modal")}
-                    onError={(e) => {
-                      console.error("Error al cargar la imagen en el modal:", e);
-                      setLogoLoaded(false);
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="flex justify-center mb-2">
-                  <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center">
-                    <span className="text-gray-500 text-xs">Logo</span>
+              <div className="bg-white p-2 text-center print:bg-white print:px-2 print:py-1">
+                {/* Logo de la empresa */}
+                {logoLoaded && logoUrl ? (
+                  <div className="flex justify-center mb-1 logo-container print:mb-0.5">
+                    <img
+                      src={`${logoUrl}?t=${new Date().getTime()}`}
+                      alt={`Logo de ${empresa?.razon_social || 'la empresa'}`}
+                      className="h-10 object-contain print:h-8 mx-auto logo"
+                      onLoad={() => console.log("Logo cargado en el modal")}
+                      onError={(e) => {
+                        console.error("Error al cargar la imagen en el modal:", e);
+                        setLogoLoaded(false);
+                      }}
+                    />
                   </div>
+                ) : (
+                  <div className="flex justify-center mb-1 print:mb-0.5">
+                    <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center print:h-8 print:w-8">
+                      <span className="text-gray-500 text-xs">Logo</span>
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-0 leading-tight header-no-space">
+                  <p className="text-xs mb-0 font-semibold print:text-[9pt] print:font-bold">
+                    {empresa?.razon_social || "EMPRESA"} - RUC: {empresa?.ruc || ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground mb-0 print:text-[8pt] print:text-black">
+                    {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)
+                      ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - 
+                        ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}`
+                      : "Semana no seleccionada"}
+                  </p>
+                  <p className="text-xs print:text-[8pt]">{getCurrentDateTime()}</p>
                 </div>
-              )}
-              <p className="text-xs mb-0">
-                {empresa?.razon_social || "EMPRESA"} - RUC: {empresa?.ruc || ""}
-              </p>
-              <p className="text-xs text-muted-foreground mb-0">
-                {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)
-                  ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - 
-                    ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}`
-                  : "Semana no seleccionada"}
-              </p>
-              <p className="text-xs">{getCurrentDateTime()}</p>
-              <h2 className="py-2 font-bold text-base print:text-[14pt]">DETALLE DE PAGO SEMANAL</h2>
+                <h2 className="pt-0.5 pb-0 font-bold text-base print:text-[12pt]">RECIBO DE PAGO SEMANAL</h2>
 
-              <div className="my-1 border-t border-dashed border-black"></div>
-            </div>
-
-            {loadingDetalles ? (
+                <div className="my-1 border-t border-dashed border-gray-500 print:my-0.5"></div>
+              </div>            {loadingDetalles ? (
               <div className="flex justify-center items-center p-10">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <span className="ml-2">Cargando detalles...</span>
@@ -3331,9 +3370,9 @@ export default function PagoPersonalPage() {
             ) : (
               <>
                 {/* Información del trabajador */}
-                <div className="p-2 border-t border-dashed border-black print:border-dashed print:border-black">
-                  <div className="text-center font-bold mb-1">DATOS DEL TRABAJADOR</div>
-                  <div className="flex flex-col text-xs space-y-0.5">
+                <div className="p-1 print:p-0.5">
+                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">DATOS DEL PERSONAL</div>
+                  <div className="flex flex-col text-xs space-y-0 print:text-[9pt] print:space-y-0">
                     <div className="flex justify-between">
                       <span className="font-medium">Personal:</span>
                       <span className="text-right">{detallePersonal?.personal?.nombre_completo}</span>
@@ -3345,111 +3384,125 @@ export default function PagoPersonalPage() {
                   </div>
                 </div>
 
-                {/* Sección de asistencias - simplificada para ticket */}
-                <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
-                  <div className="text-center font-bold mb-1">ASISTENCIA</div>
-                  <div className="grid grid-cols-2 gap-2 text-[10px]">
-                    <div className="text-center">
-                      <div className="font-medium">Días completos</div>
-                      <div>{detallePersonal?.asistencias.filter(a => a.estado === 'Completo').length || 0}</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="font-medium">Medios días</div>
-                      <div>{detallePersonal?.asistencias.filter(a => a.estado === 'Medio día').length || 0}</div>
-                    </div>
-                  </div>
-                  <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                {/* Sección de asistencias - con tabla para impresión térmica */}
+                <div className="px-1 py-0.5 print:px-0.5 print:py-0">
+                  <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
+                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">ASISTENCIA</div>
+                  <table className="thermal-table w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="font-bold text-center">Días completos</th>
+                        <th className="font-bold text-center">Medios días</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="text-center">
+                          {detallePersonal?.asistencias.filter(a => a.estado === 'Completo').length || 0}
+                        </td>
+                        <td className="text-center">
+                          {detallePersonal?.asistencias.filter(a => a.estado === 'Medio día').length || 0}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 print:mt-0 print:pt-0.5">
                     <span>Total: S/.{detallePersonal?.totales.asistencia.toFixed(2)}</span>
                   </div>
                 </div>
 
-                {/* Sección de tareas extras - simplificada para ticket */}
-                <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
-                  <div className="text-center font-bold mb-1">TAREAS EXTRA</div>
+                {/* Sección de tareas extras - con tabla para impresión térmica */}
+                <div className="px-1 py-0.5 print:px-0.5 print:py-0">
+                  <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
+                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">TAREAS EXTRA</div>
                   {detallePersonal?.tareasExtra && detallePersonal.tareasExtra.length > 0 ? (
-                    <div className="text-[9px]">
-                      {/* Encabezado de columnas */}
-                      <div className="grid grid-cols-3 mb-1">
-                        <div className="font-medium">Fecha</div>
-                        <div className="font-medium">Descripción</div>
-                        <div className="font-medium text-right">Monto</div>
-                      </div>
-                      {/* Filas de datos */}
-                      {[...detallePersonal.tareasExtra]
-                        .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
-                        .map((tarea, idx) => (
-                          <div key={idx} className="grid grid-cols-3 mb-0.5">
-                            <div>{formatDate(tarea.fecha)}</div>
-                            <div className="truncate">{tarea.descripcion || 'Sin desc.'}</div>
-                            <div className="text-right">S/.{Number(tarea.monto).toFixed(2)}</div>
-                          </div>
-                        ))}
-                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                    <div className="text-[9px] print:text-[8pt]">
+                      {/* Tabla para impresión térmica */}
+                      <table className="thermal-table w-full border-collapse">
+                        <thead>
+                          <tr>
+                            <th className="col-fecha font-bold">Fecha</th>
+                            <th className="col-cargo font-bold">Descripción</th>
+                            <th className="col-monto font-bold">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...detallePersonal.tareasExtra]
+                            .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                            .map((tarea, idx) => (
+                              <tr key={idx}>
+                                <td className="col-fecha">{formatDate(tarea.fecha)}</td>
+                                <td className="col-cargo">{tarea.descripcion || 'Sin desc.'}</td>
+                                <td className="col-monto">S/.{Number(tarea.monto).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                      <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 print:mt-0 print:pt-0.5">
                         Total: S/.{detallePersonal?.totales.tareas_extra.toFixed(2)}
                       </div>
                     </div>
                   ) : (
-                    <div className="text-[9px] text-center text-muted-foreground py-0.5">
+                    <div className="text-[9px] text-center text-muted-foreground py-0.5 print:text-[8pt] print:text-black">
                       No hay tareas extra registradas
                     </div>
                   )}
                 </div>
 
-                {/* Sección de turnos de cocción - con información detallada */}
-                <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
-                  <div className="text-center font-bold mb-1">SERVICIOS DE COCCIÓN</div>
+                {/* Sección de servicios de cocción - con tabla */}
+                <div className="px-1 py-0.5 print:px-0.5 print:py-0">
+                  <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
+                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">SERVICIOS DE COCCIÓN</div>
                   {detallePersonal?.cocciones && detallePersonal.cocciones.length > 0 ? (
-                    <div className="text-[9px]">
-                      {/* Ordenar cocciones por fecha de encendido (más antiguas primero) */}
+                    <div className="text-[9px] print:text-[8pt]">
+                      {/* Versión única optimizada con tablas */}
                       {[...detallePersonal.cocciones]
                         .sort((a, b) => new Date(a.fecha_encendido).getTime() - new Date(b.fecha_encendido).getTime())
                         .map((coccion, idx) => (
-                        <div key={idx} className="mb-2 border-b border-dashed border-black pb-1">
-                          {/* Primera fila: Información de la cocción (fecha y horno) */}
-                          <div className="flex justify-between items-center mb-1 pb-1 border-b border-dashed border-black">
-                            <div className="font-medium">
-                              F.cocción: {formatDate(coccion.fecha_encendido)}
+                          <div key={idx} className="mb-0.5 print:mb-0.5">
+                            {/* Primera fila: Información de la cocción (fecha y horno) */}
+                            <div className="flex justify-between items-center mb-0 pb-0">
+                              <div className={coccion.esCoccionDeOtraSemana ? "text-orange-600 font-medium print:text-black" : "font-medium"}>
+                                Horno: {coccion.horno}
+                              </div>
+                              <div className="font-medium">
+                                F. encendido: {formatDate(coccion.fecha_encendido)}
+                              </div>
                             </div>
-                            <div className={coccion.esCoccionDeOtraSemana ? "text-orange-600 font-medium" : "font-medium"}>
-                              Horno: {coccion.horno || '-'}
-                            </div>
+
+                            {/* Tabla para impresión térmica */}
+                            <table className="thermal-table w-full border-collapse">
+                              <thead>
+                                <tr>
+                                  <th className="col-fecha font-bold">Fecha</th>
+                                  <th className="col-cargo font-bold">Cargo</th>
+                                  <th className="col-monto font-bold">Monto</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {[...coccion.turnos]
+                                  .sort((a, b) => {
+                                    if (!a.fecha || !b.fecha) return 0;
+                                    const [diaA, mesA, yearA] = a.fecha.split('/');
+                                    const [diaB, mesB, yearB] = b.fecha.split('/');
+                                    const dateA = new Date(Number(yearA), Number(mesA) - 1, Number(diaA));
+                                    const dateB = new Date(Number(yearB), Number(mesB) - 1, Number(diaB));
+                                    return dateA.getTime() - dateB.getTime();
+                                  })
+                                  .map((turno, turnoIdx, arr) => (
+                                    <tr key={turnoIdx}>
+                                      <td className="col-fecha">{turno.fecha}</td>
+                                      <td className="col-cargo">{turno.cargo}</td>
+                                      <td className="col-monto">S/.{turno.costo.toFixed(2)}</td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
                           </div>
-                          
-                          {/* Segunda fila: Detalles de los turnos en 3 columnas */}
-                          <div className="grid grid-cols-3 mb-1">
-                            <div className="font-medium">Fecha</div>
-                            <div className="font-medium">Cargo</div>
-                            <div className="font-medium text-right">Monto</div>
-                          </div>
-                          
-                          {/* Filas de datos de turnos */}
-                          {[...coccion.turnos]
-                            .sort((a, b) => {
-                              // Convertir fechas DD/MM/YYYY a objetos Date para comparación
-                              if (!a.fecha || !b.fecha) return 0;
-                              const [diaA, mesA, yearA] = a.fecha.split('/');
-                              const [diaB, mesB, yearB] = b.fecha.split('/');
-                              const dateA = new Date(Number(yearA), Number(mesA) - 1, Number(diaA));
-                              const dateB = new Date(Number(yearB), Number(mesB) - 1, Number(diaB));
-                              return dateA.getTime() - dateB.getTime();
-                            })
-                            .map((turno, turnoIdx) => (
-                            <div key={turnoIdx} className="grid grid-cols-3 mb-0.5">
-                              <div>{turno.fecha}</div>
-                              <div className="truncate">{turno.cargo}</div>
-                              <div className="text-right">S/.{turno.costo.toFixed(2)}</div>
-                            </div>
-                          ))}
-                          
-                          {/* Total por cocción */}
-                          <div className="flex justify-end font-medium text-[9px] mt-1 pt-1 border-t border-dashed border-black">
-                            Subtotal: S/.{coccion.total_coccion.toFixed(2)}
-                          </div>
-                        </div>
-                      ))}
+                        ))}
 
                       {/* Total general de todas las cocciones */}
-                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
+                      <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 print:mt-0 print:pt-0.5">
                         Total: S/.{detallePersonal?.totales.coccion.toFixed(2)}
                       </div>
                     </div>
@@ -3460,69 +3513,82 @@ export default function PagoPersonalPage() {
                   )}
                 </div>
 
-                {/* Sección de adelantos - simplificada para ticket */}
-                <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
-                  <div className="text-center font-bold mb-1">ADELANTOS PENDIENTES</div>
+                {/* Sección de adelantos pendientes - con tabla */}
+                <div className="px-1 py-0.5 print:px-0.5 print:py-0">
+                  <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
+                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">ADELANTOS PENDIENTES</div>
                   {detallePersonal?.adelantos && detallePersonal.adelantos.length > 0 ? (
-                    <div className="text-[9px]">
-                      {/* Encabezado de columnas */}
-                      <div className="grid grid-cols-3 mb-1">
-                        <div className="font-medium">Fecha</div>
-                        <div className="font-medium">Descripción</div>
-                        <div className="font-medium text-right">Monto</div>
-                      </div>
-                      {/* Filas de datos */}
-                      {detallePersonal.adelantos
-                        .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
-                        .map((adelanto, idx) => (
-                        <div key={idx} className="grid grid-cols-3 mb-0.5">
-                          <div>{formatDate(adelanto.fecha)}</div>
-                          <div className="truncate">{adelanto.comentario || 'Sin desc.'}</div>
-                          <div className="text-right text-red-600 font-medium">S/.{Number(adelanto.monto).toFixed(2)}</div>
-                        </div>
-                      ))}
-                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
-                        <span className="text-red-600">Total Pendiente: S/.{detallePersonal?.totales.adelantos.toFixed(2)}</span>
+                    <div className="text-[9px] print:text-[8pt]">
+                      {/* Tabla para impresión térmica */}
+                      <table className="thermal-table w-full border-collapse">
+                        <thead>
+                          <tr>
+                            <th className="col-fecha font-bold">Fecha</th>
+                            <th className="col-cargo font-bold">Descripción</th>
+                            <th className="col-monto font-bold">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detallePersonal.adelantos
+                            .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                            .map((adelanto, idx, arr) => (
+                              <tr key={idx}>
+                                <td className="col-fecha">{formatDate(adelanto.fecha)}</td>
+                                <td className="col-cargo">{adelanto.comentario || 'Sin desc.'}</td>
+                                <td className="col-monto text-red-600 font-medium print:font-normal">S/.{Number(adelanto.monto).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                      <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 border-t border-dashed border-gray-300 print:text-[9pt] print:mt-0 print:pt-0.5">
+                        <span className="text-red-600 print:font-medium">Total Pendiente: S/.{detallePersonal?.totales.adelantos.toFixed(2)}</span>
                       </div>
                     </div>
                   ) : (
-                    <div className="text-[9px] text-center text-muted-foreground py-0.5">
+                    <div className="text-[9px] text-center text-muted-foreground py-0.5 print:text-[8pt] print:text-black">
                       No hay adelantos pendientes
                     </div>
                   )}
                 </div>
-                
+
                 {/* Sección de adelantos cancelados - solo visible si hay datos */}
                 {detallePersonal?.adelantosCancelados && detallePersonal.adelantosCancelados.length > 0 && (
-                  <div className="px-2 py-1 border-t border-dashed border-black print:border-dashed print:border-black">
-                    <div className="text-center font-bold mb-1">ADELANTOS CANCELADOS EN ESTE PAGO</div>
-                    <div className="text-[9px]">
-                      {/* Encabezado de columnas */}
-                      <div className="grid grid-cols-3 mb-1">
-                        <div className="font-medium">Fecha</div>
-                        <div className="font-medium">Descripción</div>
-                        <div className="font-medium text-right">Monto</div>
-                      </div>
-                      {/* Filas de datos */}
-                      {detallePersonal.adelantosCancelados
-                        .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
-                        .map((adelanto, idx) => (
-                        <div key={idx} className="grid grid-cols-3 mb-0.5">
-                          <div>{formatDate(adelanto.fecha)}</div>
-                          <div className="truncate">{adelanto.comentario || 'Sin desc.'}</div>
-                          <div className="text-right text-green-600 font-medium">S/.{Number(adelanto.monto).toFixed(2)}</div>
-                        </div>
-                      ))}
-                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-1 border-t border-dashed border-black">
-                        <span className="text-green-600">Total Cancelado: S/.{detallePersonal?.totales.adelantosCancelados?.toFixed(2) || '0.00'}</span>
+                  <div className="px-1 py-0.5 print:px-0.5 print:py-0">
+                   <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
+                    <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">ADELANTOS CANCELADOS EN ESTE PAGO</div>
+                    <div className="text-[9px] print:text-[8pt]">
+                      {/* Tabla para impresión térmica */}
+                      <table className="thermal-table w-full border-collapse">
+                        <thead>
+                          <tr>
+                            <th className="col-fecha font-bold">Fecha</th>
+                            <th className="col-cargo font-bold">Descripción</th>
+                            <th className="col-monto font-bold">Monto</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detallePersonal.adelantosCancelados
+                            .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                            .map((adelanto, idx, arr) => (
+                              <tr key={idx}>
+                                <td className="col-fecha">{formatDate(adelanto.fecha)}</td>
+                                <td className="col-cargo">{adelanto.comentario || 'Sin desc.'}</td>
+                                <td className="col-monto text-green-600 font-medium print:font-normal">S/.{Number(adelanto.monto).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                      <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 print:mt-0 print:pt-0.5">
+                        <span className="text-green-600 print:font-medium">Total Cancelado: S/.{detallePersonal?.totales.adelantosCancelados?.toFixed(2) || '0.00'}</span>
                       </div>
                     </div>
                   </div>
                 )}
 
                 {/* Resumen final */}
-                <div className="p-2 print:bg-white border-t border-dashed border-black">
-                  <div className="flex flex-col text-[11px] space-y-0.5">
+                <div className="p-1 print:p-0.5 print:bg-white">
+                  <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
+                  <div className="flex flex-col text-[11px] space-y-0 print:text-[9pt] print:space-y-0">
                     <div className="flex justify-between">
                       <span>Total Asistencia:</span>
                       <span>S/.{detallePersonal?.totales.asistencia.toFixed(2)}</span>
@@ -3535,23 +3601,28 @@ export default function PagoPersonalPage() {
                       <span>Total Cocción:</span>
                       <span>S/.{detallePersonal?.totales.coccion.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-red-600">
+                    <div className="flex justify-between text-red-600 print:font-medium">
                       <span>Adelantos Pendientes:</span>
                       <span>S/.{detallePersonal?.totales.adelantos.toFixed(2)}</span>
                     </div>
-                    {detallePersonal?.totales.adelantosCancelados && detallePersonal.totales.adelantosCancelados > 0 && (
-                      <div className="flex justify-between text-green-600">
-                        <span>Adelantos Cancelados:</span>
-                        <span>S/.{detallePersonal.totales.adelantosCancelados.toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between font-bold border-t border-dashed border-black pt-1 mt-1">
-                      <span>TOTAL A PAGAR:</span>
-                      <span>S/.{detallePersonal?.totales.final.toFixed(2)}</span>
+                    <div className="flex justify-between text-green-600 print:font-medium mb-0.5 print:mb-1">
+                      <span>Adelantos Cancelados:</span>
+                      <span>S/.{detallePersonal?.totales.adelantosCancelados?.toFixed(2) || '0.00'}</span>
                     </div>
-                    <div className="flex justify-between font-bold text-emerald-600 print:text-black">
-                      <span>TOTAL PAGADO:</span>
-                      <span>
+                    
+                    {/* Línea divisoria antes del total a pagar */}
+                    <div className="my-2 border-t border-dashed border-gray-500 print:my-2"></div>
+                    
+                    {/* Total a pagar */}
+                    <div className="text-center font-bold pt-0.5 mt-1 print:pt-0.5 print:mt-1">
+                      <div className="text-base print:text-[11pt]">TOTAL A PAGAR:</div>
+                      <div className="text-lg print:text-[14pt] mt-0.5 print:mt-1">S/.{detallePersonal?.totales.final.toFixed(2)}</div>
+                    </div>
+                    
+                    {/* Total pagado */}
+                    <div className="text-center font-bold text-emerald-600 print:text-black print:font-extrabold mt-3 print:mt-4">
+                      <div className="text-base print:text-[11pt]">TOTAL PAGADO:</div>
+                      <div className="text-lg print:text-[14pt] mt-0.5 print:mt-1">
                         {pagosRealizados.some(p =>
                           p.id_personal === detallePersonal?.personal?.id_personal &&
                           p.id_semana_laboral.toString() === semanaSeleccionada
@@ -3559,7 +3630,7 @@ export default function PagoPersonalPage() {
                           ? `S/.${Number(detallePersonal?.totales.final_pagado).toFixed(2)}`
                           : "-"
                         }
-                      </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3567,15 +3638,15 @@ export default function PagoPersonalPage() {
             )}
 
             {/* Pie de página */}
-            <div className="p-2 text-center text-[8px] text-muted-foreground print:text-black border-t border-dashed border-black">
-              <p>Documento informativo - No constituye comprobante oficial de pago</p>
-              <p>Gracias por su trabajo</p>
-              <p className="pt-2">* * * * * * * * * *</p>
+            <div className="p-2 text-center text-[8px] text-muted-foreground print:text-black print:px-0">
+              <div className="my-1 border-t border-dashed border-gray-500 print:my-0.5"></div>
+              <p className="mb-0.5 print:text-[7pt]">Documento informativo - No constituye comprobante oficial de pago</p>
+              <p className="mb-0.5 print:text-[7pt]">Gracias por su trabajo</p>
+              <p className="pt-2 mb-0 print:pt-1 print:text-[7pt]">* * * * * * * * * *</p>
             </div>
           </div>
 
-          {/* Botones de acción */}
-          <div className="flex justify-end gap-2 p-2 border-t">
+          <div className="flex justify-end gap-2 p-2 border-t print:hidden">
             <Button variant="outline" size="sm" onClick={() => setDetalleModalOpen(false)}>
               Cerrar
             </Button>

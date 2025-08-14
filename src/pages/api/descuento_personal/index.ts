@@ -21,6 +21,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const id = parseInt(req.query.id as string, 10);
           const descuento = await DescuentoPersonalService.findById(id);
           return res.status(200).json(descuento);
+        } else if (req.query.id_personal && req.query.fecha_inicio && req.query.fecha_fin) {
+          // Buscar por personal y rango de fechas
+          const idPersonal = parseInt(req.query.id_personal as string, 10);
+          const fechaInicio = new Date(req.query.fecha_inicio as string);
+          const fechaFin = new Date(req.query.fecha_fin as string);
+          const descuentos = await DescuentoPersonalService.findByPersonalAndFecha(idPersonal, fechaInicio, fechaFin);
+          return res.status(200).json(descuentos);
         } else {
           const descuentos = await DescuentoPersonalService.findAllByEmpresa(id_empresa);
           return res.status(200).json(descuentos);
