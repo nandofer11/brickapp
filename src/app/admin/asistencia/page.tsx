@@ -180,7 +180,8 @@ export default function AsistenciaPage() {
 
   const fetchSemanas = async () => {
     try {
-      const response = await fetch("/api/semana_laboral")
+      // Modificado para solicitar directamente solo las últimas 4 semanas
+      const response = await fetch("/api/semana_laboral?limit=4")
       const data = await response.json()
 
       // Ordenar las semanas por fecha de inicio (más reciente primero)
@@ -188,11 +189,10 @@ export default function AsistenciaPage() {
         ? data.sort((a, b) => new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime())
         : [];
 
-      // Obtener solo las últimas 4 semanas
-      const ultimasCuatroSemanas = semanasOrdenadas.slice(0, 4);
-      setSemanas(ultimasCuatroSemanas)
+      // Ya vienen limitadas a 4 desde el servidor
+      setSemanas(semanasOrdenadas)
 
-      const semanaAbierta = ultimasCuatroSemanas.find((s: Semana) => s.estado === 1)
+      const semanaAbierta = semanasOrdenadas.find((s: Semana) => s.estado === 1)
       if (semanaAbierta) {
         setSelectedSemana(semanaAbierta.id_semana_laboral)
       }
@@ -844,6 +844,11 @@ export default function AsistenciaPage() {
   }
   // Actualiza la función handleRegisterAsistencia para incluir id_asistencia en modo edición
   const handleRegisterAsistencia = async () => {
+    // Prevenir doble envío
+    if (isSubmitting) {
+      return;
+    }
+    
     if (!selectedSemana) {
       toast.error("Por favor, seleccione una semana")
       return
@@ -873,6 +878,10 @@ export default function AsistenciaPage() {
       toast.error(`Hay ${personalSinEstado.length} trabajador(es) sin estado de asistencia seleccionado`);
       return;
     }
+    
+    // Marcar como en proceso de envío inmediatamente para prevenir doble clic
+    setIsSubmitting(true);
+    
     try {
       // Si no estamos en modo edición, verificamos que no existan registros previos para la fecha
       if (!modoEdicion) {
@@ -915,6 +924,7 @@ export default function AsistenciaPage() {
         // Si hay al menos un registro de asistencia para esta fecha Y en esta semana específica, mostramos error
         if (asistenciasEnEstaSemanaYFecha && asistenciasEnEstaSemanaYFecha.length > 0) {
           toast.error("Ya existe registro de asistencia para la fecha seleccionada en esta semana. Para modificarla, utilice la opción de edición desde la tabla.");
+          setIsSubmitting(false);
           return;
         }
       }
@@ -945,10 +955,10 @@ export default function AsistenciaPage() {
 
       if (asistenciaData.length === 0) {
         toast.error("Seleccione al menos un trabajador con un estado de asistencia válido");
+        setIsSubmitting(false);
         return;
       }
 
-      setIsSubmitting(true);
       const response = await fetch("/api/asistencia", {
         method: modoEdicion ? "PUT" : "POST",
         headers: {
@@ -1436,7 +1446,11 @@ export default function AsistenciaPage() {
             <Button variant="outline" onClick={handleCloseModal} disabled={isSubmitting} className="w-full sm:w-auto text-sm">
               Cerrar
             </Button>
-            <Button onClick={handleRegisterAsistencia} disabled={isSubmitting} className="w-full sm:w-auto text-sm">
+            <Button 
+              onClick={handleRegisterAsistencia} 
+              disabled={isSubmitting} 
+              className="w-full sm:w-auto text-sm"
+            >
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
