@@ -27,6 +27,21 @@ export class AdelantoPagoService {
   async findByPersonalAndFecha(id_personal: number, fechaInicio: Date, fechaFin: Date, estado?: string) {
     return adelantoPagoRepository.findByPersonalAndFecha(id_personal, fechaInicio, fechaFin, estado);
   }
+
+
+  async addDetalle(id_adelanto_pago: number, data: Prisma.adelanto_pago_detalleCreateInput) {
+    return adelantoPagoRepository.addDetalle(id_adelanto_pago, data);
+  }
+
+  async getDetalles(id_adelanto_pago: number) {
+    return adelantoPagoRepository.getDetalles(id_adelanto_pago);
+  }
+
+  async getSaldo(id_adelanto_pago: number) {
+    return adelantoPagoRepository.getSaldo(id_adelanto_pago);
+  }
+
+
 }
 
 export default new AdelantoPagoService();

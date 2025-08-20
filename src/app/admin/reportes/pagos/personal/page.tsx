@@ -47,6 +47,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { formatDate } from "@/utils/dateFormat";
 
 // Interfaces según la estructura de las APIs
 interface Personal {
@@ -169,6 +170,8 @@ interface ReportePersonal {
   totalHumeada: number;
   tareasExtras: TareaExtra[];
   totalTareasExtras: number;
+  costoPagoDiario?: number; // Costo del pago diario
+  totalAsistencias: number; // Total calculado por asistencias
 }
 
 // Interfaz para la información de la empresa
@@ -190,35 +193,16 @@ export default function Page() {
 
   // Estados para datos
   const [personal, setPersonal] = useState<Personal[]>([]);
-  const [asistencias, setAsistencias] = useState<Asistencia[]>([]);
-  const [cocciones, setCocciones] = useState<Coccion[]>([]);
-  const [coccionTurnos, setCoccionTurnos] = useState<CoccionTurno[]>([]);
-  const [tareasExtras, setTareasExtras] = useState<TareaExtra[]>([]);
-
+  const [pagosRealizados, setPagosRealizados] = useState<any[]>([]);
+  
   // Estado para el reporte final
   const [reportePersonal, setReportePersonal] = useState<ReportePersonal[]>([]);
   // Estado para el total pagado
   const [totalPagado, setTotalPagado] = useState<number>(0);
 
-  // Nuevo estado para filtro por mes
-  const [mesSeleccionado, setMesSeleccionado] = useState<string>("");
-  const [tipoFiltro, setTipoFiltro] = useState<"rango" | "mes">("rango");
-
-  // Opciones para el select de meses
-  const meses = [
-    { value: "01", label: "Enero" },
-    { value: "02", label: "Febrero" },
-    { value: "03", label: "Marzo" },
-    { value: "04", label: "Abril" },
-    { value: "05", label: "Mayo" },
-    { value: "06", label: "Junio" },
-    { value: "07", label: "Julio" },
-    { value: "08", label: "Agosto" },
-    { value: "09", label: "Septiembre" },
-    { value: "10", label: "Octubre" },
-    { value: "11", label: "Noviembre" },
-    { value: "12", label: "Diciembre" },
-  ];
+  // Estados para los filtros
+  const [semanasLaborales, setSemanasLaborales] = useState<SemanaLaboral[]>([]);
+  const [semanaSeleccionada, setSemanaSeleccionada] = useState<string>("");
 
   // Cargar datos de personal al inicio
   useEffect(() => {
@@ -252,37 +236,84 @@ export default function Page() {
     fetchPersonal();
   }, []);
 
-  // Función para establecer el rango de fechas según el mes seleccionado
-  const establecerRangoSegunMes = (mes: string) => {
-    if (!mes) return;
+  // Cargar las últimas 4 semanas laborales
+  useEffect(() => {
+    const fetchSemanasLaborales = async () => {
+      try {
+        setLoading(true);
+        console.log("Cargando semanas laborales...");
+        // Agregamos el parámetro limit=4 para obtener solo las últimas 4 semanas
+        const response = await fetch('/api/semana_laboral?limit=4');
+        if (!response.ok) {
+          throw new Error(`Error al cargar semanas laborales: ${response.status} ${response.statusText}`);
+        }
 
-    const year = new Date().getFullYear();
-    const primerDia = new Date(year, parseInt(mes) - 1, 1);
-    const ultimoDia = new Date(year, parseInt(mes), 0);
+        const data = await response.json();
+        console.log(`Semanas laborales cargadas: ${data.length} registros`);
 
-    const formatoFecha = (fecha: Date) => {
-      return fecha.toISOString().split('T')[0];
+        // Ordenar las semanas por fecha_inicio de más reciente a más antigua
+        const semanasOrdenadas = data.sort((a: SemanaLaboral, b: SemanaLaboral) => {
+          return new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime();
+        });
+
+        setSemanasLaborales(semanasOrdenadas);
+
+        // Verificar si hay semanas
+        if (semanasOrdenadas.length === 0) {
+          console.warn("No se encontraron semanas laborales");
+        }
+      } catch (error) {
+        console.error('Error al cargar semanas laborales:', error);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    setFechaInicio(formatoFecha(primerDia));
-    setFechaFin(formatoFecha(ultimoDia));
+    fetchSemanasLaborales();
+  }, []);
+
+  // Manejador para cambio de semana laboral
+  const handleSemanaChange = (value: string) => {
+    setSemanaSeleccionada(value);
+    establecerRangoSegunSemana(value);
   };
 
-  // Manejador para cambio de mes
-  const handleMesChange = (value: string) => {
-    setMesSeleccionado(value);
-    establecerRangoSegunMes(value);
+  // Función para establecer el rango de fechas según la semana laboral seleccionada
+  const establecerRangoSegunSemana = (idSemana: string) => {
+    if (!idSemana) return;
+
+    // Guardamos el ID de la semana para usar en la consulta a la API
+    setSemanaSeleccionada(idSemana);
+    
+    const semana = semanasLaborales.find(s => s.id_semana_laboral.toString() === idSemana);
+    if (!semana) {
+      console.warn(`No se encontró la semana laboral con ID ${idSemana}`);
+      return;
+    }
+
+    console.log("Semana seleccionada:", semana);
+    
+    // Usamos directamente las fechas de la semana laboral sin ajustes de zona horaria
+    // El formato ISO ya está en UTC y necesitamos extraer solo la parte de fecha
+    // Formato YYYY-MM-DD para inputs de tipo date
+    const formatoFecha = (fechaStr: string) => {
+      // Extraer directamente la parte de fecha del string ISO (primeros 10 caracteres)
+      return fechaStr.substring(0, 10);
+    };
+
+    const fechaInicio = formatoFecha(semana.fecha_inicio);
+    const fechaFin = formatoFecha(semana.fecha_fin);
+    
+    console.log(`Estableciendo rango de fechas: ${fechaInicio} - ${fechaFin}`);
+    
+    setFechaInicio(fechaInicio);
+    setFechaFin(fechaFin);
   };
 
   // Función para generar el reporte
   const generarReporte = async () => {
-    if (tipoFiltro === "rango" && (!fechaInicio || !fechaFin)) {
-      toast.error("Seleccione un rango de fechas válido");
-      return;
-    }
-
-    if (tipoFiltro === "mes" && !mesSeleccionado) {
-      toast.error("Seleccione un mes para generar el reporte");
+    if (!semanaSeleccionada) {
+      toast.error("Seleccione una semana laboral para generar el reporte");
       return;
     }
 
@@ -292,51 +323,36 @@ export default function Page() {
     setTotalPagado(0);
 
     try {
-      console.log(`Generando reporte desde ${fechaInicio} hasta ${fechaFin}`);
+      console.log(`Generando reporte para la semana laboral ID: ${semanaSeleccionada}`);
+      
+      // Si es filtro por semana, usar el ID de semana directamente
+      const url = `/api/pago_personal_semana?id_semana=${semanaSeleccionada}`;
+      console.log(`Consultando pagos por ID de semana: ${semanaSeleccionada}`);
 
-      // 1. Obtener asistencias por rango de fechas
-      console.log("Cargando asistencias...");
-      const responseAsistencias = await fetch(`/api/asistencia?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`);
-      if (!responseAsistencias.ok) {
-        throw new Error(`Error al cargar asistencias: ${responseAsistencias.status}`);
+      // Obtener pagos realizados
+      console.log("Cargando pagos realizados...");
+      const responsePagos = await fetch(url);
+      if (!responsePagos.ok) {
+        throw new Error(`Error al cargar pagos: ${responsePagos.status}`);
       }
-      const dataAsistencias = await responseAsistencias.json();
-      console.log(`Asistencias cargadas: ${dataAsistencias.length} registros`);
-      setAsistencias(dataAsistencias);
+      const dataPagos = await responsePagos.json();
+      console.log(`Pagos cargados: ${dataPagos.length} registros`);
+      setPagosRealizados(dataPagos);
 
-      // 2. Obtener cocciones por rango de fechas
-      console.log("Cargando cocciones...");
-      const responseCocciones = await fetch(`/api/coccion?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`);
-      if (!responseCocciones.ok) {
-        throw new Error(`Error al cargar cocciones: ${responseCocciones.status}`);
-      }
-      const dataCocciones = await responseCocciones.json();
-      console.log(`Cocciones cargadas: ${dataCocciones.length} registros`);
-      setCocciones(dataCocciones);
-
-      // 3. Obtener información de turnos de cocción
-      console.log("Cargando turnos de cocción...");
-      const responseCoccionTurnos = await fetch(`/api/coccion_turno?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`);
-      if (!responseCoccionTurnos.ok) {
-        throw new Error(`Error al cargar turnos: ${responseCoccionTurnos.status}`);
-      }
-      const dataCoccionTurnos = await responseCoccionTurnos.json();
-      console.log(`Turnos cargados: ${dataCoccionTurnos.length} registros`);
-      setCoccionTurnos(dataCoccionTurnos);
-
-      // 4. Obtener tareas extras por rango de fechas
-      console.log("Cargando tareas extras...");
-      const responseTareasExtras = await fetch(`/api/tarea_extra?fechaInicio=${fechaInicio}&fechaFin=${fechaFin}`);
-      if (!responseTareasExtras.ok) {
-        throw new Error(`Error al cargar tareas extras: ${responseTareasExtras.status}`);
-      }
-      const dataTareasExtras = await responseTareasExtras.json();
-      console.log(`Tareas extras cargadas: ${dataTareasExtras.length} registros`);
-      setTareasExtras(dataTareasExtras);
-
-      // 5. Generar el reporte con todos los datos
+      // Procesar los datos de pagos para mostrarlos en el reporte
       console.log("Procesando datos para el reporte...");
-      generarReporteCompleto(dataAsistencias, dataCocciones, dataCoccionTurnos, dataTareasExtras);
+      // Importar y utilizar la función procesarPagosParaReporte
+      import('./procesarPagosParaReporte').then(module => {
+        module.procesarPagosParaReporte(
+          dataPagos,
+          personal,
+          fechaInicio,
+          fechaFin,
+          setReportePersonal,
+          setTotalPagado,
+          setError
+        );
+      });
     } catch (error) {
       console.error('Error al generar reporte:', error);
       setError(`Error al generar reporte: ${error instanceof Error ? error.message : 'Error desconocido'}`);
@@ -375,13 +391,19 @@ export default function Page() {
     }
 
     console.log(`Rango de fechas: ${fechaInicioObj.toISOString()} hasta ${fechaFinObj.toISOString()}`);
+    console.log(`Rango de fechas (formato humano): ${fechaInicio} hasta ${fechaFin}`);
 
     // Filtrar asistencias por rango de fechas primero
     const asistenciasFiltradas = Array.isArray(asistenciasData)
       ? asistenciasData.filter(a => {
         if (!a || !a.fecha) return false;
         const fechaAsistencia = new Date(a.fecha);
-        return fechaAsistencia >= fechaInicioObj && fechaAsistencia <= fechaFinObj;
+        fechaAsistencia.setHours(0, 0, 0, 0);
+        const fechaInicioAjustada = new Date(fechaInicioObj);
+        fechaInicioAjustada.setHours(0, 0, 0, 0);
+        const fechaFinAjustada = new Date(fechaFinObj);
+        fechaFinAjustada.setHours(23, 59, 59, 999);
+        return fechaAsistencia >= fechaInicioAjustada && fechaAsistencia <= fechaFinAjustada;
       })
       : [];
 
@@ -390,12 +412,19 @@ export default function Page() {
       ? tareasExtrasData.filter(t => {
         if (!t || !t.fecha) return false;
         const fechaTarea = new Date(t.fecha);
-        return fechaTarea >= fechaInicioObj && fechaTarea <= fechaFinObj;
+        // Ajustar la fecha para comparación (establecer hora a 00:00:00)
+        fechaTarea.setHours(0, 0, 0, 0);
+        const fechaInicioAjustada = new Date(fechaInicioObj);
+        fechaInicioAjustada.setHours(0, 0, 0, 0);
+        const fechaFinAjustada = new Date(fechaFinObj);
+        fechaFinAjustada.setHours(23, 59, 59, 999);
+        return fechaTarea >= fechaInicioAjustada && fechaTarea <= fechaFinAjustada;
       })
       : [];
 
     console.log(`Asistencias filtradas por fecha: ${asistenciasFiltradas.length} de ${asistenciasData.length}`);
     console.log(`Tareas extras filtradas por fecha: ${tareasExtrasFiltradas.length} de ${tareasExtrasData.length}`);
+    console.log(`Rango de fechas ajustado para comparación: ${new Date(fechaInicioObj).setHours(0,0,0,0)} hasta ${new Date(fechaFinObj).setHours(23,59,59,999)}`);
 
     // Crear un reporte para cada persona
     const reporte = personal.map(persona => {
@@ -487,6 +516,9 @@ export default function Page() {
         }
       });
 
+      // Agregar costoPagoDiario al objeto para cumplir con la interfaz
+      const costoPagoDiario = persona.pago_diario_normal || 0;
+
       return {
         id_personal: persona.id_personal,
         nombre_completo: persona.nombre_completo,
@@ -499,7 +531,8 @@ export default function Page() {
         humeadas: hummeadasIds.size,
         totalHumeada: totalHumeada,
         tareasExtras: tareasExtrasPersona,
-        totalTareasExtras: totalTareasExtras
+        totalTareasExtras: totalTareasExtras,
+        costoPagoDiario: costoPagoDiario // <-- propiedad agregada
       };
     });
 
@@ -516,15 +549,36 @@ export default function Page() {
 
     console.log(`Reporte filtrado: ${reporteFiltrado.length} registros con actividad`);
 
-    // Calcular el total pagado
-    const total = reporteFiltrado.reduce((suma, persona) => {
-      const pagoDiario = personal.find(p => p.id_personal === persona.id_personal)?.pago_diario_normal || 0;
-      const pagoAsistencias = (persona.asistencias * pagoDiario) + (persona.mediosDias * pagoDiario * 0.5);
-      const totalPersona = pagoAsistencias + persona.totalCoccion + persona.totalHumeada + persona.totalTareasExtras;
-      return suma + totalPersona;
+    // Asegurarnos que todos los registros tengan los campos requeridos
+    const reporteCompleto = reporteFiltrado.map(persona => {
+      // Obtener el valor del costoPagoDiario si no está definido
+      const costoPagoDiario = persona.costoPagoDiario || 
+        (personal.find(p => p.id_personal === persona.id_personal)?.pago_diario_normal || 0);
+      
+      // Calcular totalAsistencias usando asistencias y mediosDias
+      const totalAsistencias = ((persona.asistencias * costoPagoDiario) + (persona.mediosDias * costoPagoDiario * 0.5));
+      
+      return {
+        ...persona,
+        costoPagoDiario,
+        totalAsistencias
+      };
+    });
+
+    // Calcular el total pagado sumando el Total Final de cada persona (que ya incluye descuentos)
+    const total = reporteCompleto.reduce((suma, persona) => {
+      // Obtener el total de descuentos
+      const totalDescuentos = Number(pagosRealizados.find(p => p.id_personal === persona.id_personal && 
+            p.id_semana_laboral.toString() === semanaSeleccionada)?.total_descuentos || 0);
+      
+      // Calcular el total final (igual que en la tabla)
+      const totalFinal = persona.totalAsistencias + persona.totalCoccion + 
+                         persona.totalHumeada + persona.totalTareasExtras - totalDescuentos;
+      
+      return suma + totalFinal;
     }, 0);
 
-    setReportePersonal(reporteFiltrado);
+    setReportePersonal(reporteCompleto);
     setTotalPagado(total);
 
     if (reporteFiltrado.length === 0) {
@@ -646,9 +700,22 @@ export default function Page() {
     const empleado = reportePersonal.find(p => p.id_personal === id);
 
     if (empleado) {
-      setEmpleadoSeleccionado(empleado);
+      // Verificar y ajustar valores por defecto para evitar errores
+      const empleadoValidado = {
+        ...empleado,
+        // Asegurar que los valores numéricos sean números válidos
+        cocciones: empleado.cocciones || 0,
+        humeadas: empleado.humeadas || 0,
+        totalCoccion: empleado.totalCoccion || 0,
+        totalHumeada: empleado.totalHumeada || 0,
+        tareasExtras: empleado.tareasExtras || [],
+        totalTareasExtras: empleado.totalTareasExtras || 0,
+        costoPagoDiario: empleado.costoPagoDiario || 0
+      };
+      
+      setEmpleadoSeleccionado(empleadoValidado);
       setDetalleModalOpen(true);
-      console.log(`Mostrando detalle del empleado ID: ${id}`);
+      console.log(`Mostrando detalle del empleado ID: ${id}`, empleadoValidado);
     } else {
       toast.error(`No se encontró información para el empleado ID: ${id}`);
     }
@@ -666,78 +733,25 @@ export default function Page() {
         <CardContent>
           {/* Filtros en una sola fila con flexbox responsivo */}
           <div className="flex flex-col md:flex-row items-start md:items-end gap-4 mb-6">
-            {/* Tipo de filtro como grupo de radio buttons */}
-            <div className="w-full md:w-auto">
-              <Label className="block mb-2">Tipo de filtro:</Label>
-              <div className="flex gap-4">
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="filtro-rango"
-                    name="tipo-filtro"
-                    checked={tipoFiltro === "rango"}
-                    onChange={() => setTipoFiltro("rango")}
-                    className="mr-2"
-                  />
-                  <Label htmlFor="filtro-rango">Por rango de fechas</Label>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="radio"
-                    id="filtro-mes"
-                    name="tipo-filtro"
-                    checked={tipoFiltro === "mes"}
-                    onChange={() => setTipoFiltro("mes")}
-                    className="mr-2"
-                  />
-                  <Label htmlFor="filtro-mes">Por mes</Label>
-                </div>
-              </div>
-            </div>
-
-            {/* Selector de fechas o mes dependiendo del filtro seleccionado */}
-            {tipoFiltro === "rango" ? (
-              <>
-                <div className="w-full md:w-auto flex-1 flex gap-2">
-                  <div className="flex-1">
-                    <Label htmlFor="fechaInicio" className="block mb-2">Fecha Inicio</Label>
-                    <Input
-                      id="fechaInicio"
-                      type="date"
-                      value={fechaInicio}
-                      onChange={(e) => setFechaInicio(e.target.value)}
-                      className="w-full"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <Label htmlFor="fechaFin" className="block mb-2">Fecha Fin</Label>
-                    <Input
-                      id="fechaFin"
-                      type="date"
-                      value={fechaFin}
-                      onChange={(e) => setFechaFin(e.target.value)}
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="w-full md:w-40">
-                <Label htmlFor="mes-select" className="block mb-2">Seleccione Mes</Label>
-                <Select value={mesSeleccionado} onValueChange={handleMesChange}>
-                  <SelectTrigger id="mes-select">
-                    <SelectValue placeholder="Seleccionar mes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {meses.map((mes) => (
-                      <SelectItem key={mes.value} value={mes.value}>
-                        {mes.label}
+            {/* Selector de semana laboral */}
+            <div className="w-full md:w-72">
+              <Label htmlFor="semana-select" className="block mb-2">Seleccione Semana Laboral</Label>
+              <Select value={semanaSeleccionada} onValueChange={handleSemanaChange}>
+                <SelectTrigger id="semana-select">
+                  <SelectValue placeholder="Seleccionar semana" />
+                </SelectTrigger>
+                <SelectContent>
+                  {semanasLaborales.map((semana) => {
+                    // Usar la función formatDate para mostrar fechas en formato DD/MM/YYYY
+                    return (
+                      <SelectItem key={semana.id_semana_laboral} value={semana.id_semana_laboral.toString()}>
+                        Semana: {formatDate(semana.fecha_inicio)} - {formatDate(semana.fecha_fin)}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Botón generar reporte */}
             <div className="w-full md:w-auto mt-4 md:mt-0">
@@ -776,36 +790,15 @@ export default function Page() {
                   </TableHead>
                   <TableHead className="text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <X className="h-4 w-4 text-red-600" />
-                      Faltas
-                    </div>
-                  </TableHead>
-                  <TableHead className="text-center">
-                    <div className="flex items-center justify-center gap-1">
                       <AlertCircle className="h-4 w-4 text-yellow-600" />
                       Medio Días
                     </div>
                   </TableHead>
-                  <TableHead className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Flame className="h-4 w-4 text-orange-600" />
-                      Quemas
-                    </div>
-                  </TableHead>
+                  <TableHead className="text-center">S/. Asistencias</TableHead>
                   <TableHead className="text-center">S/. Cocción</TableHead>
-                  <TableHead className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <Wind className="h-4 w-4 text-blue-600" />
-                      Humeadas
-                    </div>
-                  </TableHead>
-                  <TableHead className="text-center">S/. Humeada</TableHead>
-                  <TableHead className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <ClipboardList className="h-4 w-4 text-purple-600" />
-                      Tarea Extra
-                    </div>
-                  </TableHead>
+                  <TableHead className="text-center">S/. Tareas Extra</TableHead>
+                  <TableHead className="text-center">S/. Descuentos</TableHead>
+                  <TableHead className="text-center">S/. Total Final</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -826,16 +819,30 @@ export default function Page() {
                         )}
                       </TableCell>
                       <TableCell className="text-center">{persona.asistencias}</TableCell>
-                      <TableCell className="text-center">{persona.faltas}</TableCell>
                       <TableCell className="text-center">{persona.mediosDias}</TableCell>
-                      <TableCell className="text-center">{persona.cocciones}</TableCell>
-                      <TableCell className="text-center">S/. {persona.totalCoccion.toFixed(2)}</TableCell>
-                      <TableCell className="text-center">{persona.humeadas}</TableCell>
-                      <TableCell className="text-center">S/. {persona.totalHumeada.toFixed(2)}</TableCell>
                       <TableCell className="text-center">
-                        {persona.tareasExtras && persona.tareasExtras.length > 0
-                          ? `S/. ${persona.totalTareasExtras.toFixed(2)}`
-                          : "-"}
+                        S/. {(()=>{
+                          // Mostrar total de asistencias directamente del objeto reportePersonal
+                          return persona.totalAsistencias.toFixed(2);
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-center">S/. {persona.totalCoccion.toFixed(2)}</TableCell>
+                      <TableCell className="text-center">
+                        S/. {persona.totalTareasExtras.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        S/. {(pagosRealizados.find(p => p.id_personal === persona.id_personal && 
+                                p.id_semana_laboral.toString() === semanaSeleccionada)?.total_descuentos || "0").toString()}
+                      </TableCell>
+                      <TableCell className="text-center font-semibold">
+                        S/. {(()=>{
+                          // Obtener el total de descuentos
+                          const totalDescuentos = Number(pagosRealizados.find(p => p.id_personal === persona.id_personal && 
+                                p.id_semana_laboral.toString() === semanaSeleccionada)?.total_descuentos || 0);
+                          
+                          // Calcular el total final usando totalAsistencias directamente
+                          return (persona.totalAsistencias + persona.totalCoccion + persona.totalHumeada + persona.totalTareasExtras - totalDescuentos).toFixed(2);
+                        })()}
                       </TableCell>
                       <TableCell className="text-center">
                         <Button
@@ -876,10 +883,7 @@ export default function Page() {
                     <div>
                       <h3 className="text-lg font-bold">Total Pagado:</h3>
                       <p className="text-sm text-gray-600">
-                        {tipoFiltro === "rango"
-                          ? `Periodo: ${fechaInicio} al ${fechaFin}`
-                          : `Mes: ${meses.find(m => m.value === mesSeleccionado)?.label || ''} ${new Date().getFullYear()}`
-                        }
+                        Semana: {formatDate(fechaInicio)} - {formatDate(fechaFin)}
                       </p>
                       <div className="flex gap-2 mt-1">
                         <span className="inline-flex items-center bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">
@@ -949,34 +953,29 @@ export default function Page() {
                 <span><strong>Fecha:</strong> {obtenerFechaHoraActual().split(',')[0]}</span>
               </div>
               <div>
-                <span><strong>Periodo:</strong> {tipoFiltro === "rango"
-                  ? `${fechaInicio} - ${fechaFin}`
-                  : `${meses.find(m => m.value === mesSeleccionado)?.label || mesSeleccionado}`}
-                </span>
+                <span><strong>Periodo:</strong> Semana: {formatDate(fechaInicio)} - {formatDate(fechaFin)}</span>
               </div>
             </div>
 
             {/* Información del empleado - Más compacta */}
             {empleadoSeleccionado && (
-              <div className="text-sm">
-                <div className="border-b pb-2 mb-2">
-                  <p className="font-semibold mb-0">{empleadoSeleccionado.nombre_completo}</p>
-                  <div className="flex items-center">
-                    <p className="text-xs mb-0 mr-2">DNI: {personal.find(p => p.id_personal === empleadoSeleccionado.id_personal)?.dni || 'N/A'}</p>
-                    {empleadoSeleccionado.estado === 1 ? (
-                      <span className="inline-flex items-center bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                        Activo
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                        Inactivo
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs">Pago diario: S/. {Number(personal.find(p => p.id_personal === empleadoSeleccionado.id_personal)?.pago_diario_normal).toFixed(2) || '0.00'}</p>
-                </div>
-
-                {/* Detalle más compacto */}
+                <div className="text-sm">
+                  <div className="border-b pb-2 mb-2">
+                    <p className="font-semibold mb-0">{empleadoSeleccionado.nombre_completo}</p>
+                    <div className="flex items-center">
+                      <p className="text-xs mb-0 mr-2">DNI: {personal.find(p => p.id_personal === empleadoSeleccionado.id_personal)?.dni || 'N/A'}</p>
+                      {empleadoSeleccionado.estado === 1 ? (
+                        <span className="inline-flex items-center bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                          Activo
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                          Inactivo
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs">Costo diario pagado: S/. {(empleadoSeleccionado.costoPagoDiario !== undefined ? empleadoSeleccionado.costoPagoDiario : 0).toFixed(2)}</p>
+                  </div>                {/* Detalle más compacto */}
                 <div className="mb-2">
                   <p className="font-semibold mb-1 border-b pb-1 text-xs">ASISTENCIAS</p>
                   <div className="grid grid-cols-2 text-xs gap-1">
@@ -990,52 +989,41 @@ export default function Page() {
                     <p className="mb-0 text-right">{empleadoSeleccionado.mediosDias}</p>
                     <p className="mb-0 font-semibold">Pago asistencias:</p>
                     <p className="mb-0 text-right font-semibold">S/. {(() => {
-                      const pagoDiario = personal.find(p => p.id_personal === empleadoSeleccionado.id_personal)?.pago_diario_normal || 0;
-                      return ((empleadoSeleccionado.asistencias * pagoDiario) + (empleadoSeleccionado.mediosDias * pagoDiario * 0.5)).toFixed(2);
+                      // Usar totalAsistencias directamente
+                      return empleadoSeleccionado.totalAsistencias.toFixed(2);
                     })()}</p>
                   </div>
                 </div>
 
-                <div className="mb-2">
-                  <p className="font-semibold mb-1 border-b pb-1 text-xs">SERVICIOS</p>
-                  <div className="grid grid-cols-2 text-xs gap-1">
-                    <p className="mb-0">Quemas:</p>
-                    <p className="mb-0 text-right">{empleadoSeleccionado.cocciones}</p>
-                    <p className="mb-0">Humeadas:</p>
-                    <p className="mb-0 text-right">{empleadoSeleccionado.humeadas}</p>
-                    <p className="mb-0 font-semibold">Total quemas:</p>
-                    <p className="mb-0 text-right font-semibold">S/. {empleadoSeleccionado.totalCoccion.toFixed(2)}</p>
-                    <p className="mb-0 font-semibold">Total humeadas:</p>
-                    <p className="mb-0 text-right font-semibold">S/. {empleadoSeleccionado.totalHumeada.toFixed(2)}</p>
+                {/* Sección de servicios - solo mostrar si hay servicios */}
+                {(empleadoSeleccionado.totalCoccion > 0 || empleadoSeleccionado.totalHumeada > 0) && (
+                  <div className="mb-2">
+                    <p className="font-semibold mb-1 border-b pb-1 text-xs">SERVICIOS</p>
+                    <div className="grid grid-cols-2 text-xs gap-1">
+                      {empleadoSeleccionado.totalCoccion > 0 && (
+                        <>
+                          <p className="mb-0 font-semibold">Total cocción:</p>
+                          <p className="mb-0 text-right font-semibold">S/. {empleadoSeleccionado.totalCoccion.toFixed(2)}</p>
+                        </>
+                      )}
+                      {empleadoSeleccionado.totalHumeada > 0 && (
+                        <>
+                          <p className="mb-0 font-semibold">Total humeada:</p>
+                          <p className="mb-0 text-right font-semibold">S/. {empleadoSeleccionado.totalHumeada.toFixed(2)}</p>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Tareas extras */}
-                {empleadoSeleccionado.tareasExtras && empleadoSeleccionado.tareasExtras.length > 0 && (
+                {/* Tareas extras - solo mostrar si hay tareas extras válidas */}
+                {empleadoSeleccionado.totalTareasExtras > 0 && (
                   <div className="mb-2">
                     <p className="font-semibold mb-1 border-b pb-1 text-xs">TAREAS EXTRAS</p>
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr>
-                          <th className="text-left font-medium">Fecha</th>
-                          <th className="text-left font-medium">Desc.</th>
-                          <th className="text-right font-medium">Monto</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {empleadoSeleccionado.tareasExtras.map((tarea) => (
-                          <tr key={tarea.id_tarea_extra}>
-                            <td>{new Date(tarea.fecha).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' })}</td>
-                            <td>{tarea.descripcion.substring(0, 15)}{tarea.descripcion.length > 15 ? '...' : ''}</td>
-                            <td className="text-right">{parseFloat(tarea.monto).toFixed(2)}</td>
-                          </tr>
-                        ))}
-                        <tr>
-                          <td colSpan={2} className="text-right font-semibold">Total:</td>
-                          <td className="text-right font-semibold">S/. {empleadoSeleccionado.totalTareasExtras.toFixed(2)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                    <div className="grid grid-cols-2 text-xs gap-1">
+                      <p className="mb-0 font-semibold">Total tareas extras:</p>
+                      <p className="mb-0 text-right font-semibold">S/. {empleadoSeleccionado.totalTareasExtras.toFixed(2)}</p>
+                    </div>
                   </div>
                 )}
 
@@ -1044,21 +1032,51 @@ export default function Page() {
                   <p className="font-semibold mb-1 text-xs text-center">RESUMEN DE PAGOS</p>
                   <div className="grid grid-cols-2 text-xs gap-1">
                     {(() => {
-                      const pagoDiario = personal.find(p => p.id_personal === empleadoSeleccionado.id_personal)?.pago_diario_normal || 0;
+                      // Usar el costoPagoDiario del empleado seleccionado
+                      const pagoDiario = empleadoSeleccionado.costoPagoDiario || 0;
+                      
+                      // Calcular el pago por asistencias correctamente
                       const pagoAsistencias = (empleadoSeleccionado.asistencias * pagoDiario) + (empleadoSeleccionado.mediosDias * pagoDiario * 0.5);
-                      const totalGeneral = pagoAsistencias + empleadoSeleccionado.totalCoccion + empleadoSeleccionado.totalHumeada + empleadoSeleccionado.totalTareasExtras;
+                      
+                      // Obtener datos del pago realizado si existe
+                      const pagoRealizado = pagosRealizados.find(p => 
+                        p.id_personal === empleadoSeleccionado.id_personal && 
+                        p.id_semana_laboral.toString() === semanaSeleccionada
+                      );
+                      
+                      // Obtener el total de descuentos (0 si no existe)
+                      const totalDescuentos = Number(pagoRealizado?.total_descuentos || 0);
+                      
+                      // Calcular el total general
+                      const totalGeneral = pagoAsistencias + empleadoSeleccionado.totalCoccion + 
+                                          empleadoSeleccionado.totalHumeada + empleadoSeleccionado.totalTareasExtras - 
+                                          totalDescuentos;
 
                       return (
                         <>
                           <p className="mb-0">Por asistencias:</p>
                           <p className="mb-0 text-right">S/. {pagoAsistencias.toFixed(2)}</p>
-                          <p className="mb-0">Por cocción:</p>
-                          <p className="mb-0 text-right">S/. {empleadoSeleccionado.totalCoccion.toFixed(2)}</p>
-                          <p className="mb-0">Por humeada:</p>
-                          <p className="mb-0 text-right">S/. {empleadoSeleccionado.totalHumeada.toFixed(2)}</p>
-                          <p className="mb-0">Por tareas extras:</p>
-                          <p className="mb-0 text-right">S/. {empleadoSeleccionado.totalTareasExtras.toFixed(2)}</p>
-                          <p className="font-bold text-sm border-t pt-1 mt-1">TOTAL:</p>
+                          {empleadoSeleccionado.cocciones > 0 && (
+                            <>
+                              <p className="mb-0">Por cocción:</p>
+                              <p className="mb-0 text-right">S/. {empleadoSeleccionado.totalCoccion.toFixed(2)}</p>
+                            </>
+                          )}
+                          {empleadoSeleccionado.humeadas > 0 && (
+                            <>
+                              <p className="mb-0">Por humeada:</p>
+                              <p className="mb-0 text-right">S/. {empleadoSeleccionado.totalHumeada.toFixed(2)}</p>
+                            </>
+                          )}
+                          {empleadoSeleccionado.tareasExtras && empleadoSeleccionado.tareasExtras.length > 0 && (
+                            <>
+                              <p className="mb-0">Por tareas extras:</p>
+                              <p className="mb-0 text-right">S/. {empleadoSeleccionado.totalTareasExtras.toFixed(2)}</p>
+                            </>
+                          )}
+                          <p className="mb-0 text-red-600">Descuentos:</p>
+                          <p className="mb-0 text-right text-red-600">-S/. {totalDescuentos.toFixed(2)}</p>
+                          <p className="font-bold text-sm border-t pt-1 mt-1">TOTAL PAGADO:</p>
                           <p className="font-bold text-sm text-right border-t pt-1 mt-1">S/. {totalGeneral.toFixed(2)}</p>
                         </>
                       );

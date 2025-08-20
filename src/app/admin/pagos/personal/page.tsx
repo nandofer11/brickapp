@@ -198,6 +198,7 @@ interface TareaExtra {
 
 interface ResumenPago {
   id_personal: number;
+  id_semana_laboral: number;
   nombre_completo: string;
   pago_diario_normal: number;
   dias_completos: number;
@@ -348,15 +349,20 @@ export default function PagoPersonalPage() {
   const [selectedPago, setSelectedPago] = useState<ResumenPago | null>(null);
 
   const [descuentosModalOpen, setDescuentosModalOpen] = useState(false);
+  const [pagoParcialModalOpen, setPagoParcialModalOpen] = useState(false);
+  const [adelantoSeleccionado, setAdelantoSeleccionado] = useState<any>(null);
+  const [montoPagoParcial, setMontoPagoParcial] = useState("");
+  const [mostrarNuevoDescuento, setMostrarNuevoDescuento] = useState(false);
   const [descuentoTemp, setDescuentoTemp] = useState({
     monto: '',
     motivo: ''
   });
   const [descuentosSeleccionados, setDescuentosSeleccionados] = useState<{
     id?: number;
-    tipo: 'adelanto' | 'descuento';
+    tipo: 'adelanto' | 'descuento' | 'adelanto_parcial';
     monto: number;
     motivo: string;
+    adelanto_original?: any; // Opcional, solo para adelanto_parcial
   }[]>([]);
 
   // Añadir nuevas interfaces que necesitamos
@@ -646,8 +652,9 @@ export default function PagoPersonalPage() {
       enhancedContent = enhancedContent.replace(/<td class="/g, '<td style="font-family: Arial, Helvetica, sans-serif;" class="');
       
       // Mejorar estilos para el total a pagar y total pagado
-      enhancedContent = enhancedContent.replace(/TOTAL A PAGAR:/g, '<span style="font-size: 12pt; font-weight: bold;">TOTAL A PAGAR:</span>');
+      enhancedContent = enhancedContent.replace(/TOTAL SIN DESCUENTO:/g, '<span style="font-size: 12pt; font-weight: bold;">TOTAL SIN DESCUENTO:</span>');
       enhancedContent = enhancedContent.replace(/TOTAL PAGADO:/g, '<span style="font-size: 12pt; font-weight: bold; margin-top: 6mm; display: block;">TOTAL PAGADO:</span>');
+      enhancedContent = enhancedContent.replace(/\(Monto final después de descuentos\)/g, '<span style="font-size: 8pt; color: #666;">(Monto final después de descuentos)</span>');
       
       // Forzar el estilo de los divisores directamente en el HTML
       enhancedContent = enhancedContent.replace(/<div class="my-1 border-t/g, '<div style="border-top: 0.5px solid #333; margin: 3mm 0; display: block; height: 0; width: 100%;" class="my-1 border-t');
@@ -854,6 +861,23 @@ export default function PagoPersonalPage() {
     console.log("Resumen de turnos por personal:", turnosPorPersonal);
 
     // Crear el resumen completo
+    interface ResumenPago {
+      id_personal: number;
+      nombre_completo: string;
+      pago_diario_normal: number;
+      dias_completos: number;
+      medios_dias: number;
+      total_asistencia: number;
+      total_tareas_extra: number;
+      total_coccion: number;
+      total_adelantos: number;
+      total_descuentos: number;
+      total_final: number;
+      estado_pago: "Pendiente" | "Pagado";
+      pago_aplicado: 'normal' | 'reducido';
+      id_semana_laboral: number; // <-- Agregado para evitar error
+    }
+
     const resumen = personalActivo.map((p): ResumenPago => {
       // Calcular días de asistencia
       const asistenciasPersonal = asistenciasSemana.filter(
@@ -946,7 +970,8 @@ export default function PagoPersonalPage() {
         total_descuentos,
         total_final,
         estado_pago: "Pendiente",
-        pago_aplicado: aplicaPagoReducido ? 'reducido' : 'normal'
+        pago_aplicado: aplicaPagoReducido ? 'reducido' : 'normal',
+        id_semana_laboral: Number(idSemana) // <-- Agregado para evitar error
       };
     });
 
@@ -1327,20 +1352,39 @@ export default function PagoPersonalPage() {
     }
   }
 
+  // Estados para la eliminación de tareas extra
+  const [showConfirmDeleteTareaModal, setShowConfirmDeleteTareaModal] = useState(false);
+  const [tareaToDelete, setTareaToDelete] = useState<number | null>(null);
+
+  // Función para mostrar modal de confirmación antes de eliminar
+  const confirmDeleteTareaExtra = (id: number) => {
+    setTareaToDelete(id);
+    setShowConfirmDeleteTareaModal(true);
+  };
+  
   // Agregar función para eliminar tarea extra
-  const handleDeleteTareaExtra = async (id: number) => {
+  const handleDeleteTareaExtra = async () => {
+    if (!tareaToDelete) return;
+    
     try {
-      const response = await fetch(`/api/tarea_extra/?id=${id}`, {
+      const response = await fetch(`/api/tarea_extra/?id=${tareaToDelete}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) throw new Error('Error al eliminar tarea extra');
 
       toast.success('Tarea extra eliminada correctamente');
-      // Recargar tareas extras
+      
+      // Recargar tareas extras y actualizar el resumen de pagos
       if (semanaSeleccionada) {
-        await fetchTareasExtra(semanaSeleccionada);
+        // Recargar todos los datos para asegurar que todo se actualice correctamente
+        await cargarDatosCompletos(semanaSeleccionada);
       }
+      
+      // Cerrar el modal de confirmación
+      setShowConfirmDeleteTareaModal(false);
+      setTareaToDelete(null);  
+      
     } catch (error) {
       console.error('Error:', error);
       toast.error('Error al eliminar la tarea extra');
@@ -1351,7 +1395,46 @@ export default function PagoPersonalPage() {
   const handleCloseDescuentosModal = () => {
     setDescuentosModalOpen(false);
     setDescuentoTemp({ monto: '', motivo: '' });
+    setMostrarNuevoDescuento(false);
     // No reiniciamos descuentosSeleccionados para mantener los previamente seleccionados
+  };
+
+  // Función para manejar pagos parciales
+  const handlePagoParcial = (adelanto: any) => {
+    setAdelantoSeleccionado(adelanto);
+    setMontoPagoParcial("");
+    setPagoParcialModalOpen(true);
+  };
+
+  // Función para aplicar pago parcial
+  const handleApplyPagoParcial = () => {
+    if (!adelantoSeleccionado || !montoPagoParcial || Number(montoPagoParcial) <= 0) {
+      toast.error("Ingrese un monto válido para el pago parcial");
+      return;
+    }
+
+    if (Number(montoPagoParcial) > Number(adelantoSeleccionado.monto)) {
+      toast.error("El monto no puede ser mayor que el adelanto");
+      return;
+    }
+
+    // Agregar a la lista de descuentos seleccionados
+    setDescuentosSeleccionados([
+      ...descuentosSeleccionados,
+      {
+        tipo: 'adelanto_parcial',
+        monto: Number(montoPagoParcial),
+        motivo: `Pago parcial de adelanto (${formatDate(adelantoSeleccionado.fecha)})`,
+        adelanto_original: adelantoSeleccionado
+      }
+    ]);
+
+    // Cerrar el modal
+    setPagoParcialModalOpen(false);
+    setAdelantoSeleccionado(null);
+    setMontoPagoParcial("");
+
+    toast.success("Pago parcial agregado");
   };
 
   // Función para cargar los detalles del personal para el modal
@@ -1770,6 +1853,9 @@ export default function PagoPersonalPage() {
 
     // Calcular el total de descuentos
     const totalDescuentos = descuentosSeleccionados.reduce((sum, d) => sum + Number(d.monto), 0);
+    
+    // Ya no procesamos pagos parciales aquí - se procesarán en handlePagoSubmit
+    // Los pagos parciales se mantienen en el array descuentosSeleccionados
 
     // Actualizar el pago seleccionado con los descuentos
     setSelectedPago({
@@ -1780,6 +1866,11 @@ export default function PagoPersonalPage() {
         selectedPago.total_coccion -
         totalDescuentos
     });
+
+    // Mostrar un mensaje para indicar que los descuentos se aplicarán al procesar el pago
+    if (descuentosSeleccionados.some(d => d.tipo === 'adelanto_parcial')) {
+      toast.info("Los pagos parciales se registrarán al procesar el pago");
+    }
 
     // Cerrar el modal de descuentos
     setDescuentosModalOpen(false);
@@ -1864,7 +1955,60 @@ export default function PagoPersonalPage() {
       // Obtener los datos del pago recién creado
       const nuevoPago = await response.json();
 
-      // 2. Marcar adelantos aplicados como "Cancelado" y guardar referencia al pago
+      // 2. Procesar pagos parciales de adelanto (antes se hacía en handleApplyDescuentos)
+      const pagosParciales = descuentosSeleccionados.filter(d => d.tipo === 'adelanto_parcial');
+      if (pagosParciales.length > 0) {
+        try {
+          // Registrar los pagos parciales en la API
+          for (const pagoParcial of pagosParciales) {
+            // Solo procesamos si tiene la referencia al adelanto original
+            if (pagoParcial.adelanto_original) {
+              const adelanto = pagoParcial.adelanto_original;
+              
+              // Datos para el pago parcial
+              const dataPagoParcial = {
+                fecha: new Date().toISOString().split('T')[0], // Fecha actual
+                monto_pagado: pagoParcial.monto,
+                id_semana_laboral: selectedPago.id_semana_laboral,
+                observacion: `Pago parcial registrado en planilla de ${formatDate(new Date())}`
+              };
+              
+              // Llamar a la API para registrar el pago parcial
+              const parcialResponse = await fetch(`/api/adelanto_pago/${adelanto.id_adelanto_pago}/detalle`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(dataPagoParcial)
+              });
+              
+              if (!parcialResponse.ok) {
+                const errorData = await parcialResponse.json();
+                throw new Error(errorData.message || 'Error al registrar pago parcial');
+              }
+              
+              // Actualizar el estado de adelantos si se canceló completamente
+              const responseData = await parcialResponse.json();
+              if (responseData.saldo && responseData.saldo.saldo === 0) {
+                // Actualizar el estado en la API
+                await fetch(`/api/adelanto_pago?id=${adelanto.id_adelanto_pago}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ 
+                    estado: "Cancelado",
+                    comentario: `Cancelado por pagos parciales completados en ${formatDate(new Date())}`
+                  })
+                });
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error al registrar pagos parciales:', error);
+          toast.error(error instanceof Error ? error.message : 'Error al registrar pagos parciales');
+        }
+      }
+
+      // 3. Marcar adelantos aplicados como "Cancelado" y guardar referencia al pago
       if (adelantosAplicados.length > 0) {
         await Promise.all(
           adelantosAplicados.map(async (id) => {
@@ -1881,6 +2025,11 @@ export default function PagoPersonalPage() {
       }
 
       toast.success("Pago procesado correctamente");
+      
+      // Si se procesaron pagos parciales, mostrar mensaje adicional
+      if (pagosParciales.length > 0) {
+        toast.success(`Se registraron ${pagosParciales.length} pagos parciales de adelantos`);
+      }
 
       // 3. Cerrar el modal y limpiar estados
       setPagoModalOpen(false);
@@ -2815,7 +2964,7 @@ export default function PagoPersonalPage() {
                                 variant="outline"
                                 size="icon"
                                 onClick={() => {
-                                  tarea.id_tarea_extra && handleDeleteTareaExtra(tarea.id_tarea_extra)
+                                  tarea.id_tarea_extra && confirmDeleteTareaExtra(tarea.id_tarea_extra)
                                 }}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -2859,7 +3008,35 @@ export default function PagoPersonalPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Confirmación de Eliminación */}
+      {/* Modal de Confirmación de Eliminación de Tarea Extra */}
+      <AlertDialog open={showConfirmDeleteTareaModal} onOpenChange={setShowConfirmDeleteTareaModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl">
+              Confirmar eliminación
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              ¿Está seguro que desea eliminar esta tarea extra?
+              <p className="mt-2 font-medium text-red-600">
+                Esta acción no se puede deshacer.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex gap-2 mt-4">
+            <AlertDialogCancel className="mt-0">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteTareaExtra}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal de Confirmación de Eliminación de Adelanto */}
       <AlertDialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -3109,6 +3286,7 @@ export default function PagoPersonalPage() {
                       <TableHead>Semana</TableHead>
                       <TableHead>Monto</TableHead>
                       <TableHead>Comentario</TableHead>
+                      <TableHead className="w-[80px]">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -3184,6 +3362,17 @@ export default function PagoPersonalPage() {
                                 : Number(adelanto.monto).toFixed(2)
                             }</TableCell>
                             <TableCell>{adelanto.comentario || '-'}</TableCell>
+                            <TableCell>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className="h-7 w-7" 
+                                onClick={() => handlePagoParcial(adelanto)}
+                                title="Pago Parcial"
+                              >
+                                <CreditCard className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         );
                       })}
@@ -3193,7 +3382,7 @@ export default function PagoPersonalPage() {
                       a.estado === "Pendiente"
                     ).length === 0 && (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center py-3 text-muted-foreground">
+                          <TableCell colSpan={6} className="text-center py-3 text-muted-foreground">
                             No hay adelantos pendientes
                           </TableCell>
                         </TableRow>
@@ -3203,15 +3392,32 @@ export default function PagoPersonalPage() {
               </div>
             </div>
 
-            {/* Formulario para Nuevo Descuento */}
-            <div className="space-y-3">
-              <h4 className="font-medium">Agregar Nuevo Descuento</h4>
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <Label htmlFor="monto" className="text-sm">Monto</Label>
-                  <Input
-                    id="monto"
-                    type="number"
+            {/* Botón para mostrar/ocultar sección de nuevo descuento */}
+            <div className="flex justify-end">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-xs"
+                onClick={() => setMostrarNuevoDescuento(!mostrarNuevoDescuento)}
+              >
+                {mostrarNuevoDescuento ? "Ocultar" : "Agregar otros descuentos"}
+                {mostrarNuevoDescuento ? 
+                  <Eye className="ml-1 h-3 w-3" /> : 
+                  <PlusCircle className="ml-1 h-3 w-3" />
+                }
+              </Button>
+            </div>
+
+            {/* Formulario para Nuevo Descuento - Oculto inicialmente */}
+            {mostrarNuevoDescuento && (
+              <div className="space-y-3 border p-3 rounded-md bg-gray-50">
+                <h4 className="font-medium">Agregar Nuevo Descuento</h4>
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label htmlFor="monto" className="text-sm">Monto</Label>
+                    <Input
+                      id="monto"
+                      type="number"
                     value={descuentoTemp.monto}
                     onChange={(e) => setDescuentoTemp({
                       ...descuentoTemp,
@@ -3257,6 +3463,7 @@ export default function PagoPersonalPage() {
                 </Button>
               </div>
             </div>
+            )}
 
             {/* Resumen de Descuentos Seleccionados */}
             <div className="space-y-2">
@@ -3296,14 +3503,16 @@ export default function PagoPersonalPage() {
                   </p>
                 )}
               </div>
-              <div className="flex justify-between items-center font-medium">
-                <span>Total Descuentos:</span>
-                <span>S/. {
-                  descuentosSeleccionados
-                    .reduce((sum, d) => sum + (Number(d.monto) || 0), 0)
-                    .toFixed(2)
-                }</span>
-              </div>
+              {descuentosSeleccionados.length > 0 ? (
+                <div className="flex justify-between items-center font-medium mt-2">
+                  <span>Total Descuentos:</span>
+                  <span className="text-red-600">S/. {
+                    descuentosSeleccionados
+                      .reduce((sum, d) => sum + (Number(d.monto) || 0), 0)
+                      .toFixed(2)
+                  }</span>
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -3311,7 +3520,7 @@ export default function PagoPersonalPage() {
             <Button variant="outline" onClick={handleCloseDescuentosModal}>
               Cancelar
             </Button>
-            <Button onClick={handleApplyDescuentos}>
+            <Button onClick={handleApplyDescuentos} disabled={descuentosSeleccionados.length === 0}>
               Aplicar Descuentos
             </Button>
           </DialogFooter>
@@ -3613,10 +3822,16 @@ export default function PagoPersonalPage() {
                     {/* Línea divisoria antes del total a pagar */}
                     <div className="my-2 border-t border-dashed border-gray-500 print:my-2"></div>
                     
-                    {/* Total a pagar */}
+                    {/* Total sin descuento */}
                     <div className="text-center font-bold pt-0.5 mt-1 print:pt-0.5 print:mt-1">
-                      <div className="text-base print:text-[11pt]">TOTAL A PAGAR:</div>
-                      <div className="text-lg print:text-[14pt] mt-0.5 print:mt-1">S/.{detallePersonal?.totales.final.toFixed(2)}</div>
+                      <div className="text-base print:text-[11pt]">TOTAL SIN DESCUENTO:</div>
+                      <div className="text-lg print:text-[14pt] mt-0.5 print:mt-1">
+                        S/.{(
+                          (detallePersonal?.totales.asistencia ?? 0) +
+                          (detallePersonal?.totales.tareas_extra ?? 0) +
+                          (detallePersonal?.totales.coccion ?? 0)
+                        ).toFixed(2)}
+                      </div>
                     </div>
                     
                     {/* Total pagado */}
@@ -3630,6 +3845,9 @@ export default function PagoPersonalPage() {
                           ? `S/.${Number(detallePersonal?.totales.final_pagado).toFixed(2)}`
                           : "-"
                         }
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1 print:text-[8pt]">
+                        (Monto final después de descuentos)
                       </div>
                     </div>
                   </div>
@@ -3691,6 +3909,68 @@ export default function PagoPersonalPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Pago Parcial */}
+      <Dialog open={pagoParcialModalOpen} onOpenChange={setPagoParcialModalOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Pago Parcial de Adelanto</DialogTitle>
+            <DialogDescription>
+              Ingrese el monto para el pago parcial del adelanto
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {adelantoSeleccionado && (
+              <div className="space-y-2">
+                <div className="border rounded-md p-3 bg-gray-50">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="font-medium">Fecha:</div>
+                    <div>{formatDate(adelantoSeleccionado.fecha)}</div>
+                    
+                    <div className="font-medium">Monto Total:</div>
+                    <div>S/. {Number(adelantoSeleccionado.monto).toFixed(2)}</div>
+                    
+                    <div className="font-medium">Comentario:</div>
+                    <div>{adelantoSeleccionado.comentario || '-'}</div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="montoParcial">Monto a Pagar</Label>
+                  <Input
+                    id="montoParcial"
+                    type="number"
+                    value={montoPagoParcial}
+                    onChange={(e) => setMontoPagoParcial(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full"
+                    step="0.01"
+                    min="0.01"
+                    max={adelantoSeleccionado.monto}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Ingrese un valor entre S/. 0.01 y S/. {Number(adelantoSeleccionado.monto).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button variant="outline" onClick={() => {
+              setPagoParcialModalOpen(false);
+              setAdelantoSeleccionado(null);
+              setMontoPagoParcial("");
+            }}>
+              Cancelar
+            </Button>
+            <Button onClick={handleApplyPagoParcial}>
+              Aplicar Pago Parcial
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
