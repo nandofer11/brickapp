@@ -11,17 +11,18 @@ const thermalPrintStyles = `
   /* Configuración general para ticket térmico */
   body {
     font-family: Arial, Helvetica, sans-serif !important;
-    font-size: 8pt !important;
+    font-size: 9pt !important;
     width: 80mm !important;
     margin: 0 auto !important;
-    padding: 2mm 0 !important; /* Reducido de 4mm a 2mm */
+    padding: 4mm 0 !important;
   }
   
   /* Contenedor principal con márgenes laterales */
   .flex.flex-col.text-\\[11px\\] {
-    padding-left: 6mm !important; /* Reducido de 8mm a 6mm */
-    padding-right: 6mm !important; /* Reducido de 8mm a 6mm */
-    padding-top: 2mm !important; /* Reducido de 4mm a 2mm */
+    padding-left: 8mm !important;
+    padding-right: 8mm !important;
+    padding-top: 4mm !important;
+    text-align: center !important;
   }
   
   /* Hacer todas las líneas continuas, delgadas y bien visibles */
@@ -32,10 +33,10 @@ const thermalPrintStyles = `
   }
   
   /* Asegurar que las líneas divisorias sean visibles pero con menor margen */
-  .my-1.border-t.border-dashed {
+  .my-1.border-t.border-dashed, .my-1.border-t.border-solid {
     border-top: 0.5px solid #555 !important;
-    margin-top: 1mm !important; /* Reducido de 2mm a 1mm */
-    margin-bottom: 1mm !important; /* Reducido de 2mm a 1mm */
+    margin-top: 2mm !important;
+    margin-bottom: 2mm !important;
     display: block !important;
     height: 0 !important;
     width: 100% !important;
@@ -376,6 +377,7 @@ export default function PagoPersonalPage() {
     tareasExtra: TareaExtra[];
     adelantos: AdelantoPersonal[];
     adelantosCancelados?: AdelantoPersonal[]; // Adelantos que fueron cancelados en este pago
+    pagosParciales?: any[]; // Pagos parciales registrados para adelantos pendientes
     cocciones: {
       fecha_encendido: string;
       semana: string;
@@ -401,6 +403,7 @@ export default function PagoPersonalPage() {
       coccion: number;
       adelantos: number;
       adelantosCancelados?: number; // Total de adelantos cancelados en este pago
+      pagosParciales?: number; // Total de pagos parciales aplicados a adelantos
       descuentos: number;
       final: number;
       final_pagado: number;
@@ -412,6 +415,11 @@ export default function PagoPersonalPage() {
   const [detallePersonal, setDetallePersonal] = useState<DetallePersonal | null>(null);
   const [loadingDetalles, setLoadingDetalles] = useState(false);
   const impresionRef = useRef<HTMLDivElement>(null);
+
+  // Estado para el modal de impresión del resumen semanal
+  const [imprimirResumenModalOpen, setImprimirResumenModalOpen] = useState(false);
+  const [loadingImprimirResumen, setLoadingImprimirResumen] = useState(false);
+  const impresionResumenRef = useRef<HTMLDivElement>(null);
 
   // Función para verificar si una imagen existe
   const checkImageExists = async (url: string): Promise<boolean> => {
@@ -516,6 +524,159 @@ export default function PagoPersonalPage() {
       // Usar el estado logoUrl en lugar de empresa.logo directamente
       // Esto asegura que usamos la URL validada previamente
       const validLogoUrl = logoLoaded && logoUrl ? logoUrl : null;
+
+      // Función para imprimir el resumen semanal
+      // const imprimirResumenSemanal = () => {
+      //   if (!impresionResumenRef.current) {
+      //     toast.error("No se puede imprimir el resumen");
+      //     return;
+      //   }
+
+      //   try {
+      //     toast.info("Preparando resumen semanal para impresión...");
+
+      //     // Contenido HTML del ticket de resumen
+      //     let contenido = impresionResumenRef.current.innerHTML;
+
+      //     // Estilos para la ventana de impresión
+      //     const printStyles = `
+      //   <style>
+      //     @page {
+      //       size: 80mm auto;
+      //       margin: 8mm;
+      //     }
+      //     body {
+      //       font-family: Arial, Helvetica, sans-serif;
+      //       font-size: 10pt;
+      //       width: 80mm;
+      //       margin: 8mm auto;
+      //       padding: 5mm;
+      //       text-align: center;
+      //     }
+      //     .header {
+      //       text-align: center;
+      //       margin-bottom: 6mm;
+      //     }
+      //     .header img {
+      //       max-height: 12mm;
+      //       margin-bottom: 3mm;
+      //     }
+      //     .title {
+      //       font-size: 14pt;
+      //       font-weight: bold;
+      //       margin: 4mm 0;
+      //       text-align: center;
+      //     }
+      //     .subtitle {
+      //       font-size: 12pt;
+      //       font-weight: bold;
+      //       margin-bottom: 4mm;
+      //       text-align: center;
+      //     }
+      //     .simple-line {
+      //       border-top: 1px solid #555;
+      //       margin: 4mm 0;
+      //       height: 0;
+      //     }
+      //     .resumen-item {
+      //       display: flex;
+      //       justify-content: space-between;
+      //       margin: 3mm 0;
+      //       text-align: left;
+      //     }
+      //     .total {
+      //       font-size: 18pt;
+      //       font-weight: bold;
+      //       text-align: center;
+      //       margin: 6mm 0;
+      //     }
+      //     .total-label {
+      //       font-size: 14pt;
+      //       font-weight: bold;
+      //       text-align: center;
+      //       margin-bottom: 3mm;
+      //     }
+      //     .footer {
+      //       text-align: center;
+      //       font-size: 8pt;
+      //       margin-top: 6mm;
+      //     }
+      //     -webkit-print-color-adjust: exact;
+      //     print-color-adjust: exact;
+      //   </style>
+      // `;
+
+      //     // Añadir los estilos térmicos al final
+      //     const stylesTag = `
+      //   <style>
+      //       ${thermalPrintStyles}
+      //   </style>
+      // `;
+
+      //     // Abrir ventana de impresión
+      //     const printWindow = window.open('', '', 'height=600,width=800');
+
+      //     if (!printWindow) {
+      //       toast.error("Por favor, permita ventanas emergentes para imprimir");
+      //       return;
+      //     }
+
+      //     printWindow.document.write('<html><head><title>Resumen de Semana Laboral</title>');
+      //     printWindow.document.write(printStyles);
+      //     printWindow.document.write(stylesTag);
+      //     printWindow.document.write('</head><body>');
+
+      //     // Mejorar el contenido HTML para impresión
+      //     let enhancedContent = contenido;
+
+      //     // Reemplazar líneas divisorias por estilos CSS
+      //     enhancedContent = enhancedContent.replace(/<div class="my-1 border-t border-solid border-gray-500 print:my-1"><\/div>/g,
+      //       '<div style="border-top: 1px solid #555; margin: 5mm 0; height: 0; width: 100%;"></div>');
+
+      //     // Reemplazar líneas divisorias más grandes
+      //     enhancedContent = enhancedContent.replace(/<div class="my-4 border-t border-solid border-gray-500 print:my-3"><\/div>/g,
+      //       '<div style="border-top: 1px solid #555; margin: 6mm 0; height: 0; width: 100%;"></div>');
+
+      //     // Mejorar el formato de los totales
+      //     // enhancedContent = enhancedContent.replace(/TOTAL SIN DESCUENTO:/g,
+      //     //   '<span style="font-size: 12pt; font-weight: bold; display: block; text-align: center; margin: 5mm 0 2mm 0;">TOTAL SIN DESCUENTO</span>');
+
+      //     enhancedContent = enhancedContent.replace(/TOTAL FINAL PAGADO:/g,
+      //       '<span style="font-size: 16pt; font-weight: bold; display: block; text-align: center; margin: 5mm 0 2mm 0;">TOTAL FINAL PAGADO</span>');
+
+      //     // Centrar y resaltar los valores de los totales
+      //     enhancedContent = enhancedContent.replace(/(<span[^>]*>)(S\/\s*[\d,.]+)(<\/span>)/g,
+      //       (match, p1, p2, p3) => {
+      //         if (match.includes('text-xl font-bold') || match.includes('font-bold text-xl')) {
+      //           return `<div style="font-size: 18pt; font-weight: bold; text-align: center; margin: 3mm 0 6mm 0;">${p2}</div>`;
+      //         }
+      //         return match;
+      //       });
+
+      //     // Centrar todos los encabezados
+      //     enhancedContent = enhancedContent.replace(/<h2[^>]*>(.*?)<\/h2>/g,
+      //       '<h2 style="text-align: center; font-size: 14pt; font-weight: bold; margin: 4mm 0;">$1</h2>');
+
+      //     enhancedContent = enhancedContent.replace(/<h3[^>]*>(.*?)<\/h3>/g,
+      //       '<h3 style="text-align: center; font-size: 12pt; font-weight: bold; margin: 3mm 0;">$1</h3>');
+
+      //     printWindow.document.write(enhancedContent);
+      //     printWindow.document.write('</body></html>');
+      //     printWindow.document.close();
+
+      //     // Imprimir después de que los recursos se hayan cargado
+      //     printWindow.onload = function () {
+      //       setTimeout(() => {
+      //         printWindow.focus();
+      //         printWindow.print();
+      //         printWindow.close();
+      //       }, 250);
+      //     };
+      //   } catch (error) {
+      //     console.error("Error al imprimir resumen semanal:", error);
+      //     toast.error("Ocurrió un error al preparar la impresión");
+      //   }
+      // };
       console.log("URL de logo para impresión:", validLogoUrl);
 
       // Crear estilos específicos para impresora térmica
@@ -596,6 +757,18 @@ export default function PagoPersonalPage() {
           .font-bold { font-weight: bold; }
           .font-semibold { font-weight: 600; }
           
+          /* Estilos para los totales */
+          .text-2xl, .text-lg { font-size: 20pt !important; font-weight: bold !important; margin: 2mm 0 !important; }
+          .text-sm { font-size: 9pt !important; font-weight: 600 !important; margin-bottom: 1mm !important; }
+          
+          /* Estilos para el pie de página */
+          p.mb-0.5 { text-align: center !important; }
+          p.pt-2 { text-align: center !important; }
+          div.text-muted-foreground p { text-align: center !important; }
+          div.p-2.text-center p { text-align: center !important; }
+          /* Regla general para centrar todos los párrafos en el pie de página */
+          div[class*="text-center"] p { text-align: center !important; }
+          
           /* Estilos para el logo */
           .logo-container { text-align: center; margin-bottom: 2mm; }
           img.logo { max-height: 10mm; max-width: 70mm; object-fit: contain; }
@@ -627,40 +800,54 @@ export default function PagoPersonalPage() {
 
       // Aplicar algunas transformaciones para optimizar la impresión térmica
       let enhancedContent = content;
-      
+
       // Añadir un contenedor con margen para asegurar espaciado en todos los lados y aplicar fuente Arial globalmente
       enhancedContent = `<div style="padding: 4mm; margin: 2mm auto; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact;">${enhancedContent}</div>`;
-      
+
       // Mejorar la visibilidad de las líneas divisorias
-      enhancedContent = enhancedContent.replace(/<div class="my-1 border-t border-dashed border-gray-500 print:my-0.5"><\/div>/g, 
+      enhancedContent = enhancedContent.replace(/<div class="my-1 border-t border-dashed border-gray-500 print:my-0.5"><\/div>/g,
         '<div style="border-top: 0.5px solid #555; margin: 3mm 0; height: 0; display: block; visibility: visible; width: 100%"></div>');
-      
+
       // Mejorar la línea divisoria antes del total a pagar
-      enhancedContent = enhancedContent.replace(/<div class="my-3 border-t border-dashed border-gray-500 print:my-5"><\/div>/g, 
+      enhancedContent = enhancedContent.replace(/<div class="my-3 border-t border-dashed border-gray-500 print:my-5"><\/div>/g,
         '<div style="border-top: 0.7px solid #333; margin: 8mm 0; height: 0; display: block; visibility: visible; width: 100%"></div>');
-      
+
       // Inyectar comandos ESC/POS como clases CSS para una mejor impresión
       enhancedContent = enhancedContent.replace(/<div class="text-center font-bold/g, '<div style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;" class="text-center font-bold escpos-center escpos-bold');
       enhancedContent = enhancedContent.replace(/<div class="flex justify-end/g, '<div style="font-family: Arial, Helvetica, sans-serif;" class="flex justify-end escpos-right');
-      
+
       // Asegurar que las clases de impresión térmica estén correctamente aplicadas
       enhancedContent = enhancedContent.replace(/<th class="col-fecha/g, '<th style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;" class="col-fecha font-bold');
       enhancedContent = enhancedContent.replace(/<th class="col-cargo/g, '<th style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;" class="col-cargo font-bold');
       enhancedContent = enhancedContent.replace(/<th class="col-monto/g, '<th style="font-family: Arial, Helvetica, sans-serif; font-weight: bold;" class="col-monto font-bold');
-      
+
       // Aplicar fuente a las celdas de la tabla
       enhancedContent = enhancedContent.replace(/<td class="/g, '<td style="font-family: Arial, Helvetica, sans-serif;" class="');
-      
+
       // Mejorar estilos para el total a pagar y total pagado
-      enhancedContent = enhancedContent.replace(/TOTAL SIN DESCUENTO:/g, '<span style="font-size: 12pt; font-weight: bold;">TOTAL SIN DESCUENTO:</span>');
-      enhancedContent = enhancedContent.replace(/TOTAL PAGADO:/g, '<span style="font-size: 12pt; font-weight: bold; margin-top: 6mm; display: block;">TOTAL PAGADO:</span>');
+      enhancedContent = enhancedContent.replace(/TOTAL SIN DESCUENTO:/g, '<span style="font-size: 9pt; font-weight: 600;">TOTAL SIN DESCUENTO:</span>');
+      enhancedContent = enhancedContent.replace(/TOTAL PAGADO:/g, '<span style="font-size: 9pt; font-weight: 600; margin-top: 6mm; display: block;">TOTAL PAGADO:</span>');
       enhancedContent = enhancedContent.replace(/\(Monto final después de descuentos\)/g, '<span style="font-size: 8pt; color: #666;">(Monto final después de descuentos)</span>');
       
+      // Mejorar estilos para los valores de los montos totales
+      enhancedContent = enhancedContent.replace(/<div class="text-2xl print:text-\[20pt\]/g, 
+        '<div style="font-size: 20pt; font-weight: bold; text-align: center; margin: 1mm 0;" class="text-2xl print:text-[20pt]');
+      enhancedContent = enhancedContent.replace(/<div class="text-lg print:text-\[14pt\]/g, 
+        '<div style="font-size: 20pt; font-weight: bold; text-align: center; margin: 1mm 0;" class="text-lg print:text-[20pt]');
+
       // Forzar el estilo de los divisores directamente en el HTML
       enhancedContent = enhancedContent.replace(/<div class="my-1 border-t/g, '<div style="border-top: 0.5px solid #333; margin: 3mm 0; display: block; height: 0; width: 100%;" class="my-1 border-t');
       
-      // No aplicar bordes a las filas de las tablas
+      // Asegurar que el pie de página esté centrado
+      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">Documento informativo - No constituye comprobante oficial<\/p>/g, 
+        '<p style="text-align: center; font-size: 7pt; margin-bottom: 0.5mm;">Documento informativo - No constituye comprobante oficial</p>');
       
+      // Asegurar que los asteriscos estén centrados
+      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">\* \* \* \* \* \* \* \* \* \*<\/p>/g, 
+        '<p style="text-align: center; font-size: 7pt; margin-bottom: 0.5mm;">* * * * * * * * * *</p>');
+
+      // No aplicar bordes a las filas de las tablas
+
       // Insertar el contenido mejorado en la ventana de impresión
       printWindow.document.write(enhancedContent);
       printWindow.document.write('</body></html>');
@@ -1361,11 +1548,11 @@ export default function PagoPersonalPage() {
     setTareaToDelete(id);
     setShowConfirmDeleteTareaModal(true);
   };
-  
+
   // Agregar función para eliminar tarea extra
   const handleDeleteTareaExtra = async () => {
     if (!tareaToDelete) return;
-    
+
     try {
       const response = await fetch(`/api/tarea_extra/?id=${tareaToDelete}`, {
         method: 'DELETE',
@@ -1374,17 +1561,17 @@ export default function PagoPersonalPage() {
       if (!response.ok) throw new Error('Error al eliminar tarea extra');
 
       toast.success('Tarea extra eliminada correctamente');
-      
+
       // Recargar tareas extras y actualizar el resumen de pagos
       if (semanaSeleccionada) {
         // Recargar todos los datos para asegurar que todo se actualice correctamente
         await cargarDatosCompletos(semanaSeleccionada);
       }
-      
+
       // Cerrar el modal de confirmación
       setShowConfirmDeleteTareaModal(false);
-      setTareaToDelete(null);  
-      
+      setTareaToDelete(null);
+
     } catch (error) {
       console.error('Error:', error);
       toast.error('Error al eliminar la tarea extra');
@@ -1510,6 +1697,47 @@ export default function PagoPersonalPage() {
       const adelantosPersonal = adelantos.filter(
         a => a.id_personal === idPersonal && a.estado === "Pendiente"
       );
+
+      // Obtener los pagos parciales para cada adelanto pendiente
+      let pagosParciales: any[] = [];
+      let totalPagosParciales = 0;
+
+      // Obtener pagos parciales para cada adelanto pendiente
+      if (adelantosPersonal.length > 0) {
+        try {
+          // Obtener pagos parciales para cada adelanto
+          const pagosParcialesTotales = await Promise.all(
+            adelantosPersonal.map(async (adelanto) => {
+              const response = await fetch(`/api/adelanto_pago/${adelanto.id_adelanto_pago}/detalle`);
+              if (response.ok) {
+                const data = await response.json();
+                return {
+                  adelanto_id: adelanto.id_adelanto_pago,
+                  adelanto_monto: adelanto.monto,
+                  adelanto_fecha: adelanto.fecha,
+                  detalles: data.detalles,
+                  saldo: data.saldo
+                };
+              }
+              return null;
+            })
+          );
+
+          // Filtrar respuestas válidas
+          pagosParciales = pagosParcialesTotales.filter(p => p !== null);
+
+          // Calcular el total de pagos parciales
+          totalPagosParciales = pagosParciales.reduce((sum, p) => {
+            const totalPagado = p.detalles.reduce((s: number, d: any) => s + Number(d.monto_pagado), 0);
+            return sum + totalPagado;
+          }, 0);
+
+          console.log("Pagos parciales encontrados:", pagosParciales);
+          console.log("Total pagos parciales:", totalPagosParciales);
+        } catch (error) {
+          console.error("Error al cargar pagos parciales:", error);
+        }
+      }
 
       const tareasPersonal = tareasExtra.filter(
         t => t.id_personal === idPersonal && t.id_semana_laboral.toString() === idSemanaActiva
@@ -1715,13 +1943,15 @@ export default function PagoPersonalPage() {
         tareasExtra: tareasPersonal,
         adelantos: adelantosPersonal,
         adelantosCancelados: adelantosCancelados,
+        pagosParciales: pagosParciales, // Añadimos los pagos parciales
         cocciones: detallesCocciones,
         totales: {
           asistencia: resumenObj.total_asistencia,
           tareas_extra: resumenObj.total_tareas_extra,
           coccion: resumenObj.total_coccion,
-          adelantos: totalAdelantosPendientes, // Usar el total calculado de adelantos pendientes
+          adelantos: totalAdelantosPendientes, // Total de adelantos pendientes completos
           adelantosCancelados: totalAdelantosCancelados, // Total de adelantos cancelados
+          pagosParciales: totalPagosParciales, // Total de pagos parciales realizados
           descuentos: resumenObj.total_descuentos,
           final: totalFinalSinDescuento - totalAdelantosPendientes, // Restar los adelantos pendientes
           final_pagado: totalFinalPagado
@@ -1813,6 +2043,25 @@ export default function PagoPersonalPage() {
     return pagosPendientes.length === 0;
   }
 
+  // Función para verificar si no hay pagos pendientes por realizar
+  function noPendientesPorPagar(): boolean {
+    // Verificar primero si hay una semana seleccionada
+    if (!semanaSeleccionada) {
+      return false;
+    }
+
+    // Verificar si hay pagos pendientes
+    const pagosPendientes = resumenPagos.filter(r =>
+      !pagosRealizados.some(p =>
+        p.id_personal === r.id_personal &&
+        p.id_semana_laboral.toString() === semanaSeleccionada
+      )
+    );
+
+    // Solo mostrar el botón de impresión si no hay pagos pendientes
+    return pagosPendientes.length === 0;
+  }
+
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [isClosingSemana, setIsClosingSemana] = useState(false);
 
@@ -1853,7 +2102,7 @@ export default function PagoPersonalPage() {
 
     // Calcular el total de descuentos
     const totalDescuentos = descuentosSeleccionados.reduce((sum, d) => sum + Number(d.monto), 0);
-    
+
     // Ya no procesamos pagos parciales aquí - se procesarán en handlePagoSubmit
     // Los pagos parciales se mantienen en el array descuentosSeleccionados
 
@@ -1964,7 +2213,7 @@ export default function PagoPersonalPage() {
             // Solo procesamos si tiene la referencia al adelanto original
             if (pagoParcial.adelanto_original) {
               const adelanto = pagoParcial.adelanto_original;
-              
+
               // Datos para el pago parcial
               const dataPagoParcial = {
                 fecha: new Date().toISOString().split('T')[0], // Fecha actual
@@ -1972,7 +2221,7 @@ export default function PagoPersonalPage() {
                 id_semana_laboral: selectedPago.id_semana_laboral,
                 observacion: `Pago parcial registrado en planilla de ${formatDate(new Date())}`
               };
-              
+
               // Llamar a la API para registrar el pago parcial
               const parcialResponse = await fetch(`/api/adelanto_pago/${adelanto.id_adelanto_pago}/detalle`, {
                 method: 'POST',
@@ -1981,12 +2230,12 @@ export default function PagoPersonalPage() {
                 },
                 body: JSON.stringify(dataPagoParcial)
               });
-              
+
               if (!parcialResponse.ok) {
                 const errorData = await parcialResponse.json();
                 throw new Error(errorData.message || 'Error al registrar pago parcial');
               }
-              
+
               // Actualizar el estado de adelantos si se canceló completamente
               const responseData = await parcialResponse.json();
               if (responseData.saldo && responseData.saldo.saldo === 0) {
@@ -1994,7 +2243,7 @@ export default function PagoPersonalPage() {
                 await fetch(`/api/adelanto_pago?id=${adelanto.id_adelanto_pago}`, {
                   method: "PUT",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ 
+                  body: JSON.stringify({
                     estado: "Cancelado",
                     comentario: `Cancelado por pagos parciales completados en ${formatDate(new Date())}`
                   })
@@ -2015,7 +2264,7 @@ export default function PagoPersonalPage() {
             await fetch(`/api/adelanto_pago?id=${id}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ 
+              body: JSON.stringify({
                 estado: "Cancelado",
                 comentario: `Cancelado por pago #${nuevoPago.id_pago_personal_semana}`
               })
@@ -2025,7 +2274,7 @@ export default function PagoPersonalPage() {
       }
 
       toast.success("Pago procesado correctamente");
-      
+
       // Si se procesaron pagos parciales, mostrar mensaje adicional
       if (pagosParciales.length > 0) {
         toast.success(`Se registraron ${pagosParciales.length} pagos parciales de adelantos`);
@@ -2055,77 +2304,77 @@ export default function PagoPersonalPage() {
 
     try {
       setIsSubmitting(true);
-      
+
       // Primero obtener detalles del pago para saber qué revertir
       const pagoResponse = await fetch(`/api/pago_personal_semana?id=${pagoToDelete}`);
       if (!pagoResponse.ok) {
         throw new Error("Error al obtener detalles del pago");
       }
-      
+
       const pagoData = await pagoResponse.json();
       console.log("Datos del pago a eliminar:", pagoData);
-      
+
       // Buscar adelantos con comentario que menciona este pago
       const busquedaComentario = `Cancelado por pago #${pagoToDelete}`;
       const adelantosResponse = await fetch(
         `/api/adelanto_pago?id_personal=${pagoData.id_personal}&estado=Cancelado`
       );
-      
+
       let adelantosARevertir = [];
       if (adelantosResponse.ok) {
         const adelantos = await adelantosResponse.json();
-        
+
         // Filtrar manualmente por el comentario que incluye el ID del pago
-        adelantosARevertir = adelantos.filter((adelanto: any) => 
+        adelantosARevertir = adelantos.filter((adelanto: any) =>
           adelanto.comentario && adelanto.comentario.includes(busquedaComentario)
         );
-        
+
         console.log("Adelantos a revertir encontrados por comentario:", adelantosARevertir);
       }
-      
+
       // Si no encontramos adelantos por comentario, intentamos con el rango de fechas
       if (adelantosARevertir.length === 0) {
         console.log("No se encontraron adelantos por comentario, intentando con fechas...");
-        
+
         const fechaPago = new Date(pagoData.fecha_pago);
         const rangoInicio = new Date(fechaPago);
         rangoInicio.setHours(rangoInicio.getHours() - 24);
         const rangoFin = new Date(fechaPago);
         rangoFin.setHours(rangoFin.getHours() + 24);
-        
+
         // Obtener todos los adelantos cancelados del personal
         const todosAdelantosResponse = await fetch(
           `/api/adelanto_pago?id_personal=${pagoData.id_personal}&estado=Cancelado`
         );
-        
+
         if (todosAdelantosResponse.ok) {
           const todosAdelantos = await todosAdelantosResponse.json();
-          
+
           // Filtrar por fecha de actualización
           adelantosARevertir = todosAdelantos.filter((adelanto: any) => {
             if (!adelanto.updated_at) return false;
             const fechaActualizacion = new Date(adelanto.updated_at);
             return fechaActualizacion >= rangoInicio && fechaActualizacion <= rangoFin;
           });
-          
+
           console.log("Adelantos a revertir encontrados por fecha:", adelantosARevertir);
         }
       }
-      
+
       // Obtener descuentos aplicados con este pago
       const fechaInicioSemana = new Date(pagoData.semana_laboral.fecha_inicio);
       const fechaFinSemana = new Date(pagoData.semana_laboral.fecha_fin);
-      
+
       const descuentosResponse = await fetch(
         `/api/descuento_personal?id_personal=${pagoData.id_personal}&fecha_inicio=${fechaInicioSemana.toISOString()}&fecha_fin=${fechaFinSemana.toISOString()}`
       );
-      
+
       let descuentosAplicados = [];
       if (descuentosResponse.ok) {
         descuentosAplicados = await descuentosResponse.json();
         console.log("Descuentos a eliminar:", descuentosAplicados);
       }
-      
+
       // Eliminar el pago
       const response = await fetch(`/api/pago_personal_semana?id=${pagoToDelete}`, {
         method: "DELETE"
@@ -2134,7 +2383,7 @@ export default function PagoPersonalPage() {
       if (!response.ok) {
         throw new Error("Error al eliminar el pago");
       }
-      
+
       // Revertir adelantos cancelados a "Pendiente"
       let resultadosReversos = [];
       if (adelantosARevertir.length > 0) {
@@ -2149,7 +2398,7 @@ export default function PagoPersonalPage() {
                 comentario: adelanto.comentario ? `${adelanto.comentario} - Revertido a Pendiente` : "Revertido a Pendiente"
               })
             });
-            
+
             if (!resp.ok) {
               console.error(`Error al revertir adelanto #${adelanto.id_adelanto_pago}:`, await resp.text());
               return false;
@@ -2157,9 +2406,9 @@ export default function PagoPersonalPage() {
             return true;
           })
         );
-        
+
         console.log("Resultados de reversión de adelantos:", resultadosReversos);
-        
+
         if (resultadosReversos.some(r => r === false)) {
           toast.warning("Algunos adelantos no pudieron ser revertidos correctamente");
         } else if (resultadosReversos.length > 0) {
@@ -2168,7 +2417,7 @@ export default function PagoPersonalPage() {
       } else {
         console.log("No se encontraron adelantos para revertir");
       }
-      
+
       // Eliminar descuentos asociados a este pago
       if (descuentosAplicados.length > 0) {
         const resultadosDescuentos = await Promise.all(
@@ -2179,7 +2428,7 @@ export default function PagoPersonalPage() {
             return resp.ok;
           })
         );
-        
+
         if (resultadosDescuentos.some(r => r === false)) {
           toast.warning("Algunos descuentos no pudieron ser eliminados");
         } else if (resultadosDescuentos.length > 0) {
@@ -2205,6 +2454,142 @@ export default function PagoPersonalPage() {
   }
 
 
+  function imprimirResumenSemanal(event: React.MouseEvent<HTMLButtonElement, MouseEvent>): void {
+    event.preventDefault();
+    if (!impresionResumenRef.current) {
+      toast.error("No se puede imprimir el resumen");
+      return;
+    }
+
+    try {
+      toast.info("Preparando resumen semanal para impresión...");
+
+      // Contenido HTML del ticket de resumen
+      let contenido = impresionResumenRef.current.innerHTML;
+
+      // Estilos para la ventana de impresión
+      const printStyles = `
+        <style>
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 10pt;
+            width: 80mm;
+            margin: 0 auto;
+            padding: 2mm;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 3mm;
+          }
+          .header img {
+            max-height: 8mm;
+            margin-bottom: 1mm;
+          }
+          .title {
+            font-size: 12pt;
+            font-weight: bold;
+            margin: 2mm 0;
+          }
+          .subtitle {
+            font-size: 9pt;
+            font-weight: 600;
+            margin: 1mm 0;
+            text-align: center;
+          }
+          .border-dashed {
+            border-top: 1px dashed #888;
+            margin: 2mm 0;
+          }
+          .resumen-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 1mm 0;
+          }
+          .total {
+            font-size: 20pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 3mm 0;
+          }
+          .footer {
+            text-align: center;
+            font-size: 8pt; 
+            margin-top: 3mm;
+          }
+          .footer p {
+            text-align: center !important;
+          }
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        </style>
+      `;
+
+      // Añadir los estilos térmicos al final
+      const stylesTag = `
+        <style>
+            ${thermalPrintStyles}
+        </style>
+      `;
+
+      // Abrir ventana de impresión
+      const printWindow = window.open('', '', 'height=600,width=800');
+
+      if (!printWindow) {
+        toast.error("Por favor, permita ventanas emergentes para imprimir");
+        return;
+      }
+
+      printWindow.document.write('<html><head><title>Resumen de Semana Laboral</title>');
+      printWindow.document.write(printStyles);
+      printWindow.document.write(stylesTag);
+      printWindow.document.write('</head><body>');
+
+      // Mejorar el contenido HTML para impresión
+      let enhancedContent = contenido;
+
+       // Añadir un contenedor con margen para asegurar espaciado en todos los lados y aplicar fuente Arial globalmente
+      enhancedContent = `<div style="padding: 4mm; margin: 2mm auto; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact;">${enhancedContent}</div>`;
+
+      // Asegurar que el pie de página esté centrado
+      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">Documento informativo - No constituye comprobante oficial<\/p>/g, 
+        '<p style="text-align: center; font-size: 7pt; margin-bottom: 0.5mm;">Documento informativo - No constituye comprobante oficial</p>');
+      
+      // Asegurar que los asteriscos estén centrados
+      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">\* \* \* \* \* \* \* \* \* \*<\/p>/g, 
+        '<p style="text-align: center; font-size: 7pt; margin-bottom: 0.5mm;">* * * * * * * * * *</p>');
+        
+      // Mejorar el formato de los títulos y valores de los totales
+      enhancedContent = enhancedContent.replace(/<div class="text-sm font-semibold mb-1 subtitle print:text-\[9pt\]">(TOTAL SIN DESCUENTO:|TOTAL FINAL PAGADO:)<\/div>/g,
+        '<div style="font-size: 9pt; font-weight: 600; text-align: center; margin: 1mm 0;">$1</div>');
+        
+      // Mejorar el formato de los valores de los totales
+      enhancedContent = enhancedContent.replace(/<div class="total text-2xl font-bold (text-blue-600|text-green-600) print:text-\[20pt\] print:text-black">(S\/\. [\d,.]+)<\/div>/g,
+        '<div style="font-size: 20pt; font-weight: bold; text-align: center; margin: 3mm 0;">$2</div>');
+        
+
+
+      printWindow.document.write(enhancedContent);
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+
+      // Imprimir después de que los recursos se hayan cargado
+      printWindow.onload = function () {
+        setTimeout(() => {
+          printWindow.focus();
+          printWindow.print();
+          printWindow.close();
+        }, 250);
+      };
+    } catch (error) {
+      console.error("Error al imprimir resumen semanal:", error);
+      toast.error("Ocurrió un error al preparar la impresión");
+    }
+  }
+
   // Corregir el error en la tabla duplicada
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -2215,80 +2600,141 @@ export default function PagoPersonalPage() {
         </p>
       </div>
 
-      {/* Filtros y Acciones */}
-      <div className="flex flex-col md:flex-row justify-between gap-2">
-        <div className="w-full md:w-[300px]">
-          <Label>Semana Laboral</Label>
-          <Select value={semanaSeleccionada} onValueChange={setSemanaSeleccionada}>
-            <SelectTrigger className="w-[240px]">
-              <SelectValue placeholder="Seleccione una semana" />
-            </SelectTrigger>
-            <SelectContent>
-              {semanasLaboral.map((semana) => (
-                <SelectItem
-                  key={semana.id_semana_laboral}
-                  value={semana.id_semana_laboral.toString()}
-                  className={semana.estado === 1 ? "font-semibold" : ""}
-                >
-                  {formatDate(semana.fecha_inicio)} - {formatDate(semana.fecha_fin)}
-                  {semana.estado === 1 ? " ✓ (Activa)" : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Estructura reorganizada para móvil y pantallas grandes */}
+      <div className="flex flex-col gap-4">
+        {/* Primera fila en pantallas grandes: select y cards en línea */}
+        <div className="flex flex-col md:flex-row md:gap-4 gap-3">
+          {/* Select de semana laboral */}
+          <div className="w-full md:w-1/3">
+            <Label>Semana Laboral</Label>
+            <Select value={semanaSeleccionada} onValueChange={setSemanaSeleccionada}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Seleccione una semana" />
+              </SelectTrigger>
+              <SelectContent>
+                {semanasLaboral.map((semana) => (
+                  <SelectItem
+                    key={semana.id_semana_laboral}
+                    value={semana.id_semana_laboral.toString()}
+                    className={semana.estado === 1 ? "font-semibold" : ""}
+                  >
+                    {formatDate(semana.fecha_inicio)} - {formatDate(semana.fecha_fin)}
+                    {semana.estado === 1 ? " ✓ (Activa)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* card total asistencia */}
-        <div>
-          <Card className="w-[320px] bg-blue-50/50 py-0">
-            <CardContent className="p-3">
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="text-sm font-medium">Total sin descuento</CardTitle>
-                  <CardDescription className="text-[11px] text-muted-foreground">
-                    Asistencia, T.Extra, Cocción
-                  </CardDescription>
+          {/* Cards de totales */}
+          <div className="flex flex-col md:flex-row md:flex-1 gap-3">
+            {/* Card total sin descuento */}
+            <Card className="w-full md:flex-1 bg-blue-50/50 py-0">
+              <CardContent className="p-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-sm font-medium">Total sin descuento</CardTitle>
+                    <CardDescription className="text-[11px] text-muted-foreground">
+                      Asistencia, T.Extra, Cocción
+                    </CardDescription>
+                  </div>
+                  <div className="text-2xl font-bold text-blue-600">
+                    S/. {resumenPagos.reduce((sum, item) =>
+                      sum + item.total_asistencia + item.total_tareas_extra + item.total_coccion,
+                      0
+                    ).toFixed(2)}
+                  </div>
                 </div>
-                <div className="text-lg font-bold text-blue-600">
-                  S/. {resumenPagos.reduce((sum, item) =>
-                    sum + item.total_asistencia + item.total_tareas_extra + item.total_coccion,
-                    0
-                  ).toFixed(2)}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
 
-        {/* Botón de cerrar semana */}
-        <Button
-          variant="outline"
-          className={`h-full ${puedesCerrarSemana() ? 'bg-green-50 hover:bg-green-100 border-green-200' : 'bg-gray-100 text-gray-400'}`}
-          disabled={!puedesCerrarSemana()}
-          onClick={() => setShowCloseModal(true)} // Usa setShowCloseModal, no setShowConfirmModal
-        >
-          <Check className={`mr-2 h-4 w-4 ${puedesCerrarSemana() ? 'text-green-600' : 'text-gray-400'}`} />
-          Cerrar Semana
-        </Button>
-        <div className="flex flex-col md:flex-row w-full md:w-auto gap-2 md:gap-2">
-          <Button
-            onClick={() => setAdelantoModalOpen(true)}
-            className="w-full md:w-auto"
-          >
-            <DollarSign className="mr-2 h-4 w-4" />
-            Adelanto Pago
-          </Button>
-          <Button
-            onClick={() => setTareaModalOpen(true)}
-            className="w-full md:w-auto"
-          >
-            <ClipboardList className="mr-2 h-4 w-4" />
-            Agregar Tarea Extra
-          </Button>
+            {/* Card Total Final Pagado */}
+            <Card className="w-full md:flex-1 bg-green-50/50 py-0">
+              <CardContent className="p-3">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle className="text-sm font-medium">Total final pagado</CardTitle>
+                    <CardDescription className="text-[11px] text-muted-foreground">
+                      Pago final de semana
+                    </CardDescription>
+                  </div>
+                  <div className="text-2xl font-bold text-green-600">
+                    S/. {pagosRealizados
+                      .filter(pago => pago.id_semana_laboral.toString() === semanaSeleccionada)
+                      .reduce((sum, item) => sum + Number(item.total_pago_final), 0)
+                      .toFixed(2)}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+          
+        {/* Botones en una fila en pantallas grandes, organizados en móvil */}
+        <div className="flex flex-col gap-3">
+          {/* Botones Cerrar Semana e Imprimir Resumen */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* Botón de cerrar semana */}
+            <Button
+              variant="outline"
+              className={`w-full ${puedesCerrarSemana() ? 'bg-green-50 hover:bg-green-100 border-green-200' : 'bg-gray-100 text-gray-400'}`}
+              disabled={!puedesCerrarSemana()}
+              onClick={() => setShowCloseModal(true)}
+            >
+              <Check className={`mr-2 h-4 w-4 ${puedesCerrarSemana() ? 'text-green-600' : 'text-gray-400'}`} />
+              Cerrar Semana
+            </Button>
+
+            {/* Botón para imprimir resumen semanal */}
+            {noPendientesPorPagar() ? (
+              <Button
+                variant="outline"
+                className="w-full bg-purple-50 hover:bg-purple-100 border-purple-200"
+                onClick={() => {
+                  setLoadingImprimirResumen(true);
+                  setImprimirResumenModalOpen(true);
+                  // Retraso para simular carga y asegurar que el estado se actualice
+                  setTimeout(() => setLoadingImprimirResumen(false), 800);
+                }}
+              >
+                {loadingImprimirResumen ? (
+                  <Loader2 className="h-4 w-4 text-purple-600 mr-2 animate-spin" />
+                ) : (
+                  <Printer className="h-4 w-4 text-purple-600 mr-2" />
+                )}
+                Imprimir Resumen
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                className="w-full bg-gray-100 text-gray-400"
+                disabled
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir Resumen
+              </Button>
+            )}
+            
+            {/* Botones de Adelanto Pago y Agregar Tarea Extra siempre en la misma fila */}
+            <Button
+              onClick={() => setAdelantoModalOpen(true)}
+              className="w-full"
+            >
+              <DollarSign className="mr-2 h-4 w-4" />
+              Adelanto Pago
+            </Button>
+            <Button
+              onClick={() => setTareaModalOpen(true)}
+              className="w-full"
+            >
+              <ClipboardList className="mr-2 h-4 w-4" />
+              Tarea Extra
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Sistema de tabs */}
+      {/* 5. Sistema de tabs */}
       <Tabs defaultValue="pendientes" value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 mb-4">
           <TabsTrigger value="pendientes">Pagos pendientes</TabsTrigger>
@@ -2524,6 +2970,7 @@ export default function PagoPersonalPage() {
                               size="icon"
                               onClick={() => {
                                 setLoadingDetalles(true);
+                                setSelectedRow(pago.id_personal);
                                 // Implementar ver detalle de pago realizado
                                 cargarDetallesPersonal(pago.id_personal);
                               }}
@@ -3363,10 +3810,10 @@ export default function PagoPersonalPage() {
                             }</TableCell>
                             <TableCell>{adelanto.comentario || '-'}</TableCell>
                             <TableCell>
-                              <Button 
-                                variant="ghost" 
+                              <Button
+                                variant="ghost"
                                 size="icon"
-                                className="h-7 w-7" 
+                                className="h-7 w-7"
                                 onClick={() => handlePagoParcial(adelanto)}
                                 title="Pago Parcial"
                               >
@@ -3394,15 +3841,15 @@ export default function PagoPersonalPage() {
 
             {/* Botón para mostrar/ocultar sección de nuevo descuento */}
             <div className="flex justify-end">
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 className="text-xs"
                 onClick={() => setMostrarNuevoDescuento(!mostrarNuevoDescuento)}
               >
                 {mostrarNuevoDescuento ? "Ocultar" : "Agregar otros descuentos"}
-                {mostrarNuevoDescuento ? 
-                  <Eye className="ml-1 h-3 w-3" /> : 
+                {mostrarNuevoDescuento ?
+                  <Eye className="ml-1 h-3 w-3" /> :
                   <PlusCircle className="ml-1 h-3 w-3" />
                 }
               </Button>
@@ -3418,51 +3865,51 @@ export default function PagoPersonalPage() {
                     <Input
                       id="monto"
                       type="number"
-                    value={descuentoTemp.monto}
-                    onChange={(e) => setDescuentoTemp({
-                      ...descuentoTemp,
-                      monto: e.target.value
-                    })}
-                    placeholder="0.00"
-                    className="h-8"
-                  />
-                </div>
-                <div className="flex-[2]">
-                  <Label htmlFor="motivo" className="text-sm">Motivo</Label>
-                  <Input
-                    id="motivo"
-                    value={descuentoTemp.motivo}
-                    onChange={(e) => setDescuentoTemp({
-                      ...descuentoTemp,
-                      motivo: e.target.value
-                    })}
-                    placeholder="Motivo del descuento"
-                    className="h-8"
-                  />
-                </div>
-                <Button
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={() => {
-                    if (!descuentoTemp.monto || !descuentoTemp.motivo) {
-                      toast.error("Complete todos los campos");
-                      return;
-                    }
-                    setDescuentosSeleccionados([
-                      ...descuentosSeleccionados,
-                      {
-                        tipo: 'descuento',
-                        monto: Number(descuentoTemp.monto),
-                        motivo: descuentoTemp.motivo
+                      value={descuentoTemp.monto}
+                      onChange={(e) => setDescuentoTemp({
+                        ...descuentoTemp,
+                        monto: e.target.value
+                      })}
+                      placeholder="0.00"
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="flex-[2]">
+                    <Label htmlFor="motivo" className="text-sm">Motivo</Label>
+                    <Input
+                      id="motivo"
+                      value={descuentoTemp.motivo}
+                      onChange={(e) => setDescuentoTemp({
+                        ...descuentoTemp,
+                        motivo: e.target.value
+                      })}
+                      placeholder="Motivo del descuento"
+                      className="h-8"
+                    />
+                  </div>
+                  <Button
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      if (!descuentoTemp.monto || !descuentoTemp.motivo) {
+                        toast.error("Complete todos los campos");
+                        return;
                       }
-                    ]);
-                    setDescuentoTemp({ monto: '', motivo: '' });
-                  }}
-                >
-                  <PlusCircle className="h-4 w-4" />
-                </Button>
+                      setDescuentosSeleccionados([
+                        ...descuentosSeleccionados,
+                        {
+                          tipo: 'descuento',
+                          monto: Number(descuentoTemp.monto),
+                          motivo: descuentoTemp.motivo
+                        }
+                      ]);
+                      setDescuentoTemp({ monto: '', motivo: '' });
+                    }}
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
             )}
 
             {/* Resumen de Descuentos Seleccionados */}
@@ -3534,44 +3981,44 @@ export default function PagoPersonalPage() {
           {/* Contenedor principal del recibo - Ticket estilo impresora térmica */}
           <div ref={impresionRef} className="flex flex-col text-[11px] print:text-[9pt] print:m-0 print:p-4 print:w-full">
             {/* Cabecera del ticket */}
-              <div className="bg-white p-2 text-center print:bg-white print:px-2 print:py-1">
-                {/* Logo de la empresa */}
-                {logoLoaded && logoUrl ? (
-                  <div className="flex justify-center mb-1 logo-container print:mb-0.5">
-                    <img
-                      src={`${logoUrl}?t=${new Date().getTime()}`}
-                      alt={`Logo de ${empresa?.razon_social || 'la empresa'}`}
-                      className="h-10 object-contain print:h-8 mx-auto logo"
-                      onLoad={() => console.log("Logo cargado en el modal")}
-                      onError={(e) => {
-                        console.error("Error al cargar la imagen en el modal:", e);
-                        setLogoLoaded(false);
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex justify-center mb-1 print:mb-0.5">
-                    <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center print:h-8 print:w-8">
-                      <span className="text-gray-500 text-xs">Logo</span>
-                    </div>
-                  </div>
-                )}
-                <div className="space-y-0 leading-tight header-no-space">
-                  <p className="text-xs mb-0 font-semibold print:text-[9pt] print:font-bold">
-                    {empresa?.razon_social || "EMPRESA"} - RUC: {empresa?.ruc || ""}
-                  </p>
-                  <p className="text-xs text-muted-foreground mb-0 print:text-[8pt] print:text-black">
-                    {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)
-                      ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - 
-                        ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}`
-                      : "Semana no seleccionada"}
-                  </p>
-                  <p className="text-xs print:text-[8pt]">{getCurrentDateTime()}</p>
+            <div className="bg-white p-2 text-center print:bg-white print:px-2 print:py-1">
+              {/* Logo de la empresa */}
+              {logoLoaded && logoUrl ? (
+                <div className="flex justify-center mb-1 logo-container print:mb-0.5">
+                  <img
+                    src={`${logoUrl}?t=${new Date().getTime()}`}
+                    alt={`Logo de ${empresa?.razon_social || 'la empresa'}`}
+                    className="h-10 object-contain print:h-8 mx-auto logo"
+                    onLoad={() => console.log("Logo cargado en el modal")}
+                    onError={(e) => {
+                      console.error("Error al cargar la imagen en el modal:", e);
+                      setLogoLoaded(false);
+                    }}
+                  />
                 </div>
-                <h2 className="pt-0.5 pb-0 font-bold text-base print:text-[12pt]">RECIBO DE PAGO SEMANAL</h2>
+              ) : (
+                <div className="flex justify-center mb-1 print:mb-0.5">
+                  <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center print:h-8 print:w-8">
+                    <span className="text-gray-500 text-xs">Logo</span>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-0 leading-tight header-no-space">
+                <p className="text-xs mb-0 font-semibold print:text-[9pt] print:font-bold">
+                  {empresa?.razon_social || "EMPRESA"} - RUC: {empresa?.ruc || ""}
+                </p>
+                <p className="text-xs text-muted-foreground mb-0 print:text-[8pt] print:text-black">
+                  {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)
+                    ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - 
+                        ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}`
+                    : "Semana no seleccionada"}
+                </p>
+                <p className="text-xs print:text-[8pt]">{getCurrentDateTime()}</p>
+              </div>
+              <h2 className="pt-0.5 pb-0 font-bold text-base print:text-[14pt]">RECIBO DE PAGO SEMANAL</h2>
 
-                <div className="my-1 border-t border-dashed border-gray-500 print:my-0.5"></div>
-              </div>            {loadingDetalles ? (
+              <div className="my-1 border-t border-dashed border-gray-500 print:my-0.5"></div>
+            </div>            {loadingDetalles ? (
               <div className="flex justify-center items-center p-10">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 <span className="ml-2">Cargando detalles...</span>
@@ -3580,15 +4027,15 @@ export default function PagoPersonalPage() {
               <>
                 {/* Información del trabajador */}
                 <div className="p-1 print:p-0.5">
-                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">DATOS DEL PERSONAL</div>
-                  <div className="flex flex-col text-xs space-y-0 print:text-[9pt] print:space-y-0">
+                  <div className="text-center font-bold mb-1 print:mb-0.5 print:text-[12pt]">DATOS DEL PERSONAL</div>
+                  <div className="flex flex-col text-sm space-y-1 print:text-[11pt] print:space-y-0.5">
                     <div className="flex justify-between">
-                      <span className="font-medium">Personal:</span>
-                      <span className="text-right">{detallePersonal?.personal?.nombre_completo}</span>
+                      <span className="font-semibold">Personal:</span>
+                      <span className="text-right font-bold print:text-[11pt]">{detallePersonal?.personal?.nombre_completo}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="font-medium">DNI:</span>
-                      <span>{detallePersonal?.personal?.dni}</span>
+                      <span className="font-semibold">DNI:</span>
+                      <span className="font-bold print:text-[11pt]">{detallePersonal?.personal?.dni}</span>
                     </div>
                   </div>
                 </div>
@@ -3596,7 +4043,7 @@ export default function PagoPersonalPage() {
                 {/* Sección de asistencias - con tabla para impresión térmica */}
                 <div className="px-1 py-0.5 print:px-0.5 print:py-0">
                   <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
-                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">ASISTENCIA</div>
+                  <div className="text-center font-bold mb-1 print:mb-0.5 print:text-[12pt]">ASISTENCIA</div>
                   <table className="thermal-table w-full border-collapse">
                     <thead>
                       <tr>
@@ -3615,7 +4062,7 @@ export default function PagoPersonalPage() {
                       </tr>
                     </tbody>
                   </table>
-                  <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 print:mt-0 print:pt-0.5">
+                  <div className="flex justify-end font-semibold text-[10px] mt-1 pt-0.5 print:mt-0.5 print:pt-0.5 print:text-[10pt]">
                     <span>Total: S/.{detallePersonal?.totales.asistencia.toFixed(2)}</span>
                   </div>
                 </div>
@@ -3623,7 +4070,7 @@ export default function PagoPersonalPage() {
                 {/* Sección de tareas extras - con tabla para impresión térmica */}
                 <div className="px-1 py-0.5 print:px-0.5 print:py-0">
                   <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
-                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">TAREAS EXTRA</div>
+                  <div className="text-center font-bold mb-1 print:mb-0.5 print:text-[12pt]">TAREAS EXTRA</div>
                   {detallePersonal?.tareasExtra && detallePersonal.tareasExtra.length > 0 ? (
                     <div className="text-[9px] print:text-[8pt]">
                       {/* Tabla para impresión térmica */}
@@ -3647,7 +4094,7 @@ export default function PagoPersonalPage() {
                             ))}
                         </tbody>
                       </table>
-                      <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 print:mt-0 print:pt-0.5">
+                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-0.5 print:mt-0.5 print:pt-0.5 print:text-[10pt]">
                         Total: S/.{detallePersonal?.totales.tareas_extra.toFixed(2)}
                       </div>
                     </div>
@@ -3661,7 +4108,7 @@ export default function PagoPersonalPage() {
                 {/* Sección de servicios de cocción - con tabla */}
                 <div className="px-1 py-0.5 print:px-0.5 print:py-0">
                   <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
-                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">SERVICIOS DE COCCIÓN</div>
+                  <div className="text-center font-bold mb-1 print:mb-0.5 print:text-[12pt]">SERVICIOS DE COCCIÓN</div>
                   {detallePersonal?.cocciones && detallePersonal.cocciones.length > 0 ? (
                     <div className="text-[9px] print:text-[8pt]">
                       {/* Versión única optimizada con tablas */}
@@ -3711,7 +4158,7 @@ export default function PagoPersonalPage() {
                         ))}
 
                       {/* Total general de todas las cocciones */}
-                      <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 print:mt-0 print:pt-0.5">
+                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-0.5 print:mt-0.5 print:pt-0.5 print:text-[10pt]">
                         Total: S/.{detallePersonal?.totales.coccion.toFixed(2)}
                       </div>
                     </div>
@@ -3725,7 +4172,7 @@ export default function PagoPersonalPage() {
                 {/* Sección de adelantos pendientes - con tabla */}
                 <div className="px-1 py-0.5 print:px-0.5 print:py-0">
                   <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
-                  <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">ADELANTOS PENDIENTES</div>
+                  <div className="text-center font-bold mb-1 print:mb-0.5 print:text-[11pt]">ADELANTOS PENDIENTES</div>
                   {detallePersonal?.adelantos && detallePersonal.adelantos.length > 0 ? (
                     <div className="text-[9px] print:text-[8pt]">
                       {/* Tabla para impresión térmica */}
@@ -3735,23 +4182,82 @@ export default function PagoPersonalPage() {
                             <th className="col-fecha font-bold">Fecha</th>
                             <th className="col-cargo font-bold">Descripción</th>
                             <th className="col-monto font-bold">Monto</th>
+                            <th className="col-monto font-bold">Pagado</th>
+                            <th className="col-monto font-bold">Saldo</th>
                           </tr>
                         </thead>
                         <tbody>
                           {detallePersonal.adelantos
                             .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
-                            .map((adelanto, idx, arr) => (
-                              <tr key={idx}>
-                                <td className="col-fecha">{formatDate(adelanto.fecha)}</td>
-                                <td className="col-cargo">{adelanto.comentario || 'Sin desc.'}</td>
-                                <td className="col-monto text-red-600 font-medium print:font-normal">S/.{Number(adelanto.monto).toFixed(2)}</td>
-                              </tr>
-                            ))}
+                            .map((adelanto, idx, arr) => {
+                              // Buscar pagos parciales para este adelanto
+                              const pagoParcial = detallePersonal.pagosParciales?.find(p => p.adelanto_id === adelanto.id_adelanto_pago);
+                              const montoPagado = pagoParcial ? pagoParcial.detalles.reduce((sum: number, d: any) => sum + Number(d.monto_pagado), 0) : 0;
+                              const saldoPendiente = Number(adelanto.monto) - montoPagado;
+
+                              return (
+                                <tr key={idx}>
+                                  <td className="col-fecha">{formatDate(adelanto.fecha)}</td>
+                                  <td className="col-cargo">{adelanto.comentario || 'Sin desc.'}</td>
+                                  <td className="col-monto text-red-600 font-medium print:font-normal">S/.{Number(adelanto.monto).toFixed(2)}</td>
+                                  <td className="col-monto text-blue-600 font-medium print:font-normal">S/.{montoPagado.toFixed(2)}</td>
+                                  <td className="col-monto text-red-600 font-medium print:font-normal">S/.{saldoPendiente.toFixed(2)}</td>
+                                </tr>
+                              );
+                            })}
                         </tbody>
                       </table>
-                      <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 border-t border-dashed border-gray-300 print:text-[9pt] print:mt-0 print:pt-0.5">
-                        <span className="text-red-600 print:font-medium">Total Pendiente: S/.{detallePersonal?.totales.adelantos.toFixed(2)}</span>
-                      </div>
+
+                      {/* Mostrar pagos parciales si existen */}
+                      {detallePersonal.pagosParciales && detallePersonal.pagosParciales.length > 0 && (
+                        <>
+                          <div className="mt-1 mb-0.5 text-[9px] font-medium text-blue-600 print:text-[8pt]">Pagos Parciales Realizados:</div>
+                          <table className="thermal-table w-full border-collapse">
+                            <thead>
+                              <tr>
+                                <th className="col-fecha font-bold">Fecha</th>
+                                <th className="col-cargo font-bold">Adelanto</th>
+                                <th className="col-monto font-bold">Monto Pagado</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {detallePersonal.pagosParciales.flatMap(pago =>
+                                pago.detalles.map((detalle: any, idx: number) => (
+                                  <tr key={`${pago.adelanto_id}-${idx}`}>
+                                    <td className="col-fecha">{formatDate(detalle.fecha)}</td>
+                                    <td className="col-cargo">
+                                      Pago parcial ({formatDate(pago.adelanto_fecha)})
+                                    </td>
+                                    <td className="col-monto text-blue-600 font-medium print:font-normal">
+                                      S/.{Number(detalle.monto_pagado).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </>
+                      )}
+
+                      {/* <div className="flex flex-col gap-0.5 text-[10px] mt-1 pt-0.5 border-t border-dashed border-gray-300 print:text-[9pt] print:mt-0.5 print:pt-0.5">
+                        <div className="flex justify-between">
+                          <span className="font-medium">Total Adelantos:</span>
+                          <span className="text-red-600 print:font-medium">S/.{detallePersonal?.totales.adelantos.toFixed(2)}</span>
+                        </div>
+                        
+                        {detallePersonal?.totales.pagosParciales && detallePersonal.totales.pagosParciales > 0 && (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="font-medium">Total Pagos Parciales:</span>
+                              <span className="text-blue-600 print:font-medium">S/.{detallePersonal.totales.pagosParciales.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between font-semibold">
+                              <span>Total Saldo Pendiente:</span>
+                              <span className="text-red-600 print:font-bold">S/.{(detallePersonal.totales.adelantos - detallePersonal.totales.pagosParciales).toFixed(2)}</span>
+                            </div>
+                          </>
+                        )}
+                      </div> */}
                     </div>
                   ) : (
                     <div className="text-[9px] text-center text-muted-foreground py-0.5 print:text-[8pt] print:text-black">
@@ -3761,10 +4267,11 @@ export default function PagoPersonalPage() {
                 </div>
 
                 {/* Sección de adelantos cancelados - solo visible si hay datos */}
+
                 {detallePersonal?.adelantosCancelados && detallePersonal.adelantosCancelados.length > 0 && (
                   <div className="px-1 py-0.5 print:px-0.5 print:py-0">
-                   <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
-                    <div className="text-center font-bold mb-0.5 print:mb-0 print:text-[10pt]">ADELANTOS CANCELADOS EN ESTE PAGO</div>
+                    <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
+                    <div className="text-center font-bold mb-1 print:mb-0.5 print:text-[12pt]">ADELANTOS CANCELADOS EN ESTE PAGO</div>
                     <div className="text-[9px] print:text-[8pt]">
                       {/* Tabla para impresión térmica */}
                       <table className="thermal-table w-full border-collapse">
@@ -3787,7 +4294,7 @@ export default function PagoPersonalPage() {
                             ))}
                         </tbody>
                       </table>
-                      <div className="flex justify-end font-semibold text-[10px] mt-0.5 pt-0.5 print:mt-0 print:pt-0.5">
+                      <div className="flex justify-end font-semibold text-[10px] mt-1 pt-0.5 print:mt-0.5 print:pt-0.5 print:text-[10pt]">
                         <span className="text-green-600 print:font-medium">Total Cancelado: S/.{detallePersonal?.totales.adelantosCancelados?.toFixed(2) || '0.00'}</span>
                       </div>
                     </div>
@@ -3797,7 +4304,8 @@ export default function PagoPersonalPage() {
                 {/* Resumen final */}
                 <div className="p-1 print:p-0.5 print:bg-white">
                   <div className="my-0.5 border-t border-dashed border-gray-500 print:my-0.5"></div>
-                  <div className="flex flex-col text-[11px] space-y-0 print:text-[9pt] print:space-y-0">
+                  <div className="text-center font-bold mb-2 print:mb-2 print:text-[12pt]">RESUMEN DEL PAGO</div>
+                  <div className=" text-[11px] print:text-[10pt] print:mt-4">
                     <div className="flex justify-between">
                       <span>Total Asistencia:</span>
                       <span>S/.{detallePersonal?.totales.asistencia.toFixed(2)}</span>
@@ -3810,22 +4318,38 @@ export default function PagoPersonalPage() {
                       <span>Total Cocción:</span>
                       <span>S/.{detallePersonal?.totales.coccion.toFixed(2)}</span>
                     </div>
+
+                    {/* Sección mejorada para adelantos pendientes y pagos parciales */}
                     <div className="flex justify-between text-red-600 print:font-medium">
-                      <span>Adelantos Pendientes:</span>
+                      <span>Adelantos Pendientes (Monto Original):</span>
                       <span>S/.{detallePersonal?.totales.adelantos.toFixed(2)}</span>
                     </div>
+
+                    {detallePersonal?.totales.pagosParciales && detallePersonal.totales.pagosParciales > 0 ? (
+                      <>
+                        <div className="flex justify-between text-blue-600 print:font-medium">
+                          <span>Pagos Parciales Realizados:</span>
+                          <span>S/.{detallePersonal.totales.pagosParciales.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-red-500 print:font-bold">
+                          <span>Saldo Pendiente por Pagar:</span>
+                          <span>S/.{(detallePersonal.totales.adelantos - detallePersonal.totales.pagosParciales).toFixed(2)}</span>
+                        </div>
+                      </>
+                    ) : null}
+
                     <div className="flex justify-between text-green-600 print:font-medium mb-0.5 print:mb-1">
                       <span>Adelantos Cancelados:</span>
                       <span>S/.{detallePersonal?.totales.adelantosCancelados?.toFixed(2) || '0.00'}</span>
                     </div>
-                    
+
                     {/* Línea divisoria antes del total a pagar */}
                     <div className="my-2 border-t border-dashed border-gray-500 print:my-2"></div>
-                    
+
                     {/* Total sin descuento */}
                     <div className="text-center font-bold pt-0.5 mt-1 print:pt-0.5 print:mt-1">
-                      <div className="text-base print:text-[11pt]">TOTAL SIN DESCUENTO:</div>
-                      <div className="text-lg print:text-[14pt] mt-0.5 print:mt-1">
+                      <div className="text-sm font-semibold print:text-[9pt]">TOTAL SIN DESCUENTO:</div>
+                      <div className="text-2xl print:text-[20pt] mt-0.5 print:mt-1">
                         S/.{(
                           (detallePersonal?.totales.asistencia ?? 0) +
                           (detallePersonal?.totales.tareas_extra ?? 0) +
@@ -3833,11 +4357,11 @@ export default function PagoPersonalPage() {
                         ).toFixed(2)}
                       </div>
                     </div>
-                    
+
                     {/* Total pagado */}
                     <div className="text-center font-bold text-emerald-600 print:text-black print:font-extrabold mt-3 print:mt-4">
-                      <div className="text-base print:text-[11pt]">TOTAL PAGADO:</div>
-                      <div className="text-lg print:text-[14pt] mt-0.5 print:mt-1">
+                      <div className="text-sm font-semibold print:text-[9pt]">TOTAL PAGADO:</div>
+                      <div className="text-2xl print:text-[20pt] mt-0.5 print:mt-1">
                         {pagosRealizados.some(p =>
                           p.id_personal === detallePersonal?.personal?.id_personal &&
                           p.id_semana_laboral.toString() === semanaSeleccionada
@@ -3845,9 +4369,6 @@ export default function PagoPersonalPage() {
                           ? `S/.${Number(detallePersonal?.totales.final_pagado).toFixed(2)}`
                           : "-"
                         }
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1 print:text-[8pt]">
-                        (Monto final después de descuentos)
                       </div>
                     </div>
                   </div>
@@ -3858,9 +4379,9 @@ export default function PagoPersonalPage() {
             {/* Pie de página */}
             <div className="p-2 text-center text-[8px] text-muted-foreground print:text-black print:px-0">
               <div className="my-1 border-t border-dashed border-gray-500 print:my-0.5"></div>
-              <p className="mb-0.5 print:text-[7pt]">Documento informativo - No constituye comprobante oficial de pago</p>
-              <p className="mb-0.5 print:text-[7pt]">Gracias por su trabajo</p>
-              <p className="pt-2 mb-0 print:pt-1 print:text-[7pt]">* * * * * * * * * *</p>
+              <p className="mb-0.5 print:text-[7pt] print:text-center text-center">Documento informativo - No constituye comprobante oficial de pago</p>
+              <p className="mb-0.5 print:text-[7pt] print:text-center text-center">Gracias por su trabajo</p>
+              <p className="pt-2 mb-0 print:pt-1 print:text-[7pt] print:text-center text-center">* * * * * * * * * *</p>
             </div>
           </div>
 
@@ -3927,15 +4448,15 @@ export default function PagoPersonalPage() {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="font-medium">Fecha:</div>
                     <div>{formatDate(adelantoSeleccionado.fecha)}</div>
-                    
+
                     <div className="font-medium">Monto Total:</div>
                     <div>S/. {Number(adelantoSeleccionado.monto).toFixed(2)}</div>
-                    
+
                     <div className="font-medium">Comentario:</div>
                     <div>{adelantoSeleccionado.comentario || '-'}</div>
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="montoParcial">Monto a Pagar</Label>
                   <Input
@@ -3969,6 +4490,136 @@ export default function PagoPersonalPage() {
               Aplicar Pago Parcial
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Resumen Semanal para imprimir */}
+      <Dialog open={imprimirResumenModalOpen} onOpenChange={setImprimirResumenModalOpen}>
+        <DialogContent className="sm:max-w-[350px] w-[95vw] max-h-[90vh] overflow-y-auto p-0 bg-white print:shadow-none print:max-w-[80mm] print:w-[80mm]">
+          <DialogTitle className="sr-only">Resumen de Semana Laboral</DialogTitle>
+
+          {/* Contenedor principal del recibo de resumen semanal */}
+          <div ref={impresionResumenRef} className="flex flex-col text-[11px] print:text-[9pt] print:m-0 print:p-4 print:w-full">
+            {/* Cabecera del ticket */}
+            <div className="bg-white p-2 text-center header">
+              {/* Logo de la empresa */}
+              {logoLoaded && logoUrl ? (
+                <div className="flex justify-center mb-1 logo-container print:mb-0.5">
+                  <img
+                    src={`${logoUrl}?t=${new Date().getTime()}`}
+                    alt={`Logo de ${empresa?.razon_social || 'la empresa'}`}
+                    className="h-10 object-contain print:h-8 mx-auto logo"
+                  />
+                </div>
+              ) : (
+                <div className="flex justify-center mb-1 print:mb-0.5">
+                  <div className="h-10 w-10 bg-gray-200 rounded-full flex items-center justify-center print:h-8 print:w-8">
+                    <span className="text-gray-500 text-xs">Logo</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-0 leading-tight header-no-space">
+                <p className="text-xs mb-0 font-semibold print:text-[9pt] print:font-bold">
+                  {empresa?.razon_social || "EMPRESA"} - RUC: {empresa?.ruc || ""}
+                </p>
+                <p className="text-xs text-muted-foreground mb-0 print:text-[8pt] print:text-black">
+                  {getCurrentDateTime()}
+                </p>
+              </div>
+
+              <h2 className="pt-1 pb-0 font-bold text-base">RESUMEN DE SEMANA</h2>
+              <div className="my-1 border-t border-solid border-gray-500 print:my-1"></div>
+            </div>
+
+            {/* Información de la semana */}
+            <div className="p-1 print:p-0.5">
+              <div className="text-center font-bold mb-1 subtitle">DATOS DE LA SEMANA</div>
+              <div className="flex flex-col text-sm space-y-0 print:text-[10pt] print:space-y-0.5">
+                {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada) && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">ID Semana:</span>
+                      <span className="text-right print:text-[11pt]">
+                        {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.id_semana_laboral}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Fecha inicio:</span>
+                      <span className="print:text-[11pt]">
+                        {formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Fecha fin:</span>
+                      <span className="print:text-[11pt]">
+                        {formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-semibold">Estado:</span>
+                      <span className="print:text-[11pt]">
+                        {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.estado === 1 ? "Activa" : "Cerrada"}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Línea divisoria */}
+            <div className="my-1 border-t border-solid border-gray-500 print:my-1"></div>
+
+            {/* Resumen de pagos */}
+            <div className="p-2 print:p-1">
+              {/* <div className="text-center font-bold mb-3 print:mb-2 print:text-[13pt]">RESUMEN FINANCIERO</div> */}
+
+              {/* Total sin descuento */}
+              <div className="text-center my-2 print:my-3 px-4">
+                <div className="text-sm font-semibold mb-1 subtitle print:text-[9pt]">TOTAL SIN DESCUENTO:</div>
+                <div className="total text-2xl font-bold text-blue-600 print:text-[20pt] print:text-black">
+                  S/. {resumenPagos.reduce((sum, item) =>
+                    sum + item.total_asistencia + item.total_tareas_extra + item.total_coccion,
+                    0
+                  ).toFixed(2)}
+                </div>
+              </div>
+
+              {/* Línea divisoria */}
+              <div className="my-4 border-t border-solid border-gray-500 print:my-3"></div>
+
+              {/* Total pagado */}
+              <div className="text-center my-2 print:my-3 px-4">
+                <div className="text-sm font-semibold mb-1 subtitle print:text-[9pt]">TOTAL FINAL PAGADO:</div>
+                <div className="total text-2xl font-bold text-green-600 print:text-[20pt] print:text-black">
+                  S/. {pagosRealizados
+                    .filter(pago => pago.id_semana_laboral.toString() === semanaSeleccionada)
+                    .reduce((sum, item) => sum + Number(item.total_pago_final), 0)
+                    .toFixed(2)}
+                </div>
+              </div>
+            </div>
+
+            {/* Pie de página */}
+            <div className="p-2 text-center text-[8px] text-muted-foreground mt-auto print:text-black">
+              <div className="my-1 border-t border-solid border-gray-500 print:my-1"></div>
+              <p className="mb-0.5 print:text-[7pt] print:text-center text-center">Documento informativo - No constituye comprobante oficial</p>
+              <p className="mb-0.5 print:text-[7pt] print:text-center text-center">* * * * * * * * * *</p>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 p-2 border-t print:hidden">
+            <Button variant="outline" size="sm" onClick={() => setImprimirResumenModalOpen(false)}>
+              Cerrar
+            </Button>
+            <Button
+              size="sm"
+              onClick={imprimirResumenSemanal}
+              className="print:hidden"
+            >
+              <Printer className="h-3 w-3 mr-1" /> Imprimir
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
