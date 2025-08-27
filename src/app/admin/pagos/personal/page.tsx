@@ -348,6 +348,7 @@ export default function PagoPersonalPage() {
   // Agregar al componente principal, después de los estados existentes
   const [pagoModalOpen, setPagoModalOpen] = useState(false);
   const [selectedPago, setSelectedPago] = useState<ResumenPago | null>(null);
+  const [formaPago, setFormaPago] = useState<string>("EFECTIVO");
 
   const [descuentosModalOpen, setDescuentosModalOpen] = useState(false);
   const [pagoParcialModalOpen, setPagoParcialModalOpen] = useState(false);
@@ -408,6 +409,7 @@ export default function PagoPersonalPage() {
       final: number;
       final_pagado: number;
     };
+    pago?: any; // <-- Añadido para permitir la propiedad 'pago'
   }
 
   // Añadir estos estados para el modal de detalles
@@ -985,7 +987,10 @@ export default function PagoPersonalPage() {
 
       // IMPORTANTE: Usar solo UN setResumenPagos al final para evitar renderizaciones parciales
       // Generar el resumen de pagos una sola vez con todos los datos
-      generarResumenPagos(personalActivo, asistencias, adelantos, tareasExtra, turnos, idSemana);
+      const resumenGenerado = await generarResumenPagos(personalActivo, asistencias, adelantos, tareasExtra, turnos, idSemana);
+      
+      // Actualizar el estado con el resumen generado
+      setResumenPagos(resumenGenerado);
 
     } catch (error) {
       console.error("Error al cargar datos:", error);
@@ -995,7 +1000,7 @@ export default function PagoPersonalPage() {
     }
   }
 
-  const generarResumenPagos = (
+  const generarResumenPagos = async (
     personalActivo: Personal[],
     asistencias: any[],
     adelantos: any[],
@@ -1007,7 +1012,7 @@ export default function PagoPersonalPage() {
     const semanaSeleccionadaObj = semanasLaboral.find(s => s.id_semana_laboral.toString() === idSemana);
     if (!semanaSeleccionadaObj) {
       console.error("No se encontró la semana seleccionada");
-      return;
+      return [];
     }
 
     // Convertir fechas a objetos Date para comparaciones
@@ -1065,7 +1070,11 @@ export default function PagoPersonalPage() {
       id_semana_laboral: number; // <-- Agregado para evitar error
     }
 
-    const resumen = personalActivo.map((p): ResumenPago => {
+    // Construir array para almacenar resúmenes de pagos
+    const resumen: ResumenPago[] = [];
+
+    // Procesar cada persona del personal activo
+    for (const p of personalActivo) {
       // Calcular días de asistencia
       const asistenciasPersonal = asistenciasSemana.filter(
         (a) => a.id_personal === p.id_personal
@@ -1097,15 +1106,41 @@ export default function PagoPersonalPage() {
       const total_asistencia = (dias_completos * pagoDiarioAplicado) +
         (medios_dias * (pagoDiarioAplicado / 2));
 
-      // Calcular adelantos
+      // Calcular adelantos y restar pagos parciales
       const adelantosPersonal = adelantosPendientes.filter(
         (a) => a.id_personal === p.id_personal
       );
 
-      const total_adelantos = adelantosPersonal.reduce(
-        (sum, adelanto) => sum + Number(adelanto.monto),
-        0
+      // Obtener pagos parciales de los adelantos pendientes (asincrónico)
+      const pagosParciales = await Promise.all(
+        adelantosPersonal.map(async (adelanto) => {
+          try {
+            const response = await fetch(`/api/adelanto_pago/${adelanto.id_adelanto_pago}/detalle`);
+            if (response.ok) {
+              const data = await response.json();
+              return {
+                adelanto_id: adelanto.id_adelanto_pago,
+                pagos: data.detalles || [],
+                total_pagado: data.detalles.reduce((s: number, d: any) => s + Number(d.monto_pagado), 0)
+              };
+            }
+            return { adelanto_id: adelanto.id_adelanto_pago, pagos: [], total_pagado: 0 };
+          } catch (error) {
+            console.error(`Error al cargar pagos parciales para adelanto ${adelanto.id_adelanto_pago}:`, error);
+            return { adelanto_id: adelanto.id_adelanto_pago, pagos: [], total_pagado: 0 };
+          }
+        })
       );
+
+      // Calcular el monto total de adelantos pendientes (restando los pagos parciales)
+      let total_adelantos = 0;
+      
+      adelantosPersonal.forEach(adelanto => {
+        const pagoParcial = pagosParciales.find(p => p.adelanto_id === adelanto.id_adelanto_pago);
+        const montoPagado = pagoParcial ? pagoParcial.total_pagado : 0;
+        // Añadir al total sólo el saldo pendiente (monto original - pagos parciales)
+        total_adelantos += Number(adelanto.monto) - montoPagado;
+      });
 
       // Calcular tareas extra
       const tareasPersonal = tareasExtraSemana.filter(
@@ -1144,7 +1179,8 @@ export default function PagoPersonalPage() {
       // Calcular total final
       const total_final = total_asistencia + total_tareas_extra + total_coccion - total_descuentos;
 
-      return {
+      // Agregar el resumen de esta persona al array principal
+      resumen.push({
         id_personal: p.id_personal,
         nombre_completo: p.nombre_completo,
         pago_diario_normal: Number(p.pago_diario_normal),
@@ -1159,10 +1195,11 @@ export default function PagoPersonalPage() {
         estado_pago: "Pendiente",
         pago_aplicado: aplicaPagoReducido ? 'reducido' : 'normal',
         id_semana_laboral: Number(idSemana) // <-- Agregado para evitar error
-      };
-    });
+      });
+    }
 
-    setResumenPagos(resumen);
+    // Retornar el resumen generado en lugar de modificar el estado directamente
+    return resumen;
   };
 
   //Función para cargar las semanas laborales
@@ -1955,7 +1992,8 @@ export default function PagoPersonalPage() {
           descuentos: resumenObj.total_descuentos,
           final: totalFinalSinDescuento - totalAdelantosPendientes, // Restar los adelantos pendientes
           final_pagado: totalFinalPagado
-        }
+        },
+        pago: pagoRealizado // <-- Añadido para corregir el error
       };
 
       setDetallePersonal(detalles);
@@ -1998,6 +2036,9 @@ export default function PagoPersonalPage() {
   function handlePagoClick(resumen: ResumenPago) {
     // Limpiar los descuentos seleccionados
     setDescuentosSeleccionados([]);
+    
+    // Reiniciar la forma de pago a EFECTIVO
+    setFormaPago("EFECTIVO");
 
     // Establecer el total de descuentos en 0 inicialmente
     const pagoSinDescuentos = {
@@ -2183,6 +2224,7 @@ export default function PagoPersonalPage() {
         totalDescuentos,
       estado: "Pagado",
       fecha_pago: new Date().toISOString(),
+      forma_pago: formaPago,
       descuentos: descuentosSeleccionados, // Para referencia en backend si se requiere
       adelantos_aplicados: adelantosAplicados
     };
@@ -3667,6 +3709,26 @@ export default function PagoPersonalPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Forma de Pago */}
+                  <div className="flex flex-col gap-1 mt-2">
+                    <div className="flex justify-between items-center">
+                      <span>Forma de Pago:</span>
+                      <Select
+                        value={formaPago}
+                        onValueChange={setFormaPago}
+                      >
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="EFECTIVO" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="EFECTIVO">EFECTIVO</SelectItem>
+                          <SelectItem value="TRANSFERENCIA">TRANSFERENCIA</SelectItem>
+                          <SelectItem value="YAPE">YAPE</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
 
 
@@ -4342,6 +4404,14 @@ export default function PagoPersonalPage() {
                       <span>Adelantos Cancelados:</span>
                       <span>S/.{detallePersonal?.totales.adelantosCancelados?.toFixed(2) || '0.00'}</span>
                     </div>
+
+                    {/* Forma de Pago */}
+                    {detallePersonal?.pago && (
+                      <div className="flex justify-between print:font-medium mb-0.5 print:mb-1">
+                        <span>Forma de Pago:</span>
+                        <span className="font-medium">{detallePersonal.pago.forma_pago || 'EFECTIVO'}</span>
+                      </div>
+                    )}
 
                     {/* Línea divisoria antes del total a pagar */}
                     <div className="my-2 border-t border-dashed border-gray-500 print:my-2"></div>

@@ -65,6 +65,7 @@ export class PagoPersonalSemanaRepository extends BaseRepository {
         dias_completos: Number(data.dias_completos || 0),
         medio_dias: Number(data.medio_dias || 0),
         costo_pago_diario: data.costo_pago_diario ? Number(data.costo_pago_diario) : null,
+        forma_pago: data.forma_pago || "EFECTIVO",
         estado: data.estado || "Pagado",
         created_at: new Date(),
         updated_at: new Date(),

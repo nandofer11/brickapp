@@ -10,12 +10,12 @@ datasource db {
 model asistencia {
   id_asistencia     Int               @id @default(autoincrement())
   fecha             DateTime          @db.Date
-  id_personal       Int
+  id_personal       Int?
   id_semana_laboral Int
   estado            asistencia_estado
   created_at        DateTime          @default(now()) @db.DateTime(0)
   updated_at        DateTime          @default(now()) @db.DateTime(0)
-  personal          personal          @relation(fields: [id_personal], references: [id_personal], onDelete: Cascade, map: "asistencia_ibfk_5")
+  personal          personal?         @relation(fields: [id_personal], references: [id_personal], map: "asistencia_ibfk_5")
   semana_laboral    semana_laboral    @relation(fields: [id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, map: "asistencia_ibfk_6")
 
   @@index([id_personal], map: "asistencia_ibfk_5")
@@ -52,16 +52,16 @@ model caja_semanal {
 }
 
 model cargo_coccion {
-  id_cargo_coccion Int                @id @default(autoincrement())
-  nombre_cargo     String             @db.VarChar(45)
-  costo_cargo      Decimal            @db.Decimal(6, 2)
-  created_at       DateTime           @default(now()) @db.DateTime(0)
-  updated_at       DateTime           @default(now()) @db.DateTime(0)
+  id_cargo_coccion Int             @id @default(autoincrement())
+  nombre_cargo     String          @db.VarChar(45)
+  costo_cargo      Decimal         @db.Decimal(6, 2)
+  created_at       DateTime        @default(now()) @db.DateTime(0)
+  updated_at       DateTime        @default(now()) @db.DateTime(0)
   id_empresa       Int
   id_horno         Int
-  empresa          empresa            @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_cargo_coccion_empresa")
-  horno            horno              @relation(fields: [id_horno], references: [id_horno], onDelete: NoAction, onUpdate: NoAction, map: "FK_cargo_coccion_horno")
-  coccion_personal coccion_personal[]
+  empresa          empresa         @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_cargo_coccion_empresa")
+  horno            horno           @relation(fields: [id_horno], references: [id_horno], onDelete: NoAction, onUpdate: NoAction, map: "FK_cargo_coccion_horno")
+  coccion_turno    coccion_turno[]
 
   @@index([id_empresa], map: "FK_cargo_coccion_empresa_idx")
   @@index([id_horno], map: "FK_cargo_coccion_horno_idx")
@@ -86,7 +86,7 @@ model coccion {
   empresa                          empresa            @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_coccion_empresa")
   horno                            horno              @relation(fields: [horno_id_horno], references: [id_horno], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_horno1")
   semana_laboral                   semana_laboral?    @relation(fields: [semana_laboral_id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, onUpdate: NoAction, map: "fk_semana_trabajo_id_semana_trabajo")
-  coccion_personal                 coccion_personal[]
+  coccion_turno                    coccion_turno[]
   consumo_material                 consumo_material[]
 
   @@index([horno_id_horno], map: "fk_coccion_horno1_idx")
@@ -173,20 +173,19 @@ model personal {
   ciudad               String                 @db.VarChar(45)
   direccion            String?                @db.VarChar(45)
   celular              String?                @db.VarChar(45)
-  pago_diario_normal   Int
-  pago_diario_reducido Int?
+  pago_diario_normal   Decimal                @db.Decimal(6, 2)
+  pago_diario_reducido Decimal?               @db.Decimal(6, 2)
   fecha_ingreso        DateTime               @db.Date
   estado               Int
-  id_empresa           Int
+  id_empresa           Int?
   created_at           DateTime               @default(now()) @db.DateTime(0)
   updated_at           DateTime               @default(now()) @db.DateTime(0)
   adelanto_pago        adelanto_pago[]
   asistencia           asistencia[]
-  coccion_personal     coccion_personal[]
   consumo_material     consumo_material[]
   descuento_personal   descuento_personal[]
   pago_personal_semana pago_personal_semana[]
-  empresa              empresa                @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "personal_ibfk_1")
+  empresa              empresa?               @relation(fields: [id_empresa], references: [id_empresa], map: "personal_ibfk_1")
   tarea_extra          tarea_extra[]
 
   @@index([id_empresa], map: "FK_id_empresa_personal_empresa_idx")
@@ -315,22 +314,6 @@ model cliente {
   @@index([id_empresa], map: "FK_cliente_empresa_idx")
 }
 
-model coccion_personal {
-  id_coccion_personal            Int           @id @default(autoincrement())
-  coccion_id_coccion             Int
-  personal_id_personal           Int
-  cargo_coccion_id_cargo_coccion Int
-  created_at                     DateTime      @default(now()) @db.DateTime(0)
-  updated_at                     DateTime      @default(now()) @db.DateTime(0)
-  cargo_coccion                  cargo_coccion @relation(fields: [cargo_coccion_id_cargo_coccion], references: [id_cargo_coccion], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_personal_cargo_coccion1")
-  coccion                        coccion       @relation(fields: [coccion_id_coccion], references: [id_coccion], onDelete: Cascade, map: "fk_coccion_personal_coccion1")
-  personal                       personal      @relation(fields: [personal_id_personal], references: [id_personal], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_personal_personal1")
-
-  @@index([cargo_coccion_id_cargo_coccion], map: "fk_coccion_personal_cargo_coccion1_idx")
-  @@index([coccion_id_coccion], map: "fk_coccion_personal_coccion1_idx")
-  @@index([personal_id_personal], map: "fk_coccion_personal_personal1_idx")
-}
-
 model compra_material {
   id_compra_material      Int                       @id @default(autoincrement())
   id_proveedor            Int
@@ -392,13 +375,12 @@ model detalle_venta {
 }
 
 model entrega_venta {
-  id_entrega_venta   Int       @id @default(autoincrement())
-  id_venta           Int
-  fecha              DateTime? @default(now()) @db.Timestamp(0)
-  cantidad_entregada Int       @map("cantidad entregada")
-  lugar_carga        String?   @db.VarChar(45)
-  observaciones      String?   @db.Text
-  venta              venta     @relation(fields: [id_venta], references: [id_venta], onDelete: NoAction, onUpdate: NoAction, map: "FK_venta_entrega_venta")
+  id_entrega_venta      Int                     @id @default(autoincrement())
+  id_venta              Int
+  fecha                 DateTime?               @default(now()) @db.Timestamp(0)
+  lugar_carga           String?                 @db.VarChar(45)
+  detalle_entrega_venta detalle_entrega_venta[]
+  venta                 venta                   @relation(fields: [id_venta], references: [id_venta], onDelete: NoAction, onUpdate: NoAction, map: "FK_venta_entrega_venta")
 
   @@index([id_venta], map: "FK_venta_entrega_venta_idx")
 }
@@ -408,7 +390,7 @@ model numeracion_comprobante {
   id_empresa                Int     @unique(map: "id_empresa_UNIQUE")
   tipo_comprobante          String  @unique(map: "tipo_comprobante_UNIQUE") @db.VarChar(45)
   serie                     String  @unique(map: "serie_UNIQUE") @db.VarChar(45)
-  numero_actual             String  @db.VarChar(45)
+  numero_actual             Int
   empresa                   empresa @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_numeracion_comprobante")
 }
 
@@ -426,38 +408,40 @@ model pago_compra_material {
 }
 
 model producto {
-  id_producto     Int             @id @default(autoincrement())
-  id_categoria    Int?
-  id_empresa      Int?
-  nombre          String          @db.VarChar(45)
-  precio_unitario Decimal         @db.Decimal(10, 2)
-  peso            Decimal?        @db.Decimal(10, 2)
-  dimensiones     String?         @db.VarChar(45)
-  estado          Int?            @default(1) @db.TinyInt
-  descripcion     String?         @db.Text
-  detalle_venta   detalle_venta[]
-  categoria       categoria?      @relation(fields: [id_categoria], references: [id_categoria], onDelete: NoAction, onUpdate: NoAction, map: "FK_categoria_producto")
-  empresa         empresa?        @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_producto")
+  id_producto           Int                     @id @default(autoincrement())
+  id_categoria          Int?
+  id_empresa            Int?
+  nombre                String                  @db.VarChar(45)
+  precio_unitario       Decimal                 @db.Decimal(10, 2)
+  peso                  Decimal?                @db.Decimal(10, 2)
+  dimensiones           String?                 @db.VarChar(45)
+  estado                Int?                    @default(1) @db.TinyInt
+  descripcion           String?                 @db.Text
+  detalle_entrega_venta detalle_entrega_venta[]
+  detalle_venta         detalle_venta[]
+  categoria             categoria?              @relation(fields: [id_categoria], references: [id_categoria], onDelete: NoAction, onUpdate: NoAction, map: "FK_categoria_producto")
+  empresa               empresa?                @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_producto")
 
   @@index([id_categoria], map: "FK_categoria_producto_idx")
   @@index([id_empresa], map: "FK_empresa_producto_idx")
 }
 
 model semana_laboral {
-  id_semana_laboral    Int                    @id @default(autoincrement())
-  fecha_inicio         DateTime               @db.Date
-  fecha_fin            DateTime               @db.Date
-  estado               Int                    @db.TinyInt
-  id_empresa           Int
-  created_at           DateTime               @default(now()) @db.DateTime(0)
-  updated_at           DateTime               @default(now()) @db.DateTime(0)
-  adelanto_pago        adelanto_pago[]
-  asistencia           asistencia[]
-  coccion              coccion[]
-  descuento_personal   descuento_personal[]
-  pago_personal_semana pago_personal_semana[]
-  empresa              empresa                @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "semana_laboral_ibfk_1")
-  tarea_extra          tarea_extra[]
+  id_semana_laboral     Int                     @id @default(autoincrement())
+  fecha_inicio          DateTime                @db.Date
+  fecha_fin             DateTime                @db.Date
+  estado                Int                     @db.TinyInt
+  id_empresa            Int
+  created_at            DateTime                @default(now()) @db.DateTime(0)
+  updated_at            DateTime                @default(now()) @db.DateTime(0)
+  adelanto_pago         adelanto_pago[]
+  adelanto_pago_detalle adelanto_pago_detalle[]
+  asistencia            asistencia[]
+  coccion               coccion[]
+  descuento_personal    descuento_personal[]
+  pago_personal_semana  pago_personal_semana[]
+  empresa               empresa                 @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "semana_laboral_ibfk_1")
+  tarea_extra           tarea_extra[]
 
   @@index([id_empresa], map: "id_empresa_semana_trabajo_empresa_idx")
 }
@@ -481,10 +465,13 @@ model venta {
   id_usuario        Int
   id_empresa        Int
   fecha_venta       DateTime            @db.Date
+  tipo_venta        String              @db.VarChar(45)
   forma_pago        String              @db.VarChar(45)
   estado_pago       String              @db.VarChar(45)
   estado_entrega    String              @db.VarChar(45)
   total             Decimal             @db.Decimal(10, 2)
+  adelanto          Decimal?            @default(0.00) @db.Decimal(10, 2)
+  saldo_pendiente   Decimal?            @default(0.00) @db.Decimal(10, 2)
   observaciones     String?             @db.Text
   comprobante_venta comprobante_venta[]
   detalle_venta     detalle_venta[]
@@ -500,24 +487,25 @@ model venta {
 }
 
 model adelanto_pago {
-  id_adelanto_pago  Int            @id @default(autoincrement())
-  id_personal       Int
-  id_semana_laboral Int
-  fecha             DateTime       @db.Date
-  monto             Decimal        @db.Decimal(6, 2)
-  comentario        String?        @db.VarChar(150)
-  estado            String         @db.VarChar(45)
-  created_at        DateTime       @default(now()) @db.DateTime(0)
-  updated_at        DateTime       @default(now()) @db.DateTime(0)
-  personal          personal       @relation(fields: [id_personal], references: [id_personal], onDelete: NoAction, onUpdate: NoAction, map: "FK_adelanto_personal")
-  semana_laboral    semana_laboral @relation(fields: [id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, onUpdate: NoAction, map: "FK_adelanto_semana_laboral")
+  id_adelanto_pago      Int                     @id @default(autoincrement())
+  id_personal           Int?
+  id_semana_laboral     Int
+  fecha                 DateTime                @db.Date
+  monto                 Decimal                 @db.Decimal(6, 2)
+  comentario            String?                 @db.VarChar(150)
+  estado                String                  @db.VarChar(45)
+  created_at            DateTime                @default(now()) @db.DateTime(0)
+  updated_at            DateTime                @default(now()) @db.DateTime(0)
+  personal              personal?               @relation(fields: [id_personal], references: [id_personal], onUpdate: NoAction, map: "FK_adelanto_personal")
+  semana_laboral        semana_laboral          @relation(fields: [id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, onUpdate: NoAction, map: "FK_adelanto_semana_laboral")
+  adelanto_pago_detalle adelanto_pago_detalle[]
 
   @@index([id_personal], map: "FK_adelanto_personal_idx")
   @@index([id_semana_laboral], map: "FK_adelanto_semana_laboral_idx")
 }
 
 model descuento_personal {
-  id_descuento_personal Int            @id
+  id_descuento_personal Int            @id @default(autoincrement())
   id_personal           Int
   id_semana_laboral     Int
   fecha                 DateTime       @db.Date
@@ -533,10 +521,11 @@ model descuento_personal {
 }
 
 model pago_personal_semana {
-  id_pago_personal_semana Int            @id
+  id_pago_personal_semana Int            @id @default(autoincrement())
   id_personal             Int
   id_semana_laboral       Int
   dias_completos          Int
+  costo_pago_diario       Decimal?       @db.Decimal(6, 2)
   medio_dias              Int
   total_asistencia_pago   Decimal        @db.Decimal(6, 2)
   total_tareas_extra      Decimal        @db.Decimal(6, 2)
@@ -546,6 +535,7 @@ model pago_personal_semana {
   total_pago_final        Decimal        @db.Decimal(6, 2)
   estado                  String         @db.VarChar(45)
   fecha_pago              DateTime       @db.Date
+  forma_pago              String         @default("EFECTIVO") @db.VarChar(45)
   created_at              DateTime       @default(now()) @db.DateTime(0)
   updated_at              DateTime       @default(now()) @db.DateTime(0)
   personal                personal       @relation(fields: [id_personal], references: [id_personal], onDelete: NoAction, onUpdate: NoAction, map: "FK_pago_personal_semana_personal")
@@ -569,6 +559,51 @@ model tarea_extra {
 
   @@index([id_personal], map: "FK_tarea_extra_personal_idx")
   @@index([id_semana_laboral], map: "FK_tarea_extra_semana_laboral_idx")
+}
+
+model coccion_turno {
+  id_coccion_personal            Int           @id @default(autoincrement())
+  coccion_id_coccion             Int
+  personal_id_personal           Int?
+  cargo_coccion_id_cargo_coccion Int
+  fecha                          DateTime?     @db.Date
+  personal_externo               String?       @db.VarChar(45)
+  created_at                     DateTime      @default(now()) @db.DateTime(0)
+  updated_at                     DateTime      @default(now()) @db.DateTime(0)
+  cargo_coccion                  cargo_coccion @relation(fields: [cargo_coccion_id_cargo_coccion], references: [id_cargo_coccion], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_personal_cargo_coccion1")
+  coccion                        coccion       @relation(fields: [coccion_id_coccion], references: [id_coccion], onDelete: Cascade, map: "fk_coccion_personal_coccion1")
+
+  @@index([cargo_coccion_id_cargo_coccion], map: "fk_coccion_personal_cargo_coccion1_idx")
+  @@index([coccion_id_coccion], map: "fk_coccion_personal_coccion1_idx")
+  @@index([personal_id_personal], map: "fk_coccion_personal_personal1_idx")
+}
+
+model detalle_entrega_venta {
+  id_detalle_entrega_venta Int           @id @default(autoincrement())
+  id_entrega_venta         Int
+  id_producto              Int
+  cantidad                 Int
+  entrega_venta            entrega_venta @relation(fields: [id_entrega_venta], references: [id_entrega_venta], onDelete: NoAction, onUpdate: NoAction, map: "fk_entrega_venta_detalle_entrega_venta")
+  producto                 producto      @relation(fields: [id_producto], references: [id_producto], onDelete: NoAction, onUpdate: NoAction, map: "fk_producto_detalle_entrega_venta")
+
+  @@index([id_entrega_venta], map: "fk_entrega_venta_detalle_entrega_venta_idx")
+  @@index([id_producto], map: "fk_producto_detalle_entrega_venta_idx")
+}
+
+model adelanto_pago_detalle {
+  id_adelanto_pago_detalle Int            @id @default(autoincrement())
+  id_adelanto_pago         Int
+  id_semana_laboral        Int
+  fecha                    DateTime       @db.Date
+  monto_pagado             Decimal        @db.Decimal(6, 2)
+  observacion              String?        @db.VarChar(150)
+  created_at               DateTime       @default(now()) @db.DateTime(0)
+  updated_at               DateTime       @default(now()) @db.DateTime(0)
+  adelanto_pago            adelanto_pago  @relation(fields: [id_adelanto_pago], references: [id_adelanto_pago], onDelete: Cascade, onUpdate: NoAction, map: "FK_adelanto_pago_detalle_adelanto_pago")
+  semana_laboral           semana_laboral @relation(fields: [id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, onUpdate: NoAction, map: "FK_adelanto_pago_detalle_semana_laboral")
+
+  @@index([id_adelanto_pago], map: "FK_adelanto_pago_detalle_adelanto_pago_idx")
+  @@index([id_semana_laboral], map: "FK_adelanto_pago_detalle_semana_laboral_idx")
 }
 
 enum asistencia_estado {
