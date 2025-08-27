@@ -8,7 +8,6 @@ import { Pencil, Trash2, Loader2, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -96,19 +95,27 @@ interface Coccion {
 }
 
 interface CoccionOperador {
-  id_coccion_operador: number
+  id_coccion_operador?: number
+  id_coccion_personal?: number
   coccion_id_coccion: number
   personal_id_personal: number
   cargo_coccion_id_cargo_coccion: number
-  Personal: Personal
-  CargoCocion: CargoCocion
+  Personal?: Personal
+  CargoCocion?: CargoCocion
+  cargo_coccion?: {
+    id_cargo_coccion: number
+    nombre_cargo: string
+    costo_cargo: string
+  }
+  nombre_personal?: string
+  nombre_horno?: string
+  fecha?: string
+  personal_externo?: string | null
 }
 
 export default function CoccionPage() {
   const { data: session } = useSession()
 
-  // Estados para las pestañas
-  const [activeTab, setActiveTab] = useState("coccion")
 
   // Estados para hornos
   const [hornos, setHornos] = useState<Horno[]>([])
@@ -137,13 +144,10 @@ export default function CoccionPage() {
   const [loadingSemanas, setLoadingSemanas] = useState(true)
 
   // Estados para operadores de cocción
-  const [operadores, setOperadores] = useState<CoccionOperador[]>([])
   const [currentOperadores, setCurrentOperadores] = useState<Partial<CoccionOperador>[]>([])
-  const [showOperadoresModal, setShowOperadoresModal] = useState(false)
   const [loadingOperadores, setLoadingOperadores] = useState(false)
   const [personal, setPersonal] = useState<Personal[]>([])
   const [loadingPersonal, setLoadingPersonal] = useState(true)
-  const [selectedCoccionId, setSelectedCoccionId] = useState<number | null>(null)
 
   // Agregar estado para el modal de visualización
   const [showViewModal, setShowViewModal] = useState(false)
@@ -481,16 +485,52 @@ export default function CoccionPage() {
 
   const loadCoccionOperadores = async (coccionId: number) => {
     try {
-      const res = await fetch(`/api/coccion?id_coccion=${coccionId}`);
-      if (!res.ok) throw new Error('Error al cargar datos de cocción');
+      setLoadingOperadores(true);
+      // Obtenemos los turnos de cocción asociados a esta cocción
+      const res = await fetch(`/api/coccion_turno?id_coccion=${coccionId}`);
+      if (!res.ok) throw new Error('Error al cargar operadores de la cocción');
 
-      const coccion = await res.json();
+      const data = await res.json();
+      console.log('Datos cargados:', data);
 
-      // Ya no necesitamos cargar operadores, así que simplemente devolvemos un array vacío
-      return [];
+      // Verificamos si la respuesta es un array o un objeto único
+      const turnos = Array.isArray(data) ? data : [data];
+      console.log('Turnos procesados:', turnos);
+
+      // Si no hay turnos, establecemos un array vacío
+      if (!turnos || turnos.length === 0 || !turnos[0]) {
+        setCoccionOperadores([]);
+        return [];
+      }
+
+      // Agrupamos por personal y cargo para evitar duplicados
+      const personalAgrupado: Record<string, CoccionOperador> = {};
+
+      turnos.forEach((turno: CoccionOperador) => {
+        // Creamos una clave única combinando el ID del personal y el ID del cargo
+        const key = `${turno.personal_id_personal}-${turno.cargo_coccion_id_cargo_coccion}`;
+
+        // Solo añadimos el turno si no existe ya uno con la misma combinación de personal y cargo
+        if (!personalAgrupado[key]) {
+          personalAgrupado[key] = turno;
+        }
+      });
+
+      // Convertimos el objeto agrupado a un array
+      const operadoresUnicos: CoccionOperador[] = Object.values(personalAgrupado);
+      console.log('Operadores únicos:', operadoresUnicos);
+
+      // Actualizamos el estado con los operadores únicos
+      setCoccionOperadores(operadoresUnicos);
+
+      return operadoresUnicos;
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error al cargar operadores:', error);
+      toast.error("Error al cargar personal asignado a esta cocción");
+      setCoccionOperadores([]);
       throw error;
+    } finally {
+      setLoadingOperadores(false);
     }
   };
 
@@ -501,16 +541,6 @@ export default function CoccionPage() {
     return formatDateRange(fecha_inicio, fecha_fin)
   }
 
-  const loadOperadoresCoccion = async (coccionId: number) => {
-    try {
-      const res = await fetch(`/api/coccion?id_coccion=${coccionId}&include_personal=true`);
-      if (!res.ok) throw new Error('Error al cargar operadores');
-      return await res.json();
-    } catch (error) {
-      console.error('Error:', error);
-      throw error;
-    }
-  };
 
   return (
     <div className="container mx-auto p-4">
@@ -520,7 +550,7 @@ export default function CoccionPage() {
         </CardHeader>
         <CardContent>
           <p className="mb-4 text-muted-foreground">
-            En este módulo puede gestionar las cocciones, cargos y hornos de manera eficiente.
+            En este módulo puede gestionar las cocciones, cargos y hornos.
           </p>
           <div className="flex gap-4 mb-6">
             <Button
@@ -566,11 +596,12 @@ export default function CoccionPage() {
                     <TableHead>Semana</TableHead>
                     <TableHead>Horno</TableHead>
                     <TableHead>Fecha Encendido</TableHead>
-                    <TableHead>Hora Inicio</TableHead>
-                    <TableHead>Humedad</TableHead>
+                    {/* <TableHead>Hora Inicio</TableHead> */}
+                    <TableHead>Fecha Apagado</TableHead>
+                    {/* <TableHead>Humedad</TableHead> */}
                     <TableHead>Estado</TableHead>
-                    <TableHead>Humeada</TableHead>
-                    <TableHead>Quema</TableHead>
+                    {/* <TableHead>Humeada</TableHead>
+                    <TableHead>Quema</TableHead> */}
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -585,26 +616,28 @@ export default function CoccionPage() {
                       </TableCell>
                       <TableCell>{coccion.horno?.nombre || 'Horno no asignado'}</TableCell>
                       <TableCell>{formatDate(coccion.fecha_encendido)}</TableCell>
-                      <TableCell>{coccion.hora_inicio || '-'}</TableCell>
-                      <TableCell>{coccion.humedad_inicial || '-'}</TableCell>                   <TableCell>
-                        <Badge variant={
-                          coccion.estado === "Finalizado" ? "destructive" :
-                            coccion.estado === "En Proceso" ? "success" :
-                              "info"
-                        }>
+                      {/* <TableCell>{coccion.hora_inicio || '-'}</TableCell> */}
+                      <TableCell>{coccion.fecha_apagado ? formatDate(coccion.fecha_apagado) : '-'}</TableCell>
+                      {/* <TableCell>{coccion.humedad_inicial || '-'}</TableCell> */}
+                      <TableCell>
+                        <Badge 
+                          className={
+                            coccion.estado === "En Proceso" ? 
+                            "bg-green-100 text-green-800 hover:bg-green-100" : 
+                            coccion.estado === "Finalizado" ? 
+                            "bg-red-50 text-red-600 hover:bg-red-50" : 
+                            ""
+                          }
+                        >
                           {coccion.estado}
                         </Badge>
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={coccion.humeada ? "default" : "outline"}>
-                          {coccion.humeada ? "Sí" : "No"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={coccion.quema ? "default" : "outline"}>
-                          {coccion.quema ? "Sí" : "No"}
-                        </Badge>
-                      </TableCell>
+                      {/* <TableCell><Badge variant={coccion.humeada ? "default" : "outline"}>
+                        {coccion.humeada ? "Sí" : "No"}
+                      </Badge></TableCell>
+                      <TableCell><Badge variant={coccion.quema ? "default" : "outline"}>
+                        {coccion.quema ? "Sí" : "No"}
+                      </Badge></TableCell> */}
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
@@ -612,16 +645,25 @@ export default function CoccionPage() {
                             size="icon"
                             onClick={async () => {
                               try {
+                                // Establecer el estado de carga
+                                setLoadingOperadores(true);
                                 setSelectedCoccion(coccion);
                                 await loadCoccionOperadores(coccion.id_coccion);
                                 setShowViewModal(true);
                               } catch (error) {
                                 console.error('Error al cargar detalles:', error);
                                 toast.error("Error al cargar detalles de la cocción");
+                              } finally {
+                                // Asegurar que el estado de carga se desactive incluso en caso de error
+                                setLoadingOperadores(false);
                               }
                             }}
                           >
-                            <Users className="h-4 w-4" />
+                            {loadingOperadores && selectedCoccion?.id_coccion === coccion.id_coccion ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Users className="h-4 w-4" />
+                            )}
                           </Button>
                           <Button
                             variant="outline"
@@ -688,18 +730,21 @@ export default function CoccionPage() {
           if (!isOpen) setCurrentCoccion({}); // Limpiar el formulario al cerrar
         }}
       >
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>{currentCoccion.id_coccion ? "Editar Cocción" : "Nueva Cocción"}</DialogTitle>
-            <DialogDescription>Complete los datos de la cocción y presione {currentCoccion.id_coccion ? "actualizar" : "guardar"}.</DialogDescription>
+        <DialogContent className="sm:max-w-[95%] md:max-w-[600px] p-4 sm:p-6 overflow-y-auto max-h-[90vh]">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl sm:text-2xl font-bold">
+              {currentCoccion.id_coccion ? "Editar Cocción" : "Nueva Cocción"}
+            </DialogTitle>
+            <DialogDescription>
+              Complete los datos de la cocción y presione {currentCoccion.id_coccion ? "actualizar" : "guardar"}.
+            </DialogDescription>
           </DialogHeader>
-
 
           {/* Formulario de Cocción - Solo datos básicos */}
           <div className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="space-y-2 flex-1">
-                <Label htmlFor="semana">Semana Laboral</Label>
+            <div className="flex flex-col gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="semana" className="font-medium">Semana Laboral</Label>
                 <Select
                   value={currentCoccion.semana_trabajo_id_semana_trabajo ?
                     String(currentCoccion.semana_trabajo_id_semana_trabajo) : undefined}
@@ -727,8 +772,8 @@ export default function CoccionPage() {
                 </Select>
               </div>
 
-              <div className="space-y-2 flex-1">
-                <Label htmlFor="horno">Horno</Label>
+              <div className="space-y-2">
+                <Label htmlFor="horno" className="font-medium">Horno</Label>
                 <Select
                   value={String(currentCoccion.horno_id_horno || "")}
                   onValueChange={(value) => setCurrentCoccion({
@@ -750,9 +795,9 @@ export default function CoccionPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
               <div className="space-y-2">
-                <Label htmlFor="fecha_encendido">Fecha de Encendido</Label>
+                <Label htmlFor="fecha_encendido" className="font-medium">Fecha de Encendido</Label>
                 <Input
                   id="fecha_encendido"
                   type="date"
@@ -761,7 +806,7 @@ export default function CoccionPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="hora_inicio">Hora de Inicio</Label>
+                <Label htmlFor="hora_inicio" className="font-medium">Hora de Inicio</Label>
                 <Input
                   id="hora_inicio"
                   type="time"
@@ -773,7 +818,7 @@ export default function CoccionPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="fecha_apagado">Fecha de Apagado</Label>
+                <Label htmlFor="fecha_apagado" className="font-medium">Fecha de Apagado</Label>
                 <Input
                   id="fecha_apagado"
                   type="date"
@@ -782,7 +827,7 @@ export default function CoccionPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="hora_fin">Hora de Fin</Label>
+                <Label htmlFor="hora_fin" className="font-medium">Hora de Fin</Label>
                 <Input
                   id="hora_fin"
                   type="time"
@@ -794,7 +839,7 @@ export default function CoccionPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="humedad_inicial">Humedad Inicial (%)</Label>
+                <Label htmlFor="humedad_inicial" className="font-medium">Humedad Inicial (%)</Label>
                 <Input
                   id="humedad_inicial"
                   type="number"
@@ -803,7 +848,7 @@ export default function CoccionPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="estado">Estado</Label>
+                <Label htmlFor="estado" className="font-medium">Estado</Label>
                 <Select
                   value={currentCoccion.estado || ""}
                   onValueChange={(value) => setCurrentCoccion({ ...currentCoccion, estado: value })}
@@ -821,11 +866,11 @@ export default function CoccionPage() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCoccionModal(false)}>
+          <DialogFooter className="mt-6 flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setShowCoccionModal(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveCoccion}>
+            <Button className="w-full sm:w-auto" onClick={handleSaveCoccion}>
               {currentCoccion.id_coccion ? "Actualizar" : "Guardar"}
             </Button>
           </DialogFooter>
@@ -841,108 +886,118 @@ export default function CoccionPage() {
           if (!isOpen) setCurrentCargo({}); // Limpiar el formulario al cerrar
         }}
       >
-        <DialogContent className="sm:max-w-[800px]">
-          <DialogHeader>
-            <DialogTitle>Gestión de Cargos</DialogTitle>
+        <DialogContent className="sm:max-w-[95%] md:max-w-[800px] p-4 sm:p-6 overflow-y-auto max-h-[90vh]">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl sm:text-2xl font-bold">Gestión de Cargos</DialogTitle>
             <DialogDescription>Administre los cargos de cocción según el horno.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-4">
             {/* Columna 1: Formulario de Cargos */}
-            <div className="space-y-4 md:col-span-1">
-              <div className="space-y-2">
-                <Label htmlFor="horno">Horno</Label>
-                <Select
-                  value={currentCargo.id_horno?.toString() || ""} // Cambiar a id_horno
-                  onValueChange={(value) =>
-                    setCurrentCargo({ ...currentCargo, id_horno: Number(value) }) // Actualizar id_horno
-                  }
-                >
-                  <SelectTrigger id="horno">
-                    <SelectValue placeholder="Seleccionar horno" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hornos.map((horno) => (
-                      <SelectItem key={horno.id_horno} value={horno.id_horno.toString()}>
-                        {horno.prefijo} - {horno.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-4 md:col-span-1 bg-muted/20 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold border-b pb-2">Datos del Cargo</h3>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="horno" className="font-medium">Horno</Label>
+                  <Select
+                    value={currentCargo.id_horno?.toString() || ""} // Cambiar a id_horno
+                    onValueChange={(value) =>
+                      setCurrentCargo({ ...currentCargo, id_horno: Number(value) }) // Actualizar id_horno
+                    }
+                  >
+                    <SelectTrigger id="horno" className="w-full">
+                      <SelectValue placeholder="Seleccionar horno" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {hornos.map((horno) => (
+                        <SelectItem key={horno.id_horno} value={horno.id_horno.toString()}>
+                          {horno.prefijo} - {horno.nombre}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nombre_cargo" className="font-medium">Nombre del Cargo</Label>
+                  <Input
+                    id="nombre_cargo"
+                    value={currentCargo.nombre_cargo || ""}
+                    onChange={(e) => setCurrentCargo({ ...currentCargo, nombre_cargo: e.target.value })}
+                    className="w-full"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="costo_cargo" className="font-medium">Costo del Cargo (S/.)</Label>
+                  <Input
+                    id="costo_cargo"
+                    type="number"
+                    step="0.01"
+                    value={currentCargo.costo_cargo || ""}
+                    onChange={(e) => setCurrentCargo({ ...currentCargo, costo_cargo: Number(e.target.value) })}
+                    className="w-full"
+                  />
+                </div>
+                <div className="pt-4">
+                  <Button onClick={handleSaveCargo} className="w-full sm:w-auto">
+                    {currentCargo.id_cargo_coccion ? "Actualizar Cargo" : "Guardar Cargo"}
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="nombre_cargo">Nombre del Cargo</Label>
-                <Input
-                  id="nombre_cargo"
-                  value={currentCargo.nombre_cargo || ""}
-                  onChange={(e) => setCurrentCargo({ ...currentCargo, nombre_cargo: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="costo_cargo">Costo del Cargo (S/.)</Label>
-                <Input
-                  id="costo_cargo"
-                  type="number"
-                  step="0.01"
-                  value={currentCargo.costo_cargo || ""}
-                  onChange={(e) => setCurrentCargo({ ...currentCargo, costo_cargo: Number(e.target.value) })}
-                />
-              </div>
-              <Button onClick={handleSaveCargo}>
-                {currentCargo.id_cargo_coccion ? "Actualizar Cargo" : "Guardar Cargo"}
-              </Button>
             </div>
 
             {/* Columna 2: Tabla de Cargos */}
-            <div className="rounded-md border overflow-x-auto md:col-span-2">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cod. Horno</TableHead>
-                    <TableHead>Horno</TableHead>
-                    <TableHead>Cargo</TableHead>
-                    <TableHead>Costo</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cargos.map((cargo) => {
-                    const horno = hornos.find((h) => h.id_horno === cargo.id_horno);
-                    return (
-                      <TableRow key={cargo.id_cargo_coccion}>
-                        <TableCell>{horno?.prefijo || "-"}</TableCell>
-                        <TableCell>{horno?.nombre || "-"}</TableCell>
-                        <TableCell>{cargo.nombre_cargo}</TableCell>
-                        <TableCell>S/. {Number(cargo.costo_cargo).toFixed(2)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => {
-                                setCurrentCargo(cargo);
-                                setShowCargoModal(true);
-                              }}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              className="text-destructive hover:text-destructive"
-                              onClick={() => {
-                                setDeleteCargoId(cargo.id_cargo_coccion);
-                                setShowDeleteCargoDialog(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+            <div className="rounded-lg overflow-x-auto md:col-span-2 bg-muted/20 p-4">
+              <h3 className="text-lg font-semibold border-b pb-2 mb-4">Cargos Registrados</h3>
+              <div className="rounded-md border overflow-x-auto max-h-[400px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cod. Horno</TableHead>
+                      <TableHead>Horno</TableHead>
+                      <TableHead>Cargo</TableHead>
+                      <TableHead>Costo</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cargos.map((cargo) => {
+                      const horno = hornos.find((h) => h.id_horno === cargo.id_horno);
+                      return (
+                        <TableRow key={cargo.id_cargo_coccion}>
+                          <TableCell>{horno?.prefijo || "-"}</TableCell>
+                          <TableCell>{horno?.nombre || "-"}</TableCell>
+                          <TableCell>{cargo.nombre_cargo}</TableCell>
+                          <TableCell>S/. {Number(cargo.costo_cargo).toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => {
+                                  setCurrentCargo(cargo);
+                                  setShowCargoModal(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  setDeleteCargoId(cargo.id_cargo_coccion);
+                                  setShowDeleteCargoDialog(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -956,108 +1011,120 @@ export default function CoccionPage() {
           if (!isOpen) setCurrentHorno({}); // Limpiar el formulario al cerrar
         }}
       >
-        <DialogContent className="sm:max-w-[800px]">
-          <DialogHeader>
-            <DialogTitle>Gestión de Hornos</DialogTitle>
+        <DialogContent className="sm:max-w-[95%] md:max-w-[800px] p-4 sm:p-6 overflow-y-auto max-h-[90vh]">
+          <DialogHeader className="mb-4">
+            <DialogTitle className="text-xl sm:text-2xl font-bold">Gestión de Hornos</DialogTitle>
             <DialogDescription>Administre los hornos registrados.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
             {/* Columna 1: Formulario de Hornos */}
-            <div className="space-y-4">
+            <div className="space-y-4 bg-muted/20 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold border-b pb-2">Datos del Horno</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="prefijo">Cód. de Horno</Label>
+                  <Label htmlFor="prefijo" className="font-medium">Cód. de Horno</Label>
                   <Input
                     id="prefijo"
                     value={currentHorno.prefijo || ""}
                     onChange={(e) => setCurrentHorno({ ...currentHorno, prefijo: e.target.value })}
                     maxLength={5}
                     placeholder="Ej: H1, H2, etc."
+                    className="w-full"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="nombre">Nombre</Label>
+                  <Label htmlFor="nombre" className="font-medium">Nombre</Label>
                   <Input
                     id="nombre"
                     placeholder="Nombre del horno"
                     value={currentHorno.nombre || ""}
                     onChange={(e) => setCurrentHorno({ ...currentHorno, nombre: e.target.value })}
+                    className="w-full"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="humeadores">Cantidad de Humeadores</Label>
+                  <Label htmlFor="humeadores" className="font-medium">Cantidad de Humeadores</Label>
                   <Input
                     id="humeadores"
                     type="number"
                     placeholder="Nro. de humeadores"
                     value={currentHorno.cantidad_humeadores || ""}
                     onChange={(e) => setCurrentHorno({ ...currentHorno, cantidad_humeadores: Number(e.target.value) })}
+                    className="w-full"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="quemadores">Cantidad de Quemadores</Label>
+                  <Label htmlFor="quemadores" className="font-medium">Cantidad de Quemadores</Label>
                   <Input
                     placeholder="Nro. de quemadores"
                     id="quemadores"
                     type="number"
                     value={currentHorno.cantidad_quemadores || ""}
                     onChange={(e) => setCurrentHorno({ ...currentHorno, cantidad_quemadores: Number(e.target.value) })}
+                    className="w-full"
                   />
                 </div>
               </div>
-              <Button onClick={handleSaveHorno}>Guardar Horno</Button>
+              <div className="pt-4">
+                <Button onClick={handleSaveHorno} className="w-full sm:w-auto">
+                  {currentHorno.id_horno ? "Actualizar Horno" : "Guardar Horno"}
+                </Button>
+              </div>
             </div>
 
             {/* Columna 2: Tabla de Hornos */}
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Cód.</TableHead>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Humeadores</TableHead>
-                    <TableHead>Quemadores</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {hornos.map((horno) => (
-                    <TableRow key={horno.id_horno}>
-                      <TableCell>{horno.prefijo}</TableCell>
-                      <TableCell>{horno.nombre}</TableCell>
-                      <TableCell>{horno.cantidad_humeadores || "-"}</TableCell>
-                      <TableCell>{horno.cantidad_quemadores || "-"}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                              setCurrentHorno(horno);
-                              setShowHornoModal(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => {
-                              setDeleteHornoId(horno.id_horno);
-                              setShowDeleteHornoDialog(true);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+            <div className="bg-muted/20 rounded-lg p-4">
+              <h3 className="text-lg font-semibold border-b pb-2 mb-4">Hornos Registrados</h3>
+              <div className="rounded-md border overflow-x-auto max-h-[400px]">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cód.</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Humeadores</TableHead>
+                      <TableHead>Quemadores</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {hornos.map((horno) => (
+                      <TableRow key={horno.id_horno}>
+                        <TableCell>{horno.prefijo}</TableCell>
+                        <TableCell>{horno.nombre}</TableCell>
+                        <TableCell>{horno.cantidad_humeadores || "-"}</TableCell>
+                        <TableCell>{horno.cantidad_quemadores || "-"}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              onClick={() => {
+                                setCurrentHorno(horno);
+                                setShowHornoModal(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => {
+                                setDeleteHornoId(horno.id_horno);
+                                setShowDeleteHornoDialog(true);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
         </DialogContent>
@@ -1120,94 +1187,126 @@ export default function CoccionPage() {
 
       {/* Modal de visualización */}
       <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Detalles de la Cocción</DialogTitle>
+        <DialogContent className="w-[94%] max-w-[95%] sm:max-w-xl p-2 sm:p-4 overflow-y-auto max-h-[90vh]">
+          <DialogHeader className="mb-1 sm:mb-2">
+            <DialogTitle className="text-base sm:text-lg font-bold">Detalles de la Cocción</DialogTitle>
           </DialogHeader>
           {selectedCoccion && (
-            <div className="space-y-6">
-              {/* Información detallada de la cocción */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Horno</Label>
-                  <div className="text-lg font-medium">
-                    {selectedCoccion.horno?.nombre || 'Horno no asignado'}
+            <div className="space-y-2 sm:space-y-3">
+              {/* Información detallada de la cocción - Estilo ticket más compacto */}
+              <div className="bg-muted/10 p-1 sm:p-2 rounded-lg border border-muted-foreground/20">
+                <div className="flex flex-col space-y-1 text-xs sm:text-sm">
+                  <div className="flex justify-between border-b pb-1 items-center">
+                    <span className="font-medium text-muted-foreground">Horno:</span>
+                    <span className="font-semibold text-right">{selectedCoccion.horno?.nombre || 'No asignado'}</span>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Semana</Label>
-                  <div className="text-lg font-medium">
-                    {selectedCoccion.semana_laboral ?
-                      formatSemanaLabel(selectedCoccion.semana_laboral.fecha_inicio, selectedCoccion.semana_laboral.fecha_fin) :
-                      '-'}
+                  <div className="flex justify-between border-b pb-1 items-center">
+                    <span className="font-medium text-muted-foreground">Estado:</span>
+                    <Badge
+                      className={
+                        selectedCoccion.estado === "En Proceso" ? 
+                        "bg-green-100 text-green-800 hover:bg-green-100 text-xs" : 
+                        selectedCoccion.estado === "Finalizado" ? 
+                        "bg-red-50 text-red-600 hover:bg-red-50 text-xs" : 
+                        "text-xs"
+                      }
+                    >
+                      {selectedCoccion.estado}
+                    </Badge>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Estado</Label>
-                  <Badge variant={
-                    selectedCoccion.estado === "Finalizado" ? "destructive" :
-                      selectedCoccion.estado === "En Proceso" ? "success" :
-                        "info"
-                  } className="text-base">
-                    {selectedCoccion.estado}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Fecha de Inicio</Label>
-                  <div className="text-lg font-medium">
-                    {formatDate(selectedCoccion.fecha_encendido)}
+                  <div className="flex justify-between border-b pb-1 items-center">
+                    <span className="font-medium text-muted-foreground">Semana:</span>
+                    <span className="font-semibold text-right text-xs truncate max-w-[180px]">
+                      {selectedCoccion.semana_laboral ?
+                        formatSemanaLabel(selectedCoccion.semana_laboral.fecha_inicio, selectedCoccion.semana_laboral.fecha_fin) :
+                        '-'}
+                    </span>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Hora de Inicio</Label>
-                  <div className="text-lg font-medium">
-                    {selectedCoccion.hora_inicio || '-'}
+
+                  <div className="flex flex-wrap">
+                    <div className="w-1/2 pr-1">
+                      <div className="flex justify-between border-b pb-1 items-center">
+                        <span className="font-medium text-muted-foreground text-[10px] sm:text-xs">F. Inicio:</span>
+                        <span className="font-semibold text-right text-[10px] sm:text-xs">{formatDate(selectedCoccion.fecha_encendido)}</span>
+                      </div>
+                    </div>
+                    <div className="w-1/2 pl-1">
+                      <div className="flex justify-between border-b pb-1 items-center">
+                        <span className="font-medium text-muted-foreground text-[10px] sm:text-xs">H. Inicio:</span>
+                        <span className="font-semibold text-right text-[10px] sm:text-xs">{selectedCoccion.hora_inicio || '-'}</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Humedad Inicial</Label>
-                  <div className="text-lg font-medium">
-                    {selectedCoccion.humedad_inicial ? `${selectedCoccion.humedad_inicial}%` : '-'}
+
+                  <div className="flex flex-wrap">
+                    <div className="w-1/2 pr-1">
+                      <div className="flex justify-between border-b pb-1 items-center">
+                        <span className="font-medium text-muted-foreground text-[10px] sm:text-xs">F. Fin:</span>
+                        <span className="font-semibold text-right text-[10px] sm:text-xs">
+                          {selectedCoccion.fecha_apagado ? formatDate(selectedCoccion.fecha_apagado) : '-'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-1/2 pl-1">
+                      <div className="flex justify-between border-b pb-1 items-center">
+                        <span className="font-medium text-muted-foreground text-[10px] sm:text-xs">H. Fin:</span>
+                        <span className="font-semibold text-right text-[10px] sm:text-xs">{selectedCoccion.hora_fin || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between border-b pb-1 items-center">
+                    <span className="font-medium text-muted-foreground">Humedad:</span>
+                    <span className="font-semibold text-right">
+                      {selectedCoccion.humedad_inicial ? `${selectedCoccion.humedad_inicial}%` : '-'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <Separator className="my-4" />
+              <Separator className="my-1 sm:my-2" />
 
               {/* Tabla de operadores */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Personal Asignado</h3>
+              <div className="space-y-1 sm:space-y-2 bg-muted/20 p-2 rounded-lg">
+                <h3 className="text-xs sm:text-sm font-semibold flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  Personal Asignado
+                </h3>
                 {loadingOperadores ? (
-                  <div className="flex justify-center py-4">
-                    <Loader2 className="h-6 w-6 animate-spin" />
+                  <div className="flex justify-center py-1 sm:py-2">
+                    <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
                   </div>
                 ) : coccionOperadores.length === 0 ? (
-                  <div className="text-center py-4 text-muted-foreground">
+                  <div className="text-center py-1 text-muted-foreground text-[10px] sm:text-xs">
                     No hay personal asignado a esta cocción.
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nombre</TableHead>
-                        <TableHead>Cargo</TableHead>
-                        <TableHead>Costo</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {coccionOperadores.map((operador) => (
-                        <TableRow key={operador.id_coccion_operador || `${operador.coccion_id_coccion}-${operador.personal_id_personal}`}>
-                          <TableCell>{operador.Personal?.nombre_completo || 'No asignado'}</TableCell>
-                          <TableCell>{operador.CargoCocion?.nombre_cargo || 'No asignado'}</TableCell>
-                          <TableCell>
-                            {operador.CargoCocion?.costo_cargo
-                              ? `S/. ${Number(operador.CargoCocion.costo_cargo).toFixed(2)}`
-                              : '-'}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <div className="w-full overflow-hidden rounded-md border">
+                    <div className="w-full overflow-x-visible">
+                      <Table className="w-full table-fixed">
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="whitespace-nowrap text-[10px] sm:text-xs p-1 sm:p-2 w-[40%]">Nombre</TableHead>
+                            <TableHead className="whitespace-nowrap text-[10px] sm:text-xs p-1 sm:p-2 w-[40%]">Cargo</TableHead>
+                            <TableHead className="whitespace-nowrap text-[10px] sm:text-xs p-1 sm:p-2 w-[20%]">Costo</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {coccionOperadores.map((operador, index) => (
+                            <TableRow key={operador.id_coccion_personal || operador.id_coccion_operador || `${index}-${operador.coccion_id_coccion}-${operador.personal_id_personal}`}>
+                              <TableCell className="p-1 sm:p-2 text-[10px] sm:text-xs truncate">{operador.nombre_personal || operador.Personal?.nombre_completo || 'No asignado'}</TableCell>
+                              <TableCell className="p-1 sm:p-2 text-[10px] sm:text-xs truncate">{operador.cargo_coccion?.nombre_cargo || operador.CargoCocion?.nombre_cargo || 'No asignado'}</TableCell>
+                              <TableCell className="p-1 sm:p-2 text-[10px] sm:text-xs">
+                                {(operador.cargo_coccion?.costo_cargo || operador.CargoCocion?.costo_cargo)
+                                  ? `S/. ${Number(operador.cargo_coccion?.costo_cargo || operador.CargoCocion?.costo_cargo).toFixed(2)}`
+                                  : '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
