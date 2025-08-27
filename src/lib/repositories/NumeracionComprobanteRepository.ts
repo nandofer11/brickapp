@@ -8,7 +8,7 @@ export class NumeracionComprobanteRepository extends BaseRepository {
   }
 
   async findByEmpresa(id_empresa: number) {
-    return prisma.numeracion_comprobante.findUnique({
+    return prisma.numeracion_comprobante.findMany({
       where: { id_empresa },
     });
   }

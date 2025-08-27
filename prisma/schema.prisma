@@ -111,24 +111,24 @@ model consumo_material {
 }
 
 model empresa {
-  id_empresa             Int                     @id @default(autoincrement())
-  razon_social           String                  @db.VarChar(150)
-  ruc                    String                  @unique(map: "ruc_UNIQUE") @db.VarChar(11)
-  ciudad                 String?                 @db.VarChar(45)
-  direccion              String?                 @db.VarChar(250)
-  telefono               String?                 @db.VarChar(45)
-  email                  String?                 @db.VarChar(45)
-  web                    String?                 @db.VarChar(45)
-  logo                   String?                 @db.VarChar(45)
-  created_at             DateTime                @default(now()) @db.DateTime(0)
-  updated_at             DateTime                @default(now()) @db.DateTime(0)
+  id_empresa             Int                      @id @default(autoincrement())
+  razon_social           String                   @db.VarChar(150)
+  ruc                    String                   @unique(map: "ruc_UNIQUE") @db.VarChar(11)
+  ciudad                 String?                  @db.VarChar(45)
+  direccion              String?                  @db.VarChar(250)
+  telefono               String?                  @db.VarChar(45)
+  email                  String?                  @db.VarChar(45)
+  web                    String?                  @db.VarChar(45)
+  logo                   String?                  @db.VarChar(45)
+  created_at             DateTime                 @default(now()) @db.DateTime(0)
+  updated_at             DateTime                 @default(now()) @db.DateTime(0)
   caja                   caja[]
   cargo_coccion          cargo_coccion[]
   categoria              categoria[]
   cliente                cliente[]
   coccion                coccion[]
   horno                  horno[]
-  numeracion_comprobante numeracion_comprobante?
+  numeracion_comprobante numeracion_comprobante[]
   personal               personal[]
   producto               producto[]
   rol                    rol[]
@@ -387,11 +387,13 @@ model entrega_venta {
 
 model numeracion_comprobante {
   id_numeracion_comprobante Int     @id @default(autoincrement())
-  id_empresa                Int     @unique(map: "id_empresa_UNIQUE")
+  id_empresa                Int
   tipo_comprobante          String  @unique(map: "tipo_comprobante_UNIQUE") @db.VarChar(45)
   serie                     String  @unique(map: "serie_UNIQUE") @db.VarChar(45)
   numero_actual             Int
   empresa                   empresa @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_numeracion_comprobante")
+
+  @@index([id_empresa], map: "FK_empresa_numeracion_comprobante_idx")
 }
 
 model pago_compra_material {
