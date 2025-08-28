@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Calendar as CalendarIcon, Loader2, X as XIcon, CalendarX } from "lucide-react";
+import { Pencil, Trash2, Calendar as CalendarIcon, Loader2, X as XIcon, CalendarX, Flame } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -17,7 +17,8 @@ import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils"
 
 
-import { formatDate, formatDateForInput, formatDateWithDayName } from "@/utils/dateFormat";
+import { formatDate, formatTimeAMPM, formatDateForInput, formatDateWithDayName } from "@/utils/dateFormat";
+import { formatSoles } from "@/utils/currencyFormat";
 
 import { toast } from "react-toastify";
 
@@ -29,6 +30,322 @@ interface SemanaLaboral {
   id_empresa: number;
   created_at: string;
   updated_at: string;
+}
+
+interface Coccion {
+  id_coccion: number;
+  fecha_encendido: string;
+  hora_inicio: string;
+  fecha_apagado: string;
+  hora_fin: string;
+  estado: string;
+  horno_id_horno: number;
+  horno?: {
+    id_horno: number;
+    prefijo: string;
+    nombre: string;
+  };
+}
+
+interface VentaPendiente {
+  id_venta: number;
+  fecha_venta: string;
+  total: number;
+  estado_pago: string;
+  estado_entrega: string;
+  tipo_venta: string;
+  cliente: {
+    id_cliente: number;
+    nombres_apellidos?: string;
+    razon_social?: string;
+    dni?: string;
+    ruc?: string;
+  };
+  comprobante_venta?: {
+    id_comprobante_venta: number;
+    tipo_comprobante: string;
+    serie?: string;
+    numero?: string;
+  };
+  detalle_venta: Array<{
+    id_detalle_venta: number;
+    cantidad: number;
+    precio_unitario: number;
+    producto: {
+      id_producto: number;
+      nombre: string;
+    };
+  }>;
+}
+
+// Componente para mostrar cocciones activas
+function CoccionesActivas() {
+  const [cocciones, setCocciones] = useState<Coccion[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCoccionesActivas();
+  }, []);
+
+  const fetchCoccionesActivas = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/coccion');
+      const data = await response.json();
+      
+      // Filtrar solo las cocciones en proceso
+      const coccionesActivas = data.filter((coccion: Coccion) => 
+        coccion.estado === "En Proceso"
+      );
+      
+      setCocciones(coccionesActivas);
+    } catch (error) {
+      console.error('Error al cargar cocciones activas:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+  }
+
+  if (cocciones.length === 0) {
+    return (
+      <Badge variant="outline" className="bg-yellow-50 text-yellow-700 text-xs">
+        No hay cocciones activas
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge className="bg-green-100 text-green-800 text-xs">
+      {cocciones.length} {cocciones.length === 1 ? 'activa' : 'activas'}
+    </Badge>
+  );
+}
+
+// Componente para mostrar detalles de cocciones activas
+function CoccionesActivasDetalle() {
+  const [cocciones, setCocciones] = useState<Coccion[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCoccionesActivas();
+  }, []);
+
+  const fetchCoccionesActivas = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/coccion');
+      const data = await response.json();
+      
+      // Filtrar solo las cocciones en proceso
+      const coccionesActivas = data.filter((coccion: Coccion) => 
+        coccion.estado === "En Proceso"
+      );
+      
+      // Limitar a las 3 más recientes
+      const recientes = coccionesActivas.slice(0, 3);
+      setCocciones(recientes);
+    } catch (error) {
+      console.error('Error al cargar cocciones activas:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatearFechaHora = (fecha: string) => {
+    if (!fecha) return "-";
+    return formatDate(fecha);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-2">
+        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (cocciones.length === 0) {
+    return (
+      <div className="text-center py-2 text-xs text-muted-foreground">
+        No hay cocciones activas en este momento.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {cocciones.map((coccion) => (
+        <div key={coccion.id_coccion} className="bg-muted/10 rounded-md p-2 border border-muted-foreground/10">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1">
+              <Flame className="h-3 w-3 text-amber-600" />
+              <span className="text-xs font-medium">{coccion.horno?.nombre || `Horno #${coccion.horno_id_horno}`}</span>
+            </div>
+            <Badge className="bg-green-100 text-green-800 text-[10px] h-4">En Proceso</Badge>
+          </div>
+          <div className="grid grid-cols-2 gap-1 text-[10px]">
+            <div className="text-muted-foreground">Inicio:</div>
+            <div className="text-right font-medium">{formatearFechaHora(coccion.fecha_encendido)}</div>
+            <div className="text-muted-foreground">Hora:</div>
+            <div className="text-right font-medium">{coccion.hora_inicio ? formatTimeAMPM(coccion.hora_inicio) : "-"}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Componente para mostrar badge con total de ventas pendientes
+function VentasPendientesBadge() {
+  const [totalPendientes, setTotalPendientes] = useState<number>(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchTotalPendientes();
+  }, []);
+
+  const fetchTotalPendientes = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/ventas?pendientes_entrega=true');
+      const data = await response.json();
+      setTotalPendientes(data.length);
+    } catch (error) {
+      console.error('Error al cargar total de ventas pendientes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Badge variant="outline" className="bg-orange-50 text-orange-700 text-xs">
+        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+        Cargando...
+      </Badge>
+    );
+  }
+
+  return (
+    <Badge variant="outline" className="bg-orange-50 text-orange-700 text-xs">
+      {totalPendientes} Pendientes
+    </Badge>
+  );
+}
+
+// Componente para mostrar ventas pendientes de entrega (tipo CONTRATO)
+function VentasPendientesEntrega() {
+  const [ventasPendientes, setVentasPendientes] = useState<VentaPendiente[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchVentasPendientes();
+  }, []);
+
+  // Función para calcular el tiempo transcurrido desde una fecha hasta hoy
+  const calcularTiempoTranscurrido = (fechaVenta: string) => {
+    const fechaInicio = new Date(fechaVenta);
+    const fechaActual = new Date();
+    
+    // Diferencia en milisegundos
+    const diferencia = fechaActual.getTime() - fechaInicio.getTime();
+    
+    // Convertir a días
+    const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
+    
+    if (dias === 0) return "Hoy";
+    if (dias === 1) return "1 día";
+    if (dias < 30) return `${dias} días`;
+    
+    // Convertir a meses si son más de 30 días
+    const meses = Math.floor(dias / 30);
+    if (meses === 1) return "1 mes";
+    if (meses < 12) return `${meses} meses`;
+    
+    // Convertir a años si son más de 12 meses
+    const años = Math.floor(meses / 12);
+    if (años === 1) return "1 año";
+    return `${años} años`;
+  };
+
+  const fetchVentasPendientes = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/ventas?pendientes_entrega=true');
+      const data = await response.json();
+      
+      // Ordenar por fecha más antigua primero
+      const ventasOrdenadas = [...data].sort((a, b) => 
+        new Date(a.fecha_venta).getTime() - new Date(b.fecha_venta).getTime()
+      );
+      
+      setVentasPendientes(ventasOrdenadas);
+    } catch (error) {
+      console.error('Error al cargar ventas pendientes:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-4">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (ventasPendientes.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-4 text-muted-foreground">
+        <CalendarX className="h-6 w-6 mb-2" />
+        <p className="text-sm">No hay ventas pendientes de entrega</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+        {ventasPendientes.map((venta) => (
+          <div key={venta.id_venta} className="rounded-md border p-2 bg-card/50 hover:bg-card/70 cursor-pointer">
+            <div className="flex justify-between items-start mb-1">
+              <div>
+                <span className="font-medium text-xs">
+                  {venta.cliente?.nombres_apellidos || venta.cliente?.razon_social || "Cliente sin nombre"}
+                </span>
+              </div>
+              <Badge 
+                variant="outline" 
+                className={
+                  venta.estado_entrega === "PENDIENTE" 
+                    ? "bg-yellow-50 text-yellow-700 text-[10px]"
+                    : "bg-blue-50 text-blue-700 text-[10px]"
+                }
+              >
+                {venta.estado_entrega}
+              </Badge>
+            </div>
+            <div className="text-[10px] mt-1">
+              <div className="flex justify-between">
+                <div className="flex items-center gap-1">
+                  <span>Fecha: {formatDate(venta.fecha_venta)}</span>
+                  <Badge variant="outline" className="h-4 px-1 bg-gray-50 text-gray-700 text-[8px]">
+                    {calcularTiempoTranscurrido(venta.fecha_venta)}
+                  </Badge>
+                </div>
+                <span className="font-semibold">{formatSoles(venta.total)}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const formSchema = z
@@ -355,27 +672,27 @@ export default function Page() {
 
   return (
     <>
-      <div className="flex flex-1 flex-col gap-6 p-6">
-        <div className="flex gap-4 justify-between items-center">
+      <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+        <div className="flex flex-col md:flex-row gap-4 md:justify-between md:items-center">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Bienvenido</h1>
-            <p className="text-muted-foreground">Gestione su semana laboral y vea los registros existentes.</p>
-            <div className="flex items-center gap-4">
-              <Button onClick={() => setIsModalOpen(true)}>Semana Laboral</Button>
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Bienvenido</h1>
+            <p className="text-sm text-muted-foreground">Gestione su semana laboral y vea los registros existentes.</p>
+            <div className="flex items-center gap-4 mt-2">
+              <Button onClick={() => setIsModalOpen(true)} size="sm">Semana Laboral</Button>
             </div>
           </div>
 
-          <div className="min-w-[300px] max-w-sm rounded-xl border bg-card p-6 shadow-sm">
-            <div className="flex flex-col gap-2">
-              <h3 className="text-lg font-semibold">Semana Laboral</h3>
+          <div className="w-full md:min-w-[250px] md:max-w-[280px] rounded-lg border bg-card p-3 shadow-sm">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-sm font-semibold border-b pb-1">Semana Laboral</h3>
 
               {semanaActiva ? (
                 <>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center text-xs py-1">
                     <span className="text-muted-foreground">Estado:</span>
                     <Badge
                       className={cn(
-                        "px-2 py-1",
+                        "px-1.5 py-0.5 text-xs",
                         "bg-green-100 text-green-800 hover:bg-green-100"
                       )}
                     >
@@ -383,36 +700,56 @@ export default function Page() {
                     </Badge>
                   </div>
 
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Fecha inicio:</span>
-                    <span className="font-medium"> {formatearFecha(semanaActiva.fecha_inicio)}</span>
+                  <div className="flex justify-between items-center text-xs py-1">
+                    <span className="text-muted-foreground">Inicio:</span>
+                    <span className="font-medium">{formatearFecha(semanaActiva.fecha_inicio)}</span>
                   </div>
 
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Fecha fin:</span>
-                    <span className="font-medium"> {formatearFecha(semanaActiva.fecha_fin)}</span>
+                  <div className="flex justify-between items-center text-xs py-1">
+                    <span className="text-muted-foreground">Fin:</span>
+                    <span className="font-medium">{formatearFecha(semanaActiva.fecha_fin)}</span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="py-2 text-center text-muted-foreground">
+                  <div className="py-2 text-center text-xs text-muted-foreground">
                     No hay semana laboral activa.
                   </div>
-
                 </>
               )}
             </div>
           </div>
         </div>
 
-        <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-          <div className="aspect-video rounded-xl bg-muted/50" />
-          <div className="aspect-video rounded-xl bg-muted/50" />
-          <div className="aspect-video rounded-xl bg-muted/50" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Nuevo card para cocciones en proceso */}
+          <div className="rounded-lg border bg-card p-4 shadow-sm">
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between items-center border-b pb-2">
+                <h3 className="text-sm font-semibold">Cocciones Activas</h3>
+                <CoccionesActivas />
+              </div>
+              <CoccionesActivasDetalle />
+            </div>
+          </div>
+          
+          {/* Nuevo card para ventas pendientes de entrega */}
+          <div className="rounded-lg border bg-card p-4 shadow-sm">
+            <div className="flex flex-col gap-3">
+              <div className="flex justify-between items-center border-b pb-2">
+                <h3 className="text-sm font-semibold">Contratos Pendientes</h3>
+                <VentasPendientesBadge />
+              </div>
+              <VentasPendientesEntrega />
+            </div>
+          </div>
+          
+          <div className="aspect-video rounded-lg bg-muted/50" />
         </div>
-        <div className="flex-1 rounded-xl bg-muted/50 p-6 md:min-h-[400px]">
-          <h2 className="text-xl font-semibold mb-4">Resumen</h2>
-          <p className="text-muted-foreground">Aquí se mostrará un resumen de su actividad reciente.</p>
+        
+        <div className="flex-1 rounded-lg bg-muted/50 p-4 md:p-6 md:min-h-[350px]">
+          <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Resumen</h2>
+          <p className="text-sm text-muted-foreground">Aquí se mostrará un resumen de su actividad reciente.</p>
         </div>
       </div>
       <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
