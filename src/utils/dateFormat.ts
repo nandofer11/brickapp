@@ -98,3 +98,104 @@ export const formatDateWithDayName = (dateString: string | Date): string => {
     return '';
   }
 };
+
+/**
+ * Obtiene la fecha actual en formato YYYY-MM-DD ajustada a la zona horaria de Lima, Perú (UTC-5)
+ * Esta función es útil para establecer valores por defecto en inputs de fecha
+ * que deben reflejar la fecha actual en la zona horaria de Perú
+ * 
+ * @returns String en formato YYYY-MM-DD con la fecha actual en UTC-5
+ */
+export const getCurrentDateForLima = (): string => {
+  try {
+    // Crear fecha actual
+    const now = new Date();
+    
+    // Ajustar a la zona horaria de Lima, Perú (UTC-5)
+    // Esto crea una fecha que refleja "ahora mismo" en Lima
+    const limaDate = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+    
+    // Obtener componentes de fecha (año, mes, día) y formatear
+    const year = limaDate.getUTCFullYear();
+    const month = (limaDate.getUTCMonth() + 1).toString().padStart(2, '0');
+    const day = limaDate.getUTCDate().toString().padStart(2, '0');
+    
+    // Retornar en formato YYYY-MM-DD requerido por input[type="date"]
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error('Error obteniendo fecha actual para Lima:', error);
+    // En caso de error, devolver la fecha actual en formato ISO
+    return new Date().toISOString().split('T')[0];
+  }
+};
+
+/**
+ * Formatea una hora de formato ISO a formato de 24 horas (HH:MM)
+ * Esta función es útil para mostrar horas en la interfaz de usuario
+ * de forma legible, extrayendo solo la parte de la hora
+ * 
+ * @param timeString - Hora a formatear (string o Date)
+ * @returns String en formato HH:MM, o string vacío si la hora no es válida
+ */
+export const formatTime = (timeString: string | Date | null): string => {
+  if (!timeString) return '';
+  
+  try {
+    // Si es una cadena o un objeto Date, convertir a objeto Date
+    const date = typeof timeString === 'string' ? new Date(timeString) : timeString;
+    
+    // Verificar si la fecha es válida
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    
+    // Formatear la hora en formato de 24 horas
+    const hours = date.getUTCHours().toString().padStart(2, '0');
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    
+    // Devolver en formato HH:MM
+    return `${hours}:${minutes}`;
+  } catch (error) {
+    console.error('Error formateando hora:', error);
+    return '';
+  }
+};
+
+/**
+ * Formatea una hora de formato ISO a formato de 12 horas con AM/PM
+ * Esta función muestra las horas en un formato más amigable con indicador AM/PM
+ * 
+ * @param timeString - Hora a formatear (string o Date)
+ * @returns String en formato HH:MM AM/PM, o string vacío si la hora no es válida
+ */
+export const formatTimeAMPM = (timeString: string | Date | null): string => {
+  if (!timeString) return '';
+  
+  try {
+    // Si es una cadena o un objeto Date, convertir a objeto Date
+    const date = typeof timeString === 'string' ? new Date(timeString) : timeString;
+    
+    // Verificar si la fecha es válida
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    
+    // Obtener horas y minutos
+    let hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    
+    // Determinar AM o PM
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    
+    // Convertir a formato de 12 horas
+    hours = hours % 12;
+    // Las 12 del mediodía y medianoche se muestran como 12, no como 0
+    hours = hours ? hours : 12;
+    
+    // Devolver en formato HH:MM AM/PM
+    return `${hours}:${minutes} ${ampm}`;
+  } catch (error) {
+    console.error('Error formateando hora con AM/PM:', error);
+    return '';
+  }
+};
