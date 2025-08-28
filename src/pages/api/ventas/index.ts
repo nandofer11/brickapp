@@ -16,6 +16,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         switch (req.method) {
+            case 'GET':
+                // Verificar si se solicitan ventas pendientes de entrega
+                if (req.query.pendientes_entrega === 'true') {
+                    const ventasPendientes = await VentaService.getVentasPendientesEntrega(id_empresa);
+                    return res.status(200).json(ventasPendientes);
+                }
+                
+                // Obtener todas las ventas (comportamiento original)
+                const ventas = await VentaService.getVentas(id_empresa);
+                return res.status(200).json(ventas);
+                
             case 'POST':
                 const venta = await VentaService.createVenta({
                     ...req.body,
@@ -24,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 return res.status(201).json(venta);
 
             default:
-                res.setHeader('Allow', ['POST']);
+                res.setHeader('Allow', ['GET', 'POST']);
                 return res.status(405).json({ message: `Method ${req.method} Not Allowed` });
         }
     } catch (error) {
