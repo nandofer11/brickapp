@@ -460,12 +460,16 @@ export default function AsistenciaPage() {
           return
         }
 
-        // Verificar límite de selección para humeadores/quemadores
+        // Ya no se requiere seleccionar exactamente el número de quemadores/humeadores requeridos
+        // Se permite una combinación de personal interno y externo
+        // El siguiente comentario detalla la funcionalidad anterior:
+        /*
         if (limitePuestos > 0 && tipoCargo !== 'otro' && puestosSeleccionados < limitePuestos) {
           toast.warning(`Debe seleccionar ${limitePuestos} ${tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'}`);
           setIsSubmittingTurno(false);
           return;
         }
+        */
 
         // Crear un turno para cada personal seleccionado
         Object.entries(personalSeleccionado).forEach(([idPersonal, seleccionado]) => {
@@ -580,10 +584,9 @@ export default function AsistenciaPage() {
     // Si está seleccionando
     const nuevaCantidad = puestosSeleccionados + 1;
 
-    // Verificar si alcanzó el límite
+    // Ya no hay un límite estricto, pero mostramos una advertencia informativa cuando se supera el límite recomendado
     if (limitePuestos > 0 && nuevaCantidad > limitePuestos) {
-      toast.warning(`Solo puede seleccionar ${limitePuestos} ${tipoCargo === 'humeador' ? 'humeadores' : 'quemadores'}`);
-      return;
+      toast.info(`Nota: La cantidad recomendada es ${limitePuestos} ${tipoCargo === 'humeador' ? 'humeadores' : 'quemadores'}, pero puede continuar si algunos son personal externo.`);
     }
 
     setPersonalSeleccionado(prev => ({ ...prev, [idPersonal]: true }));
@@ -1114,14 +1117,14 @@ export default function AsistenciaPage() {
           </div>
         </div>
 
-        <div className="flex gap-2 w-full md:w-auto">
-          <Button onClick={handleOpenRegisterModal} className="w-full md:w-auto">
-            <NotebookPen className="mr-2 h-4 w-4" /> Asistencia Semanal
+        <div className="flex flex-col sm:flex-row gap-2 w-full">
+          <Button onClick={handleOpenRegisterModal} className="text-xs sm:text-sm h-9 sm:h-10">
+            <NotebookPen className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" /> Asistencia Semanal
           </Button>
 
-          {/* Nuevo botón para registrar turno */}
-          <Button onClick={handleOpenTurnoModal} variant="secondary" className="w-full md:w-auto">
-            <Timer className="mr-2 h-4 w-4" /> Turno Cocción
+          {/* Botón para registrar turno */}
+          <Button onClick={handleOpenTurnoModal} variant="secondary" className="text-xs sm:text-sm h-9 sm:h-10">
+            <Timer className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" /> Turno Cocción
           </Button>
         </div>
       </div>
@@ -1269,20 +1272,20 @@ export default function AsistenciaPage() {
 
       {/* Modal de Registro de Asistencia */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-[600px] w-[95%] p-2 sm:p-6 max-h-[90vh]">
-          <DialogHeader className="space-y-2">
-            <DialogTitle className="text-base sm:text-xl">
+        <DialogContent className="sm:max-w-[600px] w-[95%] p-2 sm:p-6 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="space-y-1 sm:space-y-2">
+            <DialogTitle className="text-sm sm:text-xl">
               {modoEdicion ? "Actualizar Asistencia" : "Registro de Asistencia"}
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
+            <DialogDescription className="text-xs">
               {modoEdicion
                 ? "Modifique los estados de asistencia para la fecha seleccionada"
                 : "Seleccione la semana, fecha y registre la asistencia del personal"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-2">
-            <div className="grid grid-cols-1 gap-3">
+          <div className="flex flex-col gap-3 py-1 sm:py-2">
+            <div className="grid grid-cols-1 gap-2 sm:gap-3">
               {/* Selector de Semana */}
               <div className="space-y-1.5">
                 <Label htmlFor="semana-modal" className="text-sm">Seleccionar Semana:</Label>
@@ -1360,28 +1363,30 @@ export default function AsistenciaPage() {
             </div>
 
             {/* Tabla de Personal */}
-            <div className="border rounded-md ">
-              <ScrollArea className="h-[35vh] w-[calc(100vw-4rem)] sm:w-full">
+            <div className="border rounded-md">
+              <ScrollArea className="h-[35vh] w-full">
                 <div className="min-w-[280px]">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="bg-muted/50 w-[40%] text-sm">Empleado</TableHead>
-                        <TableHead className="bg-muted/50 w-[20%] text-center">
-                          <Check className="h-4 w-4 mx-auto text-green-600" />
+                        <TableHead className="bg-muted/50 w-[40%] text-xs sm:text-sm py-1 sm:py-2">Empleado</TableHead>
+                        <TableHead className="bg-muted/50 w-[20%] text-center py-1 sm:py-2">
+                          <Check className="h-3 w-3 sm:h-4 sm:w-4 mx-auto text-green-600" />
                         </TableHead>
-                        <TableHead className="bg-muted/50 w-[20%] text-center">
-                          <X className="h-4 w-4 mx-auto text-red-600" />
+                        <TableHead className="bg-muted/50 w-[20%] text-center py-1 sm:py-2">
+                          <X className="h-3 w-3 sm:h-4 sm:w-4 mx-auto text-red-600" />
                         </TableHead>
-                        <TableHead className="bg-muted/50 w-[20%] text-center">
-                          <AlertCircle className="h-4 w-4 mx-auto text-yellow-600" />
+                        <TableHead className="bg-muted/50 w-[20%] text-center py-1 sm:py-2">
+                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 mx-auto text-yellow-600" />
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {personal.map((p) => (
                         <TableRow key={p.id_personal}>
-                          <TableCell className="break-words text-sm py-2">{p.nombre_completo}</TableCell>
+                          <TableCell className="break-words text-xs sm:text-sm py-1 sm:py-2 max-w-[120px] sm:max-w-none">
+                            {p.nombre_completo}
+                          </TableCell>
                           <TableCell className="text-center">
                             <RadioGroup
                               value={selectedAsistencia[p.id_personal]?.estado || ""}
@@ -1468,19 +1473,19 @@ export default function AsistenciaPage() {
 
       {/* Modal para Registro de Turno */}
       <Dialog open={turnoModalOpen} onOpenChange={setTurnoModalOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[900px] p-3 sm:p-4 h-[90vh] overflow-hidden">
+        <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[900px] p-2 sm:p-4 h-[90vh] overflow-hidden">
           <DialogHeader className="space-y-1">
-            <DialogTitle className="text-base sm:text-xl">
+            <DialogTitle className="text-sm sm:text-xl">
               Registro de Turno
             </DialogTitle>
-            <DialogDescription className="text-xs sm:text-sm">
+            <DialogDescription className="text-xs">
               Seleccione la cocción, fecha y personal para el turno
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-[calc(100%-90px)] overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 h-[calc(100%-70px)] sm:h-[calc(100%-90px)] overflow-hidden">
             {/* Columna del formulario */}
-            <div className="flex flex-col gap-3 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-2 sm:gap-3 overflow-y-auto pr-1">
               {/* Selector de Cocción */}
               <div className="space-y-1">
                 <Label htmlFor="coccion-modal" className="text-xs sm:text-sm">Cocción:</Label>
@@ -1554,13 +1559,13 @@ export default function AsistenciaPage() {
                     setTipoPersonal(value)
                     resetSeleccionPersonal()
                   }}
-                  className="flex gap-4"
+                  className="flex gap-2 sm:gap-4"
                 >
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1 sm:space-x-2">
                     <RadioGroupItem value="interno" id="interno" />
                     <Label htmlFor="interno" className="text-xs sm:text-sm">Personal Interno</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1 sm:space-x-2">
                     <RadioGroupItem value="externo" id="externo" />
                     <Label htmlFor="externo" className="text-xs sm:text-sm">Personal Externo</Label>
                   </div>
@@ -1613,7 +1618,7 @@ export default function AsistenciaPage() {
                 {/* Mostrar información de límite de selección */}
                 {limitePuestos > 0 && (
                   <div className="mt-1 text-xs text-primary">
-                    Debe seleccionar {puestosSeleccionados}/{limitePuestos} {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'
+                    Personal seleccionado: {puestosSeleccionados}/{limitePuestos} {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'
                     }
                   </div>
                 )}
@@ -1622,24 +1627,24 @@ export default function AsistenciaPage() {
               {/* Campos según tipo de personal */}
               {tipoPersonal === "interno" ? (
                 // Lista de Personal con checkboxes
-                <div className="space-y-1 border rounded-md p-2">
-                  <Label className="text-xs sm:text-sm mb-2 block">
+                <div className="space-y-1 border rounded-md p-1 sm:p-2">
+                  <Label className="text-xs sm:text-sm mb-1 sm:mb-2 block">
                     Seleccionar Personal:
                     {limitePuestos > 0 && (
-                      <span className="ml-2 font-normal text-muted-foreground">
-                        (Seleccione exactamente {limitePuestos} {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'})
+                      <span className="ml-1 sm:ml-2 font-normal text-muted-foreground text-[10px] sm:text-xs">
+                        (Cantidad recomendada: {limitePuestos} {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'})
                       </span>
                     )}
                   </Label>
 
-                  <div className="max-h-[150px] overflow-y-auto pr-1">
+                  <div className="max-h-[120px] sm:max-h-[150px] overflow-y-auto pr-1">
                     {personal.length === 0 ? (
-                      <div className="text-xs sm:text-sm text-center text-gray-500 py-4">
+                      <div className="text-xs sm:text-sm text-center text-gray-500 py-2 sm:py-4">
                         No hay personal registrado
                       </div>
                     ) : (
                       personal.map((p) => (
-                        <div key={p.id_personal} className="flex items-center space-x-2 py-1 px-1">
+                        <div key={p.id_personal} className="flex items-center space-x-1 sm:space-x-2 py-1 px-1">
                           <input
                             type="checkbox"
                             id={`personal-check-${p.id_personal}`}
@@ -1648,21 +1653,14 @@ export default function AsistenciaPage() {
                               handlePersonalSelection(p.id_personal, e.target.checked);
                             }}
                             disabled={
-                              !selectedCargo || // Deshabilitar si no hay cargo seleccionado
-                              (limitePuestos > 0 && // Si hay un límite
-                                puestosSeleccionados >= limitePuestos && // Si ya alcanzó el límite
-                                !personalSeleccionado[p.id_personal]) // Y este checkbox no estaba seleccionado
+                              !selectedCargo // Deshabilitar solo si no hay cargo seleccionado
+                              // Ya no deshabilitamos por límite de puestos
                             }
-                            className="h-4 w-4 rounded border-gray-300"
+                            className="h-3 w-3 sm:h-4 sm:w-4 rounded border-gray-300"
                           />
                           <Label
                             htmlFor={`personal-check-${p.id_personal}`}
-                            className={`text-xs sm:text-sm cursor-pointer ${!selectedCargo ||
-                              (limitePuestos > 0 &&
-                                puestosSeleccionados >= limitePuestos &&
-                                !personalSeleccionado[p.id_personal]) ?
-                              'text-gray-400' : ''
-                              }`}
+                            className={`text-xs sm:text-sm cursor-pointer ${!selectedCargo ? 'text-gray-400' : ''}`}
                           >
                             {p.nombre_completo}
                           </Label>
@@ -1680,23 +1678,24 @@ export default function AsistenciaPage() {
                     value={nombreExterno}
                     onChange={(e) => setNombreExterno(e.target.value)}
                     placeholder="Ingrese el nombre completo"
-                    className="w-full text-xs sm:text-sm"
+                    className="w-full text-xs sm:text-sm h-8 sm:h-10"
                   />
                 </div>
               )}
 
-              <div className="mt-4 flex-shrink-0">
+              <div className="mt-2 sm:mt-4 flex-shrink-0">
                 <Button
                   onClick={handleRegisterTurno}
                   disabled={isSubmittingTurno ||
                     !selectedCoccion ||
                     !selectedCargo ||
-                    (limitePuestos > 0 && puestosSeleccionados !== limitePuestos && tipoPersonal === "interno")}
-                  className="w-full text-xs sm:text-sm"
+                    (tipoPersonal === "interno" && !Object.values(personalSeleccionado).some(Boolean)) ||
+                    (tipoPersonal === "externo" && !nombreExterno.trim())}
+                  className="w-full text-xs sm:text-sm h-8 sm:h-10"
                 >
                   {isSubmittingTurno ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <Loader2 className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4 animate-spin" />
                       Guardando...
                     </>
                   ) : (
@@ -1707,14 +1706,14 @@ export default function AsistenciaPage() {
             </div>
 
             {/* Columna de la tabla de turnos registrados */}
-            <div className="flex flex-col gap-3 overflow-hidden h-full">
+            <div className="flex flex-col gap-2 sm:gap-3 overflow-hidden h-full">
               <div className="text-xs sm:text-sm font-medium">
                 Turnos registrados:
               </div>
               <div className="border rounded-md flex-grow overflow-hidden">
                 {cargandoTurnos ? (
                   <div className="h-full flex items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <Loader2 className="h-4 sm:h-6 w-4 sm:w-6 animate-spin text-primary" />
                     <span className="ml-2 text-xs sm:text-sm">Cargando turnos...</span>
                   </div>
                 ) : !selectedCoccion ? (
@@ -1730,43 +1729,43 @@ export default function AsistenciaPage() {
                     <Table>
                       <TableHeader className="sticky top-0 bg-white z-10">
                         <TableRow>
-                          <TableHead className="text-xs sm:text-sm">ID</TableHead>
-                          <TableHead className="text-xs sm:text-sm">Horno</TableHead>
-                          <TableHead className="text-xs sm:text-sm">Personal</TableHead>
-                          <TableHead className="text-xs sm:text-sm">Cargo</TableHead>
-                          <TableHead className="text-xs sm:text-sm">Fecha</TableHead>
-                          <TableHead className="text-xs sm:text-sm">Acciones</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">ID</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Horno</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Personal</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Cargo</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Fecha</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {turnosRegistrados.map((turno) => (
                           <TableRow key={turno.id_coccion_personal}>
-                            <TableCell className="text-xs sm:text-sm py-1">
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
                               {turno.coccion_id_coccion}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1">
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
                               {turno.nombre_horno || getNombreHorno(
                                 cocciones.find(c => c.id_coccion === turno.coccion_id_coccion)?.horno_id_horno ?? 0
                               )}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1">
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
                               {turno.personal_externo || turno.nombre_personal || "Sin nombre"}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1">
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
                               {turno.cargo || getNombreCargo(turno.cargo_coccion_id_cargo_coccion)}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1">
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
                               {formatDate(turno.fecha)}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1">
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
                               <Button 
                                 variant="ghost" 
                                 size="icon"
-                                className="h-7 w-7" 
+                                className="h-6 sm:h-7 w-6 sm:w-7" 
                                 onClick={() => confirmDeleteTurno(turno.id_coccion_personal)}
                                 title="Eliminar turno"
                               >
-                                <X className="h-4 w-4 text-destructive" />
+                                <X className="h-3 sm:h-4 w-3 sm:w-4 text-destructive" />
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -1780,7 +1779,7 @@ export default function AsistenciaPage() {
               <Button
                 variant="outline"
                 onClick={() => setTurnoModalOpen(false)}
-                className="text-xs sm:text-sm flex-shrink-0"
+                className="text-xs sm:text-sm h-8 sm:h-10 flex-shrink-0"
               >
                 Cerrar
               </Button>
@@ -1803,6 +1802,7 @@ export default function AsistenciaPage() {
               variant="outline" 
               onClick={() => setDeleteModalOpen(false)} 
               disabled={deletingTurno}
+              className="text-xs sm:text-sm h-8 sm:h-10"
             >
               Cancelar
             </Button>
@@ -1810,10 +1810,11 @@ export default function AsistenciaPage() {
               variant="destructive" 
               onClick={handleDeleteTurno} 
               disabled={deletingTurno}
+              className="text-xs sm:text-sm h-8 sm:h-10"
             >
               {deletingTurno ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4 animate-spin" />
                   Eliminando...
                 </>
               ) : 'Eliminar'}
