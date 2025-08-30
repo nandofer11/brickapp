@@ -345,6 +345,23 @@ export default function PagoPersonalPage() {
   // estado para manejar la selección de filas en la tabla principal 
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
 
+  // Interfaz para turnos externos
+  interface TurnoExterno {
+    fecha: string;
+    cargo: string;
+    costo: number | string;
+    id_coccion: number;
+    id_semana_coccion?: number;
+    turno_completo: any;
+  }
+
+  interface TurnosExternosPorNombre {
+    [key: string]: TurnoExterno[];
+  }
+
+  // Estado para manejar los turnos de personal externo
+  const [turnosExternosPorNombre, setTurnosExternosPorNombre] = useState<TurnosExternosPorNombre>({});
+
   // Agregar al componente principal, después de los estados existentes
   const [pagoModalOpen, setPagoModalOpen] = useState(false);
   const [selectedPago, setSelectedPago] = useState<ResumenPago | null>(null);
@@ -1033,6 +1050,56 @@ export default function PagoPersonalPage() {
 
     // Ya no necesitamos filtrar los turnos por fecha, pues la API ya los devuelve filtrados por el rango correcto
     const turnosSemana = Array.isArray(turnos) ? turnos : [];
+
+    // Definir interfaces para el personal externo
+    interface PersonalExterno {
+      id_personal: string;
+      nombre_completo: string;
+      estado: number;
+      es_externo: boolean;
+    }
+    
+    // Crear registros de personal externo basados en los turnos
+    const personalesExternos: PersonalExterno[] = [];
+    const turnosExternosPorNombreTemp: TurnosExternosPorNombre = {};
+
+    // Procesar turnos externos y agruparlos por nombre
+    turnosSemana.forEach(turno => {
+      if (turno.personal_externo && !turno.personal_id_personal) {
+        const nombre = turno.personal_externo;
+        
+        // Crear un identificador único para el personal externo (usando prefijo "ext_" + nombre)
+        const idExternoVirtual = `ext_${nombre.toLowerCase().replace(/\s+/g, '_')}`;
+        
+        // Registrar el turno para este personal externo
+        if (!turnosExternosPorNombreTemp[idExternoVirtual]) {
+          turnosExternosPorNombreTemp[idExternoVirtual] = [];
+          
+          // Crear un "personal virtual" para representar al externo en la lista
+          personalesExternos.push({
+            id_personal: idExternoVirtual, // ID virtual
+            nombre_completo: `${nombre} (Externo)`,
+            estado: 1,
+            es_externo: true // Marcador para identificar que es personal externo
+          });
+        }
+        
+        turnosExternosPorNombreTemp[idExternoVirtual].push({
+          fecha: formatDate(turno.fecha), // Usar formatDate para mostrar DD/MM/YYYY
+          cargo: turno.cargo_coccion?.nombre_cargo || 'Sin cargo',
+          costo: turno.cargo_coccion?.costo_cargo || 0,
+          id_coccion: turno.coccion_id_coccion,
+          id_semana_coccion: turno.coccion?.semana_laboral_id_semana_laboral,
+          turno_completo: turno // Guardar el turno completo para referencias futuras
+        });
+      }
+    });
+
+    console.log("Personales externos encontrados:", personalesExternos);
+    console.log("Turnos de personales externos:", turnosExternosPorNombreTemp);
+
+    // Actualizar el estado global con los turnos externos procesados
+    setTurnosExternosPorNombre(turnosExternosPorNombreTemp);
 
     // Crear un registro de turnos por personal para diagnóstico
     const turnosPorPersonal = turnosSemana.reduce((acc, turno) => {
@@ -2946,6 +3013,53 @@ export default function PagoPersonalPage() {
               </TableBody>
             </Table>
           </div>
+
+          {/* Sección para personal externo de cocción */}
+          {Object.keys(turnosExternosPorNombre).length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold mb-2">Personal Externo en Turnos de Cocción</h3>
+              
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Total Turnos</TableHead>
+                      <TableHead>Detalle</TableHead>
+                      <TableHead className="text-right">Total a Pagar</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {Object.entries(turnosExternosPorNombre).map(([idExterno, turnos]) => {
+                      const nombreCompleto = turnos[0].turno_completo.personal_externo;
+                      
+                      // Calculamos el total a pagar
+                      const totalPagar = turnos.reduce((sum, turno) => {
+                        return sum + Number(turno.costo);
+                      }, 0);
+                      
+                      return (
+                        <TableRow key={idExterno}>
+                          <TableCell className="font-medium">{nombreCompleto}</TableCell>
+                          <TableCell>{turnos.length}</TableCell>
+                          <TableCell className="max-w-md">
+                            <div className="flex flex-wrap gap-1">
+                              {turnos.map((turno, idx) => (
+                                <Badge key={idx} variant="outline" className="whitespace-nowrap">
+                                  {turno.fecha} • {turno.cargo} • S/.{Number(turno.costo).toFixed(2)}
+                                </Badge>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">S/. {totalPagar.toFixed(2)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* Tab de pagos realizados */}
