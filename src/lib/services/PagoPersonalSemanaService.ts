@@ -77,6 +77,30 @@ export class PagoPersonalSemanaService {
     }
   }
 
+  // Método específico para crear pago a personal externo
+  async createPagoPersonalExterno(data: any) {
+    try {
+      // Validaciones básicas
+      if (!data.nombre_personal_externo) {
+        throw new Error("El nombre del personal externo es obligatorio");
+      }
+      
+      if (!data.id_semana_laboral) {
+        throw new Error("El ID de semana laboral es obligatorio");
+      }
+      
+      if (!data.total_coccion || Number(data.total_coccion) <= 0) {
+        throw new Error("El monto del pago por cocción debe ser mayor a cero");
+      }
+      
+      // Usar el método específico del repositorio
+      return repository.createPagoPersonalExterno(data);
+    } catch (error) {
+      console.error("Error al crear pago a personal externo:", error);
+      throw new Error(`Error al registrar pago a personal externo: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    }
+  }
+
   async update(id: number, data: Prisma.pago_personal_semanaUpdateInput) {
     return repository.updatePagoPersonalSemana(id, data);
   }

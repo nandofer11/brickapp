@@ -272,6 +272,8 @@ interface PagoRealizado {
   fecha_pago: string;
   personal?: Personal;
   semana_laboral?: SemanaLaboral;
+  es_personal_externo?: boolean;
+  nombre_personal_externo?: string;
   created_at: string;
   updated_at: string;
 }
@@ -366,6 +368,15 @@ export default function PagoPersonalPage() {
   const [pagoModalOpen, setPagoModalOpen] = useState(false);
   const [selectedPago, setSelectedPago] = useState<ResumenPago | null>(null);
   const [formaPago, setFormaPago] = useState<string>("EFECTIVO");
+
+  // Estado para el modal de pago a personal externo
+  const [pagoExternoModalOpen, setPagoExternoModalOpen] = useState(false);
+  const [personalExternoData, setPersonalExternoData] = useState<{
+    idExterno: string;
+    nombre: string;
+    totalPagar: number;
+    turnos: TurnoExterno[];
+  } | null>(null);
 
   const [descuentosModalOpen, setDescuentosModalOpen] = useState(false);
   const [pagoParcialModalOpen, setPagoParcialModalOpen] = useState(false);
@@ -528,6 +539,137 @@ export default function PagoPersonalPage() {
       dateStyle: 'long',
       timeStyle: 'medium'
     });
+  };
+
+  // Función para manejar el pago a personal externo
+  // Estado para controlar el pago de todos los personales externos
+  const [procesandoPagoTotalExterno, setProcesandoPagoTotalExterno] = useState(false);
+
+  // Función para pagar a todos los personales externos
+  const handlePagoTotalPersonalExterno = async () => {
+    try {
+      setProcesandoPagoTotalExterno(true);
+
+      // Obtener todos los datos de personal externo
+      const totalPersonalExterno = Object.entries(turnosExternosPorNombre).length;
+      let procesados = 0;
+
+      // Procesar cada personal externo
+      for (const [idExterno, turnos] of Object.entries(turnosExternosPorNombre)) {
+        const nombreCompleto = turnos[0].turno_completo.personal_externo;
+        const totalPagar = turnos.reduce((sum, turno) => sum + Number(turno.costo), 0);
+
+        // Preparar los datos para el pago
+        const payloadPago = {
+          id_semana_laboral: parseInt(semanaSeleccionada),
+          fecha_pago: new Date().toISOString(),
+          es_personal_externo: true,
+          nombre_personal_externo: nombreCompleto,
+          total_coccion: totalPagar,
+          total_asistencia_pago: 0,
+          total_tareas_extra: 0,
+          total_adelantos: 0,
+          total_descuentos: 0,
+          monto_total: totalPagar,
+          estado: "Pagado",
+        };
+
+        // Realizar la petición para crear el pago
+        const response = await fetch('/api/pagos/personal-semana', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payloadPago),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Error al registrar pago para ${nombreCompleto}`);
+        }
+
+        procesados++;
+        toast.success(`Pago ${procesados}/${totalPersonalExterno}: ${nombreCompleto}`);
+      }
+
+      // Recargar los datos después de procesar todos los pagos
+      // Esta función ahora también carga los pagos realizados
+      if (semanaSeleccionada) {
+        await cargarDatosCompletos(semanaSeleccionada);
+      }
+
+      toast.success(`Se registraron todos los pagos (${procesados}) del personal externo`);
+    } catch (error) {
+      console.error('Error al procesar pagos totales de personal externo:', error);
+      toast.error('Error al procesar los pagos del personal externo');
+    } finally {
+      setProcesandoPagoTotalExterno(false);
+    }
+  };
+
+  const handlePagoPersonalExterno = (idExterno: string, nombre: string, totalPagar: number, turnos: TurnoExterno[]) => {
+    setPersonalExternoData({
+      idExterno,
+      nombre,
+      totalPagar,
+      turnos
+    });
+    setPagoExternoModalOpen(true);
+  };
+
+  // Función para procesar el pago a personal externo
+  const handleSubmitPagoExterno = async () => {
+    if (!personalExternoData) return;
+
+    try {
+      setIsSubmitting(true);
+
+      // Preparar datos para el pago
+      const datosPago = {
+        es_personal_externo: true,
+        nombre_personal_externo: personalExternoData.nombre,
+        id_semana_laboral: Number(semanaSeleccionada),
+        total_coccion: personalExternoData.totalPagar,
+        fecha_pago: new Date().toISOString().split('T')[0],
+        forma_pago: formaPago,
+        estado: "Pagado"
+      };
+
+      console.log("Enviando pago de personal externo:", datosPago);
+
+      // Enviar solicitud al servidor
+      const response = await fetch("/api/pago_personal_semana", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(datosPago),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Error al procesar el pago");
+      }
+
+      // Obtener la respuesta
+      const result = await response.json();
+
+      // Mostrar mensaje de éxito
+      toast.success(`Pago registrado para ${personalExternoData.nombre}`);
+
+      // Cerrar el modal y recargar datos
+      setPagoExternoModalOpen(false);
+      setPersonalExternoData(null);
+
+      // Recargar datos completos para actualizar la vista
+      // Esta función ahora también carga los pagos realizados
+      cargarDatosCompletos(semanaSeleccionada);
+
+    } catch (error) {
+      console.error("Error al procesar pago a personal externo:", error);
+      toast.error(error instanceof Error ? error.message : "Error al procesar el pago");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Función para imprimir el detalle de pago en formato ticket
@@ -847,22 +989,22 @@ export default function PagoPersonalPage() {
       enhancedContent = enhancedContent.replace(/TOTAL SIN DESCUENTO:/g, '<span style="font-size: 9pt; font-weight: 600;">TOTAL SIN DESCUENTO:</span>');
       enhancedContent = enhancedContent.replace(/TOTAL PAGADO:/g, '<span style="font-size: 9pt; font-weight: 600; margin-top: 6mm; display: block;">TOTAL PAGADO:</span>');
       enhancedContent = enhancedContent.replace(/\(Monto final después de descuentos\)/g, '<span style="font-size: 8pt; color: #666;">(Monto final después de descuentos)</span>');
-      
+
       // Mejorar estilos para los valores de los montos totales
-      enhancedContent = enhancedContent.replace(/<div class="text-2xl print:text-\[20pt\]/g, 
+      enhancedContent = enhancedContent.replace(/<div class="text-2xl print:text-\[20pt\]/g,
         '<div style="font-size: 20pt; font-weight: bold; text-align: center; margin: 1mm 0;" class="text-2xl print:text-[20pt]');
-      enhancedContent = enhancedContent.replace(/<div class="text-lg print:text-\[14pt\]/g, 
+      enhancedContent = enhancedContent.replace(/<div class="text-lg print:text-\[14pt\]/g,
         '<div style="font-size: 20pt; font-weight: bold; text-align: center; margin: 1mm 0;" class="text-lg print:text-[20pt]');
 
       // Forzar el estilo de los divisores directamente en el HTML
       enhancedContent = enhancedContent.replace(/<div class="my-1 border-t/g, '<div style="border-top: 0.5px solid #333; margin: 3mm 0; display: block; height: 0; width: 100%;" class="my-1 border-t');
-      
+
       // Asegurar que el pie de página esté centrado
-      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">Documento informativo - No constituye comprobante oficial<\/p>/g, 
+      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">Documento informativo - No constituye comprobante oficial<\/p>/g,
         '<p style="text-align: center; font-size: 7pt; margin-bottom: 0.5mm;">Documento informativo - No constituye comprobante oficial</p>');
-      
+
       // Asegurar que los asteriscos estén centrados
-      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">\* \* \* \* \* \* \* \* \* \*<\/p>/g, 
+      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">\* \* \* \* \* \* \* \* \* \*<\/p>/g,
         '<p style="text-align: center; font-size: 7pt; margin-bottom: 0.5mm;">* * * * * * * * * *</p>');
 
       // No aplicar bordes a las filas de las tablas
@@ -933,9 +1075,7 @@ export default function PagoPersonalPage() {
     if (semanaSeleccionada) {
       // Llamar SOLO a cargarDatosCompletos para centralizar las cargas
       cargarDatosCompletos(semanaSeleccionada);
-
-      // Siempre cargar pagos realizados al cambiar de semana
-      fetchPagosRealizados(semanaSeleccionada);
+      // Ya no es necesario llamar a fetchPagosRealizados aquí, ya se hace en cargarDatosCompletos
     }
   }, [semanaSeleccionada]);
 
@@ -963,29 +1103,32 @@ export default function PagoPersonalPage() {
       setIsLoading(true);
       console.log("Cargando datos completos para semana:", idSemana);
 
-      // Realizar todas las peticiones en paralelo
+      // Realizar todas las peticiones en paralelo, incluyendo pagos realizados
       const [
         personalResponse,
         asistenciasResponse,
         adelantosResponse,
         tareasExtraResponse,
-        turnosResponse
+        turnosResponse,
+        pagosRealizadosResponse
       ] = await Promise.all([
         fetch("/api/personal"),
         fetch(`/api/asistencia?id_semana=${idSemana}`),
         fetch("/api/adelanto_pago?estado=Pendiente"),
         fetch(`/api/tarea_extra?id_semana=${idSemana}`),
         // La API ahora filtrará por rango de fechas de la semana, no solo por id_semana de la cocción
-        fetch(`/api/coccion_turno?id_semana=${idSemana}`)
+        fetch(`/api/coccion_turno?id_semana=${idSemana}`),
+        fetch(`/api/pago_personal_semana?id_semana=${idSemana}`)
       ]);
 
       // Procesar todas las respuestas en paralelo
-      const [personal, asistencias, adelantos, tareasExtra, turnos] = await Promise.all([
+      const [personal, asistencias, adelantos, tareasExtra, turnos, pagosRealizadosData] = await Promise.all([
         personalResponse.json(),
         asistenciasResponse.json(),
         adelantosResponse.json(),
         tareasExtraResponse.json(),
-        turnosResponse.json()
+        turnosResponse.json(),
+        pagosRealizadosResponse.json()
       ]);
 
       // Verificar si hay datos de turnos y mostrar para diagnóstico
@@ -1001,11 +1144,21 @@ export default function PagoPersonalPage() {
       setPersonal(personalActivo);
       setAdelantos(adelantos);
       setTareasExtra(tareasExtra);
+      setPagosRealizados(pagosRealizadosData); // Actualizar pagos realizados
+      setLoadingPagosRealizados(false); // Indicar que ya no se está cargando
 
       // IMPORTANTE: Usar solo UN setResumenPagos al final para evitar renderizaciones parciales
       // Generar el resumen de pagos una sola vez con todos los datos
-      const resumenGenerado = await generarResumenPagos(personalActivo, asistencias, adelantos, tareasExtra, turnos, idSemana);
-      
+      const resumenGenerado = await generarResumenPagos(
+        personalActivo, 
+        asistencias, 
+        adelantos, 
+        tareasExtra, 
+        turnos, 
+        idSemana, 
+        pagosRealizadosData // Pasamos los pagos realizados al generador de resumen
+      );
+
       // Actualizar el estado con el resumen generado
       setResumenPagos(resumenGenerado);
 
@@ -1023,7 +1176,8 @@ export default function PagoPersonalPage() {
     adelantos: any[],
     tareasExtra: any[],
     turnos: any[],
-    idSemana: string
+    idSemana: string,
+    pagosRealizados: any[] = [] // Parámetro opcional para pagos realizados
   ) => {
     // Obtener el rango de fechas de la semana seleccionada
     const semanaSeleccionadaObj = semanasLaboral.find(s => s.id_semana_laboral.toString() === idSemana);
@@ -1058,7 +1212,7 @@ export default function PagoPersonalPage() {
       estado: number;
       es_externo: boolean;
     }
-    
+
     // Crear registros de personal externo basados en los turnos
     const personalesExternos: PersonalExterno[] = [];
     const turnosExternosPorNombreTemp: TurnosExternosPorNombre = {};
@@ -1067,14 +1221,27 @@ export default function PagoPersonalPage() {
     turnosSemana.forEach(turno => {
       if (turno.personal_externo && !turno.personal_id_personal) {
         const nombre = turno.personal_externo;
-        
+
         // Crear un identificador único para el personal externo (usando prefijo "ext_" + nombre)
         const idExternoVirtual = `ext_${nombre.toLowerCase().replace(/\s+/g, '_')}`;
         
+        // Verificar si ya existe un pago para este personal externo en esta semana
+        const yaExistePago = pagosRealizados.some(
+          pago => pago.id_semana_laboral.toString() === idSemana &&
+                 pago.es_personal_externo === true &&
+                 pago.nombre_personal_externo === nombre
+        );
+        
+        // Si ya existe pago, no incluir este personal externo en la lista
+        if (yaExistePago) {
+          console.log(`Personal externo ${nombre} ya tiene pago registrado para esta semana.`);
+          return; // Skip this iteration
+        }
+
         // Registrar el turno para este personal externo
         if (!turnosExternosPorNombreTemp[idExternoVirtual]) {
           turnosExternosPorNombreTemp[idExternoVirtual] = [];
-          
+
           // Crear un "personal virtual" para representar al externo en la lista
           personalesExternos.push({
             id_personal: idExternoVirtual, // ID virtual
@@ -1083,7 +1250,7 @@ export default function PagoPersonalPage() {
             es_externo: true // Marcador para identificar que es personal externo
           });
         }
-        
+
         turnosExternosPorNombreTemp[idExternoVirtual].push({
           fecha: formatDate(turno.fecha), // Usar formatDate para mostrar DD/MM/YYYY
           cargo: turno.cargo_coccion?.nombre_cargo || 'Sin cargo',
@@ -1201,7 +1368,7 @@ export default function PagoPersonalPage() {
 
       // Calcular el monto total de adelantos pendientes (restando los pagos parciales)
       let total_adelantos = 0;
-      
+
       adelantosPersonal.forEach(adelanto => {
         const pagoParcial = pagosParciales.find(p => p.adelanto_id === adelanto.id_adelanto_pago);
         const montoPagado = pagoParcial ? pagoParcial.total_pagado : 0;
@@ -2103,7 +2270,7 @@ export default function PagoPersonalPage() {
   function handlePagoClick(resumen: ResumenPago) {
     // Limpiar los descuentos seleccionados
     setDescuentosSeleccionados([]);
-    
+
     // Reiniciar la forma de pago a EFECTIVO
     setFormaPago("EFECTIVO");
 
@@ -2395,8 +2562,7 @@ export default function PagoPersonalPage() {
       setDescuentosSeleccionados([]);
       setDescuentoTemp({ monto: '', motivo: '' });
 
-      // 4. Recargar datos
-      await fetchPagosRealizados(semanaSeleccionada);
+      // 4. Recargar datos (ahora cargarDatosCompletos también carga los pagos realizados)
       await cargarDatosCompletos(semanaSeleccionada);
 
     } catch (error) {
@@ -2551,8 +2717,7 @@ export default function PagoPersonalPage() {
       setShowConfirmDeletePagoModal(false);
       setPagoToDelete(null);
 
-      // Recargar datos
-      await fetchPagosRealizados(semanaSeleccionada);
+      // Recargar datos (ahora cargarDatosCompletos también carga los pagos realizados)
       await cargarDatosCompletos(semanaSeleccionada);
     } catch (error) {
       console.error("Error al eliminar el pago:", error);
@@ -2660,25 +2825,25 @@ export default function PagoPersonalPage() {
       // Mejorar el contenido HTML para impresión
       let enhancedContent = contenido;
 
-       // Añadir un contenedor con margen para asegurar espaciado en todos los lados y aplicar fuente Arial globalmente
+      // Añadir un contenedor con margen para asegurar espaciado en todos los lados y aplicar fuente Arial globalmente
       enhancedContent = `<div style="padding: 4mm; margin: 2mm auto; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact;">${enhancedContent}</div>`;
 
       // Asegurar que el pie de página esté centrado
-      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">Documento informativo - No constituye comprobante oficial<\/p>/g, 
+      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">Documento informativo - No constituye comprobante oficial<\/p>/g,
         '<p style="text-align: center; font-size: 7pt; margin-bottom: 0.5mm;">Documento informativo - No constituye comprobante oficial</p>');
-      
+
       // Asegurar que los asteriscos estén centrados
-      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">\* \* \* \* \* \* \* \* \* \*<\/p>/g, 
+      enhancedContent = enhancedContent.replace(/<p class="mb-0.5 print:text-\[7pt\] print:text-center text-center">\* \* \* \* \* \* \* \* \* \*<\/p>/g,
         '<p style="text-align: center; font-size: 7pt; margin-bottom: 0.5mm;">* * * * * * * * * *</p>');
-        
+
       // Mejorar el formato de los títulos y valores de los totales
       enhancedContent = enhancedContent.replace(/<div class="text-sm font-semibold mb-1 subtitle print:text-\[9pt\]">(TOTAL SIN DESCUENTO:|TOTAL FINAL PAGADO:)<\/div>/g,
         '<div style="font-size: 9pt; font-weight: 600; text-align: center; margin: 1mm 0;">$1</div>');
-        
+
       // Mejorar el formato de los valores de los totales
       enhancedContent = enhancedContent.replace(/<div class="total text-2xl font-bold (text-blue-600|text-green-600) print:text-\[20pt\] print:text-black">(S\/\. [\d,.]+)<\/div>/g,
         '<div style="font-size: 20pt; font-weight: bold; text-align: center; margin: 3mm 0;">$2</div>');
-        
+
 
 
       printWindow.document.write(enhancedContent);
@@ -2744,14 +2909,34 @@ export default function PagoPersonalPage() {
                   <div>
                     <CardTitle className="text-sm font-medium">Total sin descuento</CardTitle>
                     <CardDescription className="text-[11px] text-muted-foreground">
-                      Asistencia, T.Extra, Cocción
+                      Asistencia, T.Extra, Cocción, P.Externo
                     </CardDescription>
                   </div>
                   <div className="text-2xl font-bold text-blue-600">
-                    S/. {resumenPagos.reduce((sum, item) =>
-                      sum + item.total_asistencia + item.total_tareas_extra + item.total_coccion,
-                      0
-                    ).toFixed(2)}
+                    S/. {(() => {
+                      // Suma de los totales del personal regular
+                      const totalRegular = resumenPagos.reduce((sum, item) =>
+                        sum + item.total_asistencia + item.total_tareas_extra + item.total_coccion,
+                        0
+                      );
+
+                      // Suma de los totales del personal externo pendiente de pago
+                      const totalExternoPendiente = Object.values(turnosExternosPorNombre).reduce((total, turnos) => {
+                        const turnoTotal = turnos.reduce((sum, turno) => sum + Number(turno.costo), 0);
+                        return total + turnoTotal;
+                      }, 0);
+                      
+                      // Suma de pagos ya realizados a personal externo para la semana seleccionada
+                      const totalExternoYaPagado = pagosRealizados
+                        .filter(pago => 
+                          pago.id_semana_laboral.toString() === semanaSeleccionada && 
+                          pago.es_personal_externo === true
+                        )
+                        .reduce((sum, pago) => sum + Number(pago.total_pago_final), 0);
+
+                      // Total combinado (regular + externo pendiente + externo ya pagado)
+                      return (totalRegular + totalExternoPendiente + totalExternoYaPagado).toFixed(2);
+                    })()}
                   </div>
                 </div>
               </CardContent>
@@ -2778,7 +2963,7 @@ export default function PagoPersonalPage() {
             </Card>
           </div>
         </div>
-          
+
         {/* Botones en una fila en pantallas grandes, organizados en móvil */}
         <div className="flex flex-col gap-3">
           {/* Botones Cerrar Semana e Imprimir Resumen */}
@@ -2823,7 +3008,7 @@ export default function PagoPersonalPage() {
                 Imprimir Resumen
               </Button>
             )}
-            
+
             {/* Botones de Adelanto Pago y Agregar Tarea Extra siempre en la misma fila */}
             <Button
               onClick={() => setAdelantoModalOpen(true)}
@@ -3018,7 +3203,7 @@ export default function PagoPersonalPage() {
           {Object.keys(turnosExternosPorNombre).length > 0 && (
             <div className="mt-6">
               <h3 className="text-lg font-semibold mb-2">Personal Externo en Turnos de Cocción</h3>
-              
+
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
@@ -3032,12 +3217,12 @@ export default function PagoPersonalPage() {
                   <TableBody>
                     {Object.entries(turnosExternosPorNombre).map(([idExterno, turnos]) => {
                       const nombreCompleto = turnos[0].turno_completo.personal_externo;
-                      
+
                       // Calculamos el total a pagar
                       const totalPagar = turnos.reduce((sum, turno) => {
                         return sum + Number(turno.costo);
                       }, 0);
-                      
+
                       return (
                         <TableRow key={idExterno}>
                           <TableCell className="font-medium">{nombreCompleto}</TableCell>
@@ -3051,13 +3236,27 @@ export default function PagoPersonalPage() {
                               ))}
                             </div>
                           </TableCell>
-                          <TableCell className="text-right font-semibold">S/. {totalPagar.toFixed(2)}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            <div className="flex items-center justify-end gap-2">
+                              <span>S/. {totalPagar.toFixed(2)}</span>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handlePagoPersonalExterno(idExterno, nombreCompleto, totalPagar, turnos)}
+                                className="ml-2"
+                              >
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                Pagar
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
                   </TableBody>
                 </Table>
               </div>
+
             </div>
           )}
         </TabsContent>
@@ -3091,7 +3290,9 @@ export default function PagoPersonalPage() {
                       <TableRow key={pago.id_pago_personal_semana}>
                         <TableCell className="text-center">{pago.id_personal}</TableCell>
                         <TableCell className="font-medium">
-                          {personalObj?.nombre_completo || `Personal ID: ${pago.id_personal}`}
+                          {pago.es_personal_externo 
+                            ? `${pago.nombre_personal_externo} (Externo)` 
+                            : (personalObj?.nombre_completo || `Personal ID: ${pago.id_personal}`)}
                         </TableCell>
                         <TableCell className="text-center">
                           {formatDate(pago.fecha_pago)}
@@ -4762,10 +4963,30 @@ export default function PagoPersonalPage() {
               <div className="text-center my-2 print:my-3 px-4">
                 <div className="text-sm font-semibold mb-1 subtitle print:text-[9pt]">TOTAL SIN DESCUENTO:</div>
                 <div className="total text-2xl font-bold text-blue-600 print:text-[20pt] print:text-black">
-                  S/. {resumenPagos.reduce((sum, item) =>
-                    sum + item.total_asistencia + item.total_tareas_extra + item.total_coccion,
-                    0
-                  ).toFixed(2)}
+                  S/. {(() => {
+                    // Suma de los totales del personal regular
+                    const totalRegular = resumenPagos.reduce((sum, item) =>
+                      sum + item.total_asistencia + item.total_tareas_extra + item.total_coccion,
+                      0
+                    );
+
+                    // Suma de los totales del personal externo pendiente de pago
+                    const totalExternoPendiente = Object.values(turnosExternosPorNombre).reduce((total, turnos) => {
+                      const turnoTotal = turnos.reduce((sum, turno) => sum + Number(turno.costo), 0);
+                      return total + turnoTotal;
+                    }, 0);
+                    
+                    // Suma de pagos ya realizados a personal externo para la semana seleccionada
+                    const totalExternoYaPagado = pagosRealizados
+                      .filter(pago => 
+                        pago.id_semana_laboral.toString() === semanaSeleccionada && 
+                        pago.es_personal_externo === true
+                      )
+                      .reduce((sum, pago) => sum + Number(pago.total_pago_final), 0);
+
+                    // Total combinado (regular + externo pendiente + externo ya pagado)
+                    return (totalRegular + totalExternoPendiente + totalExternoYaPagado).toFixed(2);
+                  })()}
                 </div>
               </div>
 
@@ -4806,6 +5027,83 @@ export default function PagoPersonalPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de pago para personal externo */}
+      <Dialog open={pagoExternoModalOpen} onOpenChange={setPagoExternoModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Registrar Pago a Personal Externo</DialogTitle>
+            <DialogDescription>
+              Confirme el pago para el personal externo que participó en turnos de cocción.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {personalExternoData && (
+              <>
+                <div className="bg-muted p-3 rounded-md">
+                  <h4 className="text-base font-medium mb-2">{personalExternoData.nombre}</h4>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total turnos:</span>
+                      <span>{personalExternoData.turnos.length}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold">
+                      <span>Total a pagar:</span>
+                      <span>S/. {personalExternoData.totalPagar.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="forma_pago">Forma de pago</Label>
+                  <Select
+                    value={formaPago}
+                    onValueChange={setFormaPago}
+                  >
+                    <SelectTrigger id="forma_pago">
+                      <SelectValue placeholder="Seleccione forma de pago" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                      <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                      <SelectItem value="YAPE">Yape</SelectItem>
+                      <SelectItem value="PLIN">Plin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPagoExternoModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSubmitPagoExterno}
+              disabled={isSubmitting}
+              className="gap-1"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <DollarSign className="h-4 w-4" />
+                  Registrar Pago
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
+}
+
+function cargarDatosSemana(semanaSeleccionada: string) {
+  throw new Error("Function not implemented.");
 }

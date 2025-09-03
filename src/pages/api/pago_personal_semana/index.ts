@@ -43,8 +43,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       case "POST":
         try {
           console.log("Datos recibidos en API:", req.body);
-          const nuevo = await PagoPersonalSemanaService.create(req.body);
-          return res.status(201).json(nuevo);
+          
+          // Verificar si es un pago a personal externo
+          if (req.body.es_personal_externo) {
+            // Usar el método específico para personal externo
+            const nuevoPagoExterno = await PagoPersonalSemanaService.createPagoPersonalExterno(req.body);
+            return res.status(201).json(nuevoPagoExterno);
+          } else {
+            // Pago normal a personal interno
+            const nuevo = await PagoPersonalSemanaService.create(req.body);
+            return res.status(201).json(nuevo);
+          }
         } catch (error) {
           console.error("Error detallado al crear pago:", error);
           return res.status(400).json({ 
