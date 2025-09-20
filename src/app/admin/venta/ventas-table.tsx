@@ -30,7 +30,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import EditarVentaModal from "@/components/modals/editar-venta-modal";
 import VerDetalleVentaModal from "@/components/modals/ver-detalle-venta-modal";
+import EntregaVentaModal from "@/components/modals/entrega-venta-modal";
+import Pagination from "@/components/ui/pagination";
 import { formatDate } from "@/utils/dateFormat";
+import { formatSoles } from "@/utils/currencyFormat";
 
 interface Venta {
   id_venta: number;
@@ -42,9 +45,10 @@ interface Venta {
     ruc?: string;
   };
   total: number | string; // Puede ser número o cadena
-  estado_pago: 'PENDIENTE' | 'CANCELADO' | 'PARCIAL' |'ANULADO';
-  estado_entrega: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO';
+  estado_pago: 'PENDIENTE' | 'CANCELADO' | 'PARCIAL' | 'ANULADO' | 'ANULADA';
+  estado_entrega: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO' | 'ANULADA';
   tipo_venta: 'DIRECTA' | 'CONTRATO';
+  estado_venta?: 'ACTIVA' | 'CERRADA' | 'ANULADA'; // Nuevo campo para el estado de la venta
   adelanto?: number | string; // Campo opcional, puede ser número o cadena
   saldo_pendiente?: number | string; // Campo opcional, puede ser número o cadena
   fecha?: string; // Campo alternativo para fecha
@@ -60,19 +64,29 @@ export default function VentasTable() {
   const [editVentaId, setEditVentaId] = useState<number | null>(null);
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [detalleVentaId, setDetalleVentaId] = useState<number | null>(null);
+  const [showEntregaModal, setShowEntregaModal] = useState(false);
+  const [entregaVentaId, setEntregaVentaId] = useState<number | null>(null);
+  
+  // Estado para paginación
+  const [paginaActual, setPaginaActual] = useState(1);
+  const [totalPaginas, setTotalPaginas] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [tamañoPagina] = useState(20);
   
   useEffect(() => {
-    fetchVentas();
-  }, []);
+    fetchVentas(paginaActual);
+  }, [paginaActual]);
 
-  const fetchVentas = async () => {
+  const fetchVentas = async (pagina = 1) => {
     try {
       setIsLoading(true);
-      const res = await fetch('/api/ventas');
+      const res = await fetch(`/api/ventas?page=${pagina}&pageSize=${tamañoPagina}`);
       if (!res.ok) throw new Error('Error al cargar ventas');
       
       const data = await res.json();
-      setVentas(data);
+      setVentas(data.ventas);
+      setTotalPaginas(data.meta.totalPages);
+      setTotalItems(data.meta.totalItems);
     } catch (error) {
       console.error('Error al cargar ventas:', error);
       toast.error('Error al cargar el listado de ventas');
@@ -96,11 +110,11 @@ export default function VentasTable() {
 
   const agregarEntrega = (venta: Venta) => {
     console.log("Agregar entrega a venta:", venta);
-    // Implementar navegación a página de entrega
-    window.location.href = `/admin/venta/entrega/${venta.id_venta}`;
+    setEntregaVentaId(venta.id_venta);
+    setShowEntregaModal(true);
   };
 
-  const confirmarEliminar = (venta: Venta) => {
+  const confirmarAnular = (venta: Venta) => {
     setVentaSeleccionada(venta);
     setShowDeleteDialog(true);
   };
@@ -113,14 +127,16 @@ export default function VentasTable() {
         method: 'DELETE',
       });
       
-      if (!res.ok) throw new Error('Error al eliminar la venta');
+      if (!res.ok) throw new Error('Error al anular la venta');
       
-      toast.success('Venta eliminada correctamente');
-      // Actualizar la lista de ventas
-      setVentas(ventas.filter(v => v.id_venta !== ventaSeleccionada.id_venta));
+      const data = await res.json();
+      toast.success('Venta anulada correctamente');
+      
+      // Recargar las ventas desde el servidor para mantener la lista actualizada
+      fetchVentas(paginaActual);
     } catch (error) {
-      console.error('Error al eliminar venta:', error);
-      toast.error('Error al eliminar la venta');
+      console.error('Error al anular venta:', error);
+      toast.error('Error al anular la venta');
     } finally {
       setShowDeleteDialog(false);
       setVentaSeleccionada(null);
@@ -128,13 +144,14 @@ export default function VentasTable() {
   };
 
   // Función para mostrar el estado de pago con un badge de color adecuado
-  const renderEstadoPago = (estado: 'PENDIENTE' | 'CANCELADO' |'PARCIAL'| 'ANULADO') => {
+  const renderEstadoPago = (estado: 'PENDIENTE' | 'CANCELADO' |'PARCIAL'| 'ANULADO' | 'ANULADA') => {
     switch (estado) {
       case 'PENDIENTE':
         return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Pendiente</Badge>;
       case 'CANCELADO':
         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Cancelado</Badge>;
       case 'ANULADO':
+      case 'ANULADA':
         return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Anulado</Badge>;
       case 'PARCIAL':
         return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Parcial</Badge>;
@@ -144,7 +161,7 @@ export default function VentasTable() {
   };
 
   // Función para mostrar el estado de entrega con un badge de color adecuado
-  const renderEstadoEntrega = (estado: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO') => {
+  const renderEstadoEntrega = (estado: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO' | 'ANULADA') => {
     switch (estado) {
       case 'NO ENTREGADO':
         return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">No Entregado</Badge>;
@@ -152,8 +169,24 @@ export default function VentasTable() {
         return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Parcial</Badge>;
       case 'ENTREGADO':
         return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Entregado</Badge>;
+      case 'ANULADA':
+        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Anulada</Badge>;
       default:
         return estado;
+    }
+  };
+
+  // Función para mostrar el estado de la venta con un badge de color adecuado
+  const renderEstadoVenta = (estado?: 'ACTIVA' | 'CERRADA' | 'ANULADA') => {
+    switch (estado) {
+      case 'ACTIVA':
+        return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">Activa</Badge>;
+      case 'CERRADA':
+        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Cerrada</Badge>;
+      case 'ANULADA':
+        return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Anulada</Badge>;
+      default:
+        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Activa</Badge>;
     }
   };
 
@@ -173,53 +206,55 @@ export default function VentasTable() {
   });
 
   return (
-    <Card className="shadow-sm">
-      <CardHeader className="pb-2">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
-          <div>
-            <CardTitle>Listado de Ventas</CardTitle>
-            <p className="text-xs md:text-sm text-muted-foreground">
-              Consulte todas las ventas registradas en el sistema.
-            </p>
+    <>
+      <Card className="shadow-sm">
+        <CardHeader className="pb-2">
+          <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
+            <div>
+              <CardTitle>Listado de Ventas</CardTitle>
+              <p className="text-xs md:text-sm text-muted-foreground">
+                Consulte todas las ventas registradas en el sistema.
+              </p>
+            </div>
+            <div className="w-full sm:w-auto">
+              <Input
+                placeholder="Buscar venta..."
+                value={filtro}
+                onChange={(e) => setFiltro(e.target.value)}
+                className="text-xs md:text-sm"
+              />
+            </div>
           </div>
-          <div className="w-full sm:w-auto">
-            <Input
-              placeholder="Buscar venta..."
-              value={filtro}
-              onChange={(e) => setFiltro(e.target.value)}
-              className="text-xs md:text-sm"
-            />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          // Skeleton loader
-          <div className="space-y-2">
-            {Array(5).fill(0).map((_, i) => (
-              <Skeleton key={i} className="w-full h-12" />
-            ))}
-          </div>
-        ) : ventas.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">No hay ventas registradas.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableCaption>Lista total de {ventasFiltradas.length} ventas</TableCaption>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-20">ID</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Estado Pago</TableHead>
-                  <TableHead>Estado Entrega</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
+            // Skeleton loader
+            <div className="space-y-2">
+              {Array(5).fill(0).map((_, i) => (
+                <Skeleton key={i} className="w-full h-12" />
+              ))}
+            </div>
+          ) : ventas.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No hay ventas registradas.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableCaption>Lista total de {ventasFiltradas.length} ventas</TableCaption>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-20">ID</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead>Estado Pago</TableHead>
+                    <TableHead>Estado Entrega</TableHead>
+                    <TableHead>Estado Venta</TableHead>
+                    <TableHead className="text-right">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {ventasFiltradas.map((venta) => (
                   <TableRow key={venta.id_venta}>
@@ -241,7 +276,7 @@ export default function VentasTable() {
                     <TableCell>
                       {venta.cliente ? (
                         <div>
-                          <div className="font-medium truncate max-w-[150px]">
+                          <div className="font-medium truncate max-w-[250px]">
                             {venta.cliente.nombres_apellidos || venta.cliente.razon_social || "Cliente Varios"}
                           </div>
                           <div className="text-xs text-muted-foreground">
@@ -253,9 +288,10 @@ export default function VentasTable() {
                       )}
                     </TableCell>
                     <TableCell>{venta.tipo_venta}</TableCell>
-                    <TableCell className="text-right font-medium">S/ {parseFloat(venta.total.toString()).toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-medium">{formatSoles(venta.total)}</TableCell>
                     <TableCell>{renderEstadoPago(venta.estado_pago)}</TableCell>
                     <TableCell>{renderEstadoEntrega(venta.estado_entrega)}</TableCell>
+                    <TableCell>{renderEstadoVenta(venta.estado_venta)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end space-x-1">
                         <Button 
@@ -282,44 +318,60 @@ export default function VentasTable() {
                           className="h-8 w-8" 
                           title="Agregar entrega"
                           onClick={() => agregarEntrega(venta)}
+                          disabled={venta.estado_venta === 'ANULADA' || venta.estado_venta === 'CERRADA'}
                         >
                           <Plus className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" 
-                          title="Eliminar venta"
-                          onClick={() => confirmarEliminar(venta)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        {venta.estado_venta !== 'ANULADA' && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-destructive hover:text-accent hover:bg-destructive" 
+                            title="Anular venta"
+                            onClick={() => confirmarAnular(venta)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+            
+            {/* Paginación */}
+            <Pagination 
+              currentPage={paginaActual}
+              totalPages={totalPaginas}
+              onPageChange={(page) => setPaginaActual(page)}
+            />
+            
+            {/* Mostrar info de paginación */}
+            <div className="text-sm text-muted-foreground text-center mt-2 mb-4">
+              Mostrando {ventas.length} de {totalItems} ventas | Página {paginaActual} de {totalPaginas}
+            </div>
           </div>
         )}
       </CardContent>
-      
-      {/* Diálogo de confirmación para eliminar venta */}
+    </Card>
+
+      {/* Diálogo de confirmación para eliminar/anular venta */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Está seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará permanentemente la venta #{ventaSeleccionada?.id_venta} 
-              {ventaSeleccionada?.cliente && ventaSeleccionada.cliente.nombres_apellidos && 
-                ` de ${ventaSeleccionada.cliente.nombres_apellidos}`}. 
-              Esta acción no se puede deshacer.
+              Esta acción anulará la venta #{ventaSeleccionada?.id_venta} 
+              {ventaSeleccionada?.cliente?.nombres_apellidos && 
+                ` de ${ventaSeleccionada?.cliente?.nombres_apellidos}`}. 
+              Una venta anulada no podrá ser utilizada para entregas o pagos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={eliminarVenta} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Eliminar
+              Anular
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -333,7 +385,7 @@ export default function VentasTable() {
           setEditVentaId(null);
         }}
         ventaId={editVentaId}
-        onVentaActualizada={fetchVentas}
+        onVentaActualizada={() => fetchVentas(paginaActual)}
       />
 
       {/* Modal para ver detalle de venta */}
@@ -345,6 +397,17 @@ export default function VentasTable() {
         }}
         ventaId={detalleVentaId}
       />
-    </Card>
+
+      {/* Modal para registrar entrega de venta */}
+      <EntregaVentaModal
+        isOpen={showEntregaModal}
+        onClose={() => {
+          setShowEntregaModal(false);
+          setEntregaVentaId(null);
+        }}
+        ventaId={entregaVentaId}
+        onEntregaRegistrada={() => fetchVentas(paginaActual)}
+      />
+    </>
   );
 }

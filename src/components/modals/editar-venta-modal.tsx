@@ -31,6 +31,28 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Trash, Plus, Edit, Save, X, MinusCircle, PlusCircle, Check } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+
+interface Producto {
+  id_producto: number;
+  nombre: string;
+  precio_venta: number;
+  stock?: number;
+}
 
 interface Cliente {
   id_cliente?: number;
@@ -74,9 +96,10 @@ interface Venta {
   fecha_venta?: string;
   cliente?: Cliente;
   total: number | string;
-  estado_pago: 'PENDIENTE' | 'PAGADO' | 'ANULADO';
-  estado_entrega: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO';
+  estado_pago: 'PENDIENTE' | 'ANULADO' | 'ANULADA' | 'CANCELADO' | 'PARCIAL';
+  estado_entrega: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO' | 'ANULADA';
   tipo_venta: 'DIRECTA' | 'CONTRATO';
+  estado_venta?: 'ACTIVA' | 'CERRADA' | 'ANULADA';
   adelanto?: number | string;
   saldo_pendiente?: number | string;
   observaciones?: string;
@@ -99,21 +122,56 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
   const [isSaving, setIsSaving] = useState(false);
 
   // Estados para editar la venta
-  const [estadoPago, setEstadoPago] = useState<'PENDIENTE' | 'PAGADO' | 'ANULADO'>('PENDIENTE');
-  const [estadoEntrega, setEstadoEntrega] = useState<'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO'>('NO ENTREGADO');
+  const [estadoPago, setEstadoPago] = useState<'PENDIENTE' | 'ANULADO' | 'ANULADA' | 'CANCELADO' | 'PARCIAL'>('PENDIENTE');
+  const [estadoEntrega, setEstadoEntrega] = useState<'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO' | 'ANULADA'>('NO ENTREGADO');
   const [tipoComprobante, setTipoComprobante] = useState<'BOLETA' | 'FACTURA' | 'NINGUNO'>('NINGUNO');
   const [adelanto, setAdelanto] = useState<number>(0);
   const [observaciones, setObservaciones] = useState<string>("");
   const [isAdelantoDirty, setIsAdelantoDirty] = useState(false);
+  
+  // Estados para la edición de detalles y servicios
+  const [detallesVenta, setDetallesVenta] = useState<DetalleVenta[]>([]);
+  const [serviciosVenta, setServiciosVenta] = useState<ServicioVenta[]>([]);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [showAddProductoForm, setShowAddProductoForm] = useState(false);
+  const [selectedProducto, setSelectedProducto] = useState<number | null>(null);
+  const [cantidadNueva, setCantidadNueva] = useState<number>(1);
+  const [precioNuevo, setPrecioNuevo] = useState<number>(0);
+  const [editandoDetalle, setEditandoDetalle] = useState<number | null>(null);
+  
+  // Estados para servicios
+  const [editandoServicios, setEditandoServicios] = useState(false);
+  const [requiereFlete, setRequiereFlete] = useState(false);
+  const [requiereDescarga, setRequiereDescarga] = useState(false);
+  const [direccionEntrega, setDireccionEntrega] = useState("");
+  const [costoFlete, setCostoFlete] = useState<number>(0);
+  const [costoDescarga, setCostoDescarga] = useState<number>(0);
+  
+  // Estado para manejar si hay cambios pendientes
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     if (isOpen && ventaId) {
       fetchVentaDetalle(ventaId);
+      fetchProductos();
     } else {
       setVenta(null);
       resetForm();
     }
   }, [isOpen, ventaId]);
+
+  const fetchProductos = async () => {
+    try {
+      const res = await fetch('/api/productos');
+      if (!res.ok) throw new Error('Error al cargar productos');
+      
+      const data = await res.json();
+      setProductos(data);
+    } catch (error) {
+      console.error('Error al cargar productos:', error);
+      toast.error('Error al cargar el listado de productos');
+    }
+  };
 
   const fetchVentaDetalle = async (id: number) => {
     try {
@@ -137,6 +195,25 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
       setAdelanto(parseFloat(data.adelanto?.toString() || '0'));
       setObservaciones(data.observaciones || '');
       setIsAdelantoDirty(false);
+      
+      // Inicializar detalles de venta
+      const detalles = data.detalles || data.detalle_venta || [];
+      setDetallesVenta(detalles);
+      
+      // Inicializar servicios
+      const servicios = data.servicio_venta || [];
+      setServiciosVenta(servicios);
+      
+      if (servicios.length > 0) {
+        const servicio = servicios[0];
+        setRequiereFlete(servicio.requiere_flete === 1);
+        setRequiereDescarga(servicio.requiere_descarga === 1);
+        setDireccionEntrega(servicio.direccion_entrega || '');
+        setCostoFlete(servicio.costo_flete || 0);
+        setCostoDescarga(servicio.costo_descarga || 0);
+      }
+      
+      setIsDirty(false);
     } catch (error) {
       console.error('Error al cargar detalles de venta:', error);
       toast.error('Error al cargar los detalles de la venta');
@@ -153,6 +230,20 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
     setAdelanto(0);
     setObservaciones("");
     setIsAdelantoDirty(false);
+    setDetallesVenta([]);
+    setServiciosVenta([]);
+    setRequiereFlete(false);
+    setRequiereDescarga(false);
+    setDireccionEntrega('');
+    setCostoFlete(0);
+    setCostoDescarga(0);
+    setShowAddProductoForm(false);
+    setSelectedProducto(null);
+    setCantidadNueva(1);
+    setPrecioNuevo(0);
+    setEditandoDetalle(null);
+    setEditandoServicios(false);
+    setIsDirty(false);
   };
 
   const handleSave = async () => {
@@ -168,14 +259,47 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
         saldoPendiente = totalVenta - adelanto;
       }
       
+      // Calcular el nuevo total si se han modificado los detalles o servicios
+      let nuevoTotal = parseFloat(venta.total.toString());
+      if (isDirty) {
+        // Sumar todos los subtotales de los detalles
+        const totalDetalles = detallesVenta.reduce((total, detalle) => total + detalle.subtotal, 0);
+        
+        // Sumar servicios adicionales
+        let totalServicios = 0;
+        if (requiereFlete) totalServicios += costoFlete;
+        if (requiereDescarga) totalServicios += costoDescarga;
+        
+        nuevoTotal = totalDetalles + totalServicios;
+        
+        // Recalcular saldo pendiente con el nuevo total
+        saldoPendiente = nuevoTotal - adelanto;
+      }
+      
+      // Preparar datos de servicios para actualizar
+      const servicioActualizado = {
+        requiere_flete: requiereFlete,
+        requiere_descarga: requiereDescarga,
+        direccion_entrega: direccionEntrega,
+        costo_flete: costoFlete,
+        costo_descarga: costoDescarga,
+        id_servicio_venta: serviciosVenta.length > 0 ? serviciosVenta[0].id_servicio_venta : undefined
+      };
+      
+      // Preparar datos actualizados de la venta
       const datosActualizados = {
         estado_pago: estadoPago,
         estado_entrega: estadoEntrega,
         tipo_comprobante: tipoComprobante,
         adelanto: adelanto,
         saldo_pendiente: saldoPendiente,
-        observaciones: observaciones
+        observaciones: observaciones,
+        detalles: detallesVenta, // Siempre enviar los detalles
+        servicios: [servicioActualizado], // Siempre enviar los servicios
+        total: nuevoTotal // Siempre enviar el total actualizado
       };
+      
+      console.log('Datos a actualizar:', datosActualizados);
       
       const res = await fetch(`/api/ventas/${venta.id_venta}`, {
         method: 'PATCH',
@@ -202,6 +326,112 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
     const adelantoValue = parseFloat(value) || 0;
     setAdelanto(adelantoValue);
     setIsAdelantoDirty(true);
+    setIsDirty(true);
+  };
+  
+  // Funciones para manejar detalles de productos
+  const handleRemoveDetalle = (index: number) => {
+    const nuevosDetalles = [...detallesVenta];
+    nuevosDetalles.splice(index, 1);
+    setDetallesVenta(nuevosDetalles);
+    setIsDirty(true);
+  };
+  
+  const handleEditDetalle = (index: number) => {
+    const detalle = detallesVenta[index];
+    setEditandoDetalle(index);
+    setCantidadNueva(detalle.cantidad);
+    setPrecioNuevo(detalle.precio_unitario);
+  };
+  
+  const handleSaveDetalle = (index: number) => {
+    const nuevosDetalles = [...detallesVenta];
+    const detalle = nuevosDetalles[index];
+    
+    // Establecer los valores actualizados
+    detalle.cantidad = Number(cantidadNueva);
+    detalle.precio_unitario = Number(precioNuevo);
+    
+    // Calcular el subtotal correctamente
+    detalle.subtotal = Number(cantidadNueva) * Number(precioNuevo);
+    
+    setDetallesVenta(nuevosDetalles);
+    setEditandoDetalle(null);
+    setIsDirty(true);
+    
+    console.log('Detalle actualizado:', detalle);
+  };
+  
+  const handleCancelEditDetalle = () => {
+    setEditandoDetalle(null);
+    setCantidadNueva(1);
+    setPrecioNuevo(0);
+  };
+  
+  const handleAddProducto = () => {
+    if (!selectedProducto) {
+      toast.error('Debe seleccionar un producto');
+      return;
+    }
+    
+    const producto = productos.find(p => p.id_producto === selectedProducto);
+    if (!producto) {
+      toast.error('Producto no encontrado');
+      return;
+    }
+    
+    const nuevoDetalle: DetalleVenta = {
+      id_producto: producto.id_producto,
+      cantidad: Number(cantidadNueva),
+      precio_unitario: Number(precioNuevo > 0 ? precioNuevo : producto.precio_venta),
+      subtotal: Number(cantidadNueva) * Number(precioNuevo > 0 ? precioNuevo : producto.precio_venta),
+      nombre_producto: producto.nombre
+    };
+    
+    setDetallesVenta([...detallesVenta, nuevoDetalle]);
+    setShowAddProductoForm(false);
+    setSelectedProducto(null);
+    setCantidadNueva(1);
+    setPrecioNuevo(0);
+    setIsDirty(true);
+  };
+  
+  // Funciones para servicios
+  const handleSaveServicios = () => {
+    const servicioActualizado: ServicioVenta = {
+      id_servicio_venta: serviciosVenta.length > 0 ? serviciosVenta[0].id_servicio_venta : undefined,
+      requiere_flete: requiereFlete ? 1 : 0,
+      requiere_descarga: requiereDescarga ? 1 : 0,
+      direccion_entrega: direccionEntrega,
+      costo_flete: Number(costoFlete),
+      costo_descarga: Number(costoDescarga)
+    };
+    
+    setServiciosVenta([servicioActualizado]);
+    setEditandoServicios(false);
+    setIsDirty(true);
+    
+    console.log('Servicio actualizado:', servicioActualizado);
+  };
+  
+  const handleCancelEditServicios = () => {
+    // Restaurar los valores originales
+    if (serviciosVenta.length > 0) {
+      const servicio = serviciosVenta[0];
+      setRequiereFlete(servicio.requiere_flete === 1);
+      setRequiereDescarga(servicio.requiere_descarga === 1);
+      setDireccionEntrega(servicio.direccion_entrega || '');
+      setCostoFlete(servicio.costo_flete || 0);
+      setCostoDescarga(servicio.costo_descarga || 0);
+    } else {
+      setRequiereFlete(false);
+      setRequiereDescarga(false);
+      setDireccionEntrega('');
+      setCostoFlete(0);
+      setCostoDescarga(0);
+    }
+    
+    setEditandoServicios(false);
   };
 
   // Función para obtener el tipo de comprobante de la venta
@@ -221,78 +451,349 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
     return venta?.id_venta.toString().padStart(6, '0') || '';
   };
 
+  // Función para calcular el total actualizado de la venta
+  const calcularTotalActualizado = () => {
+    // Sumar todos los subtotales de los detalles
+    const totalDetalles = detallesVenta.reduce((total, detalle) => total + Number(detalle.subtotal || 0), 0);
+    
+    // Sumar servicios adicionales
+    let totalServicios = 0;
+    if (requiereFlete) totalServicios += Number(costoFlete || 0);
+    if (requiereDescarga) totalServicios += Number(costoDescarga || 0);
+    
+    return Number(totalDetalles + totalServicios);
+  };
+
   // Función para renderizar los detalles de productos
   const renderProductos = () => {
-    const detalles = venta?.detalles || venta?.detalle_venta || [];
-    
-    if (!detalles || detalles.length === 0) {
+    if (!detallesVenta || detallesVenta.length === 0) {
       return (
         <tr>
-          <td colSpan={4} className="px-4 py-2 text-sm text-center text-gray-500">No hay productos disponibles</td>
+          <td colSpan={6} className="px-4 py-2 text-sm text-center text-gray-500">No hay productos disponibles</td>
         </tr>
       );
     }
 
-    return detalles.map((detalle, index) => (
-      <tr key={index}>
+    return detallesVenta.map((detalle, index) => (
+      <tr key={`detalle-${index}`}>
         <td className="px-4 py-2 whitespace-nowrap text-sm">
           {detalle.nombre_producto || detalle.producto?.nombre || `Producto #${detalle.id_producto}`}
         </td>
-        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">{detalle.cantidad}</td>
-        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">S/ {parseFloat(detalle.precio_unitario.toString()).toFixed(2)}</td>
-        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">S/ {parseFloat(detalle.subtotal.toString()).toFixed(2)}</td>
+        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+          {editandoDetalle === index ? (
+            <Input 
+              type="number" 
+              value={cantidadNueva} 
+              onChange={(e) => setCantidadNueva(Number(e.target.value))}
+              min="1"
+              step="1"
+              className="w-20 text-right"
+            />
+          ) : (
+            detalle.cantidad
+          )}
+        </td>
+        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+          {editandoDetalle === index ? (
+            <Input 
+              type="number" 
+              value={precioNuevo} 
+              onChange={(e) => setPrecioNuevo(Number(e.target.value))}
+              min="0"
+              step="0.01"
+              className="w-24 text-right"
+            />
+          ) : (
+            `S/ ${parseFloat(detalle.precio_unitario.toString()).toFixed(2)}`
+          )}
+        </td>
+        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+          {editandoDetalle === index 
+            ? `S/ ${(cantidadNueva * precioNuevo).toFixed(2)}`
+            : `S/ ${parseFloat(detalle.subtotal.toString()).toFixed(2)}`
+          }
+        </td>
+        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+          {editandoDetalle === index ? (
+            <div className="flex justify-end space-x-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-green-600"
+                onClick={() => handleSaveDetalle(index)}
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-red-600"
+                onClick={handleCancelEditDetalle}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex justify-end space-x-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-blue-600"
+                onClick={() => handleEditDetalle(index)}
+              >
+                <Edit className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-8 w-8 text-red-600"
+                onClick={() => handleRemoveDetalle(index)}
+              >
+                <Trash className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </td>
       </tr>
     ));
   };
 
+  // Función para renderizar el formulario de agregar producto
+  const renderAddProductoForm = () => {
+    if (!showAddProductoForm) return null;
+    
+    return (
+      <tr>
+        <td className="px-4 py-2 whitespace-nowrap text-sm">
+          <Select value={selectedProducto?.toString() || ''} onValueChange={(value) => {
+            const idProducto = parseInt(value);
+            setSelectedProducto(idProducto);
+            
+            // Actualizar el precio con el precio por defecto del producto
+            const producto = productos.find(p => p.id_producto === idProducto);
+            if (producto) {
+              setPrecioNuevo(producto.precio_venta);
+            }
+          }}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Seleccione un producto" />
+            </SelectTrigger>
+            <SelectContent>
+              {productos.map((producto) => (
+                <SelectItem key={producto.id_producto} value={producto.id_producto.toString()}>
+                  {producto.nombre}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </td>
+        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+          <Input 
+            type="number" 
+            value={cantidadNueva} 
+            onChange={(e) => setCantidadNueva(Number(e.target.value))} 
+            min="1"
+            step="1"
+            className="w-20 text-right"
+          />
+        </td>
+        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+          <Input 
+            type="number" 
+            value={precioNuevo} 
+            onChange={(e) => setPrecioNuevo(Number(e.target.value))} 
+            min="0"
+            step="0.01"
+            className="w-24 text-right"
+          />
+        </td>
+        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+          S/ {(cantidadNueva * precioNuevo).toFixed(2)}
+        </td>
+        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">
+          <div className="flex justify-end space-x-1">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-green-600"
+              onClick={handleAddProducto}
+              disabled={!selectedProducto || cantidadNueva <= 0 || precioNuevo <= 0}
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-red-600"
+              onClick={() => setShowAddProductoForm(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   // Función para renderizar los servicios
   const renderServicios = () => {
-    const servicios = venta?.servicio_venta || [];
-    
-    if (!servicios || servicios.length === 0) {
-      return null;
+    if (editandoServicios) {
+      return renderServiciosForm();
     }
-
+    
+    // Verificar si hay servicios configurados
+    const hayServicios = requiereFlete || requiereDescarga;
+    
+    if (!hayServicios) {
+      return (
+        <div className="flex justify-between items-center mb-4">
+          <p className="text-sm text-gray-500">No hay servicios adicionales configurados</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditandoServicios(true)}
+            className="text-xs"
+          >
+            <Plus className="h-3 w-3 mr-1" /> Agregar Servicios
+          </Button>
+        </div>
+      );
+    }
+    
     return (
       <>
-        <h3 className="font-semibold mb-2">Servicios Adicionales:</h3>
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-semibold">Servicios Adicionales:</h3>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditandoServicios(true)}
+            className="text-xs"
+          >
+            <Edit className="h-3 w-3 mr-1" /> Editar
+          </Button>
+        </div>
         <div className="border rounded-md overflow-hidden mb-4">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-muted/30">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Servicio</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {servicios.map((servicio, index) => {
-                const mostrarFlete = servicio.requiere_flete === 1 && servicio.costo_flete !== undefined && servicio.costo_flete > 0;
-                const mostrarDescarga = servicio.requiere_descarga === 1 && servicio.costo_descarga !== undefined && servicio.costo_descarga > 0;
-
-                return (
-                  <>
-                    {mostrarFlete && (
-                      <tr key={`flete-${index}`}>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm capitalize">Flete</td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm">{servicio.direccion_entrega || 'No especificada'}</td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">S/ {parseFloat((servicio.costo_flete ?? 0).toString()).toFixed(2)}</td>
-                      </tr>
-                    )}
-                    {mostrarDescarga && (
-                      <tr key={`descarga-${index}`}>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm capitalize">Descarga</td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm">-</td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-right">S/ {parseFloat((servicio.costo_descarga ?? 0).toString()).toFixed(2)}</td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Servicio</TableHead>
+                <TableHead className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles</TableHead>
+                <TableHead className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {requiereFlete && (
+                <TableRow>
+                  <TableCell className="px-4 py-2 whitespace-nowrap text-sm capitalize">Flete</TableCell>
+                  <TableCell className="px-4 py-2 whitespace-nowrap text-sm">{direccionEntrega || 'No especificada'}</TableCell>
+                  <TableCell className="px-4 py-2 whitespace-nowrap text-sm text-right">S/ {Number(costoFlete).toFixed(2)}</TableCell>
+                </TableRow>
+              )}
+              {requiereDescarga && (
+                <TableRow>
+                  <TableCell className="px-4 py-2 whitespace-nowrap text-sm capitalize">Descarga</TableCell>
+                  <TableCell className="px-4 py-2 whitespace-nowrap text-sm">-</TableCell>
+                  <TableCell className="px-4 py-2 whitespace-nowrap text-sm text-right">S/ {Number(costoDescarga).toFixed(2)}</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
       </>
+    );
+  };
+
+  // Función para renderizar el formulario de edición de servicios
+  const renderServiciosForm = () => {
+    return (
+      <div className="border rounded-md p-4 mb-4 bg-muted/10">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-semibold">Editar Servicios Adicionales:</h3>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveServicios}
+              className="text-xs"
+            >
+              <Save className="h-3 w-3 mr-1" /> Guardar
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancelEditServicios}
+              className="text-xs"
+            >
+              <X className="h-3 w-3 mr-1" /> Cancelar
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="requiereFlete"
+              checked={requiereFlete}
+              onChange={(e) => setRequiereFlete(e.target.checked)}
+              className="rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <Label htmlFor="requiereFlete">Flete</Label>
+          </div>
+
+          {requiereFlete && (
+            <div className="pl-6 space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="direccionEntrega">Dirección de Entrega</Label>
+                <Input
+                  id="direccionEntrega"
+                  value={direccionEntrega}
+                  onChange={(e) => setDireccionEntrega(e.target.value)}
+                  placeholder="Ingrese la dirección de entrega"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="costoFlete">Costo de Flete (S/)</Label>
+                <Input
+                  id="costoFlete"
+                  type="number"
+                  value={costoFlete}
+                  onChange={(e) => setCostoFlete(Number(e.target.value))}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="requiereDescarga"
+              checked={requiereDescarga}
+              onChange={(e) => setRequiereDescarga(e.target.checked)}
+              className="rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <Label htmlFor="requiereDescarga">Descarga</Label>
+          </div>
+
+          {requiereDescarga && (
+            <div className="pl-6 space-y-2">
+              <Label htmlFor="costoDescarga">Costo de Descarga (S/)</Label>
+              <Input
+                id="costoDescarga"
+                type="number"
+                value={costoDescarga}
+                onChange={(e) => setCostoDescarga(Number(e.target.value))}
+                min="0"
+                step="0.01"
+              />
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 
@@ -333,7 +834,7 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
               <CardContent className="pt-4">
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
-                    <h3 className="font-semibold mb-1">Cliente:</h3>
+                    <h3 className="font-semibold mb-2">Cliente:</h3>
                     <p>{venta.cliente?.nombres_apellidos || venta.cliente?.razon_social || "Cliente Varios"}</p>
                     <p className="text-sm text-muted-foreground">
                       {venta.cliente?.dni ? `DNI: ${venta.cliente.dni}` : 
@@ -341,46 +842,120 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
                     </p>
                   </div>
                   <div>
-                    <h3 className="font-semibold mb-1">Tipo de Venta:</h3>
-                    <p>{venta.tipo_venta}</p>
-                    <div className="flex space-x-2 mt-1">
-                      <Badge variant="outline" className={
-                        venta.estado_pago === 'PENDIENTE' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                        venta.estado_pago === 'PAGADO' ? 'bg-green-50 text-green-700 border-green-200' :
-                        'bg-red-50 text-red-700 border-red-200'
-                      }>
-                        {venta.estado_pago === 'PENDIENTE' ? 'Pago Pendiente' : 
-                         venta.estado_pago === 'PAGADO' ? 'Pagado' : 'Anulado'}
-                      </Badge>
-                      <Badge variant="outline" className={
-                        venta.estado_entrega === 'NO ENTREGADO' ? 'bg-red-50 text-red-700 border-red-200' :
-                        venta.estado_entrega === 'PARCIAL' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                        'bg-green-50 text-green-700 border-green-200'
-                      }>
-                        {venta.estado_entrega === 'NO ENTREGADO' ? 'No Entregado' : 
-                         venta.estado_entrega === 'PARCIAL' ? 'Entrega Parcial' : 'Entregado'}
-                      </Badge>
+                    <h3 className="font-semibold mb-2">Tipo de Venta:</h3>
+                    <p className="mb-2">{venta.tipo_venta}</p>
+                    
+                    {/* Campos de estado editables */}
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label htmlFor="estadoPago" className="text-xs">Estado Pago</Label>
+                          <Select value={estadoPago} onValueChange={(value) => setEstadoPago(value as any)}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PENDIENTE">Pendiente</SelectItem>
+                              <SelectItem value="PARCIAL">Parcial</SelectItem>
+                              <SelectItem value="CANCELADO">Cancelado</SelectItem>
+                              <SelectItem value="ANULADA">Anulado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="estadoEntrega" className="text-xs">Estado Entrega</Label>
+                          <Select value={estadoEntrega} onValueChange={(value) => setEstadoEntrega(value as any)}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="NO ENTREGADO">No Entregado</SelectItem>
+                              <SelectItem value="PARCIAL">Parcial</SelectItem>
+                              <SelectItem value="ENTREGADO">Entregado</SelectItem>
+                              <SelectItem value="ANULADA">Anulado</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label htmlFor="tipoComprobante" className="text-xs">Tipo Comprobante</Label>
+                          <Select value={tipoComprobante} onValueChange={(value) => setTipoComprobante(value as any)}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="NINGUNO">Ninguno</SelectItem>
+                              <SelectItem value="BOLETA">Boleta</SelectItem>
+                              <SelectItem value="FACTURA">Factura</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor="adelanto" className="text-xs">Adelanto</Label>
+                          <Input
+                            id="adelanto"
+                            type="number"
+                            value={adelanto}
+                            onChange={(e) => handleAdelantoChange(e.target.value)}
+                            min="0"
+                            step="0.01"
+                            className="h-8 text-xs"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="observaciones" className="text-xs">Observaciones</Label>
+                        <Textarea
+                          id="observaciones"
+                          value={observaciones}
+                          onChange={(e) => setObservaciones(e.target.value)}
+                          className="text-xs min-h-[60px]"
+                          placeholder="Observaciones adicionales..."
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
                 
                 <Separator className="my-4" />
                 
-                <h3 className="font-semibold mb-2">Detalle de Productos:</h3>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-semibold">Detalle de Productos:</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowAddProductoForm(true);
+                      setSelectedProducto(null);
+                      setCantidadNueva(1);
+                      setPrecioNuevo(0);
+                    }}
+                    className="text-xs"
+                    disabled={showAddProductoForm || editandoDetalle !== null}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Agregar Producto
+                  </Button>
+                </div>
                 <div className="border rounded-md overflow-hidden mb-4">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-muted/30">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Unit.</th>
-                        <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</TableHead>
+                        <TableHead className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Cantidad</TableHead>
+                        <TableHead className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Precio Unit.</TableHead>
+                        <TableHead className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Subtotal</TableHead>
+                        <TableHead className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {renderProductos()}
-                    </tbody>
-                  </table>
+                      {renderAddProductoForm()}
+                    </TableBody>
+                  </Table>
                 </div>
                 
                 {renderServicios()}
@@ -401,101 +976,22 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
                     )}
                     <div className="flex justify-between pt-2 border-t">
                       <span className="font-medium">Total:</span>
-                      <span className="font-semibold">S/ {parseFloat(venta.total.toString()).toFixed(2)}</span>
+                      <span className="font-semibold">
+                        {isDirty 
+                          ? `S/ ${Number(calcularTotalActualizado()).toFixed(2)}`
+                          : `S/ ${parseFloat(venta.total.toString()).toFixed(2)}`
+                        }
+                        {isDirty && (
+                          <Badge variant="outline" className="ml-2 bg-yellow-50 text-yellow-700 border-yellow-200 text-[10px]">
+                            Modificado
+                          </Badge>
+                        )}
+                      </span>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="tipoComprobante">Tipo de Comprobante</Label>
-                  <Select 
-                    value={tipoComprobante} 
-                    onValueChange={(value: 'BOLETA' | 'FACTURA' | 'NINGUNO') => setTipoComprobante(value)}
-                  >
-                    <SelectTrigger id="tipoComprobante">
-                      <SelectValue placeholder="Seleccione un tipo de comprobante" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="BOLETA">Boleta</SelectItem>
-                      <SelectItem value="FACTURA">Factura</SelectItem>
-                      <SelectItem value="NINGUNO">Ninguno</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="adelanto">Adelanto (S/)</Label>
-                  <Input
-                    id="adelanto"
-                    type="number"
-                    value={adelanto}
-                    onChange={(e) => handleAdelantoChange(e.target.value)}
-                    min="0"
-                    max={parseFloat(venta.total.toString())}
-                    step="0.01"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="observaciones">Observaciones</Label>
-                  <Textarea
-                    id="observaciones"
-                    value={observaciones}
-                    onChange={(e) => setObservaciones(e.target.value)}
-                    placeholder="Observaciones adicionales"
-                    rows={3}
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="estadoPago">Estado de Pago</Label>
-                  <Select 
-                    value={estadoPago} 
-                    onValueChange={(value: 'PENDIENTE' | 'PAGADO' | 'ANULADO') => setEstadoPago(value)}
-                  >
-                    <SelectTrigger id="estadoPago">
-                      <SelectValue placeholder="Seleccione un estado de pago" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                      <SelectItem value="PAGADO">Pagado</SelectItem>
-                      <SelectItem value="ANULADO">Anulado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="estadoEntrega">Estado de Entrega</Label>
-                  <Select 
-                    value={estadoEntrega} 
-                    onValueChange={(value: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO') => setEstadoEntrega(value)}
-                  >
-                    <SelectTrigger id="estadoEntrega">
-                      <SelectValue placeholder="Seleccione un estado de entrega" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="NO ENTREGADO">No Entregado</SelectItem>
-                      <SelectItem value="PARCIAL">Parcial</SelectItem>
-                      <SelectItem value="ENTREGADO">Entregado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {isAdelantoDirty && (
-                  <div className="p-3 bg-muted rounded-md">
-                    <p className="text-sm">
-                      <strong>Saldo pendiente actualizado:</strong> S/ {(parseFloat(venta.total.toString()) - adelanto).toFixed(2)}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
           </>
         ) : (
           <div className="py-6 text-center text-muted-foreground">
@@ -503,20 +999,27 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
           </div>
         )}
 
-        <DialogFooter>
-          <Button 
-            variant="outline" 
-            onClick={onClose}
-            disabled={isSaving}
-          >
-            Cancelar
-          </Button>
-          <Button 
-            onClick={handleSave}
-            disabled={isSaving || isLoading}
-          >
-            {isSaving ? 'Guardando...' : 'Guardar Cambios'}
-          </Button>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          {isDirty && (
+            <div className="bg-yellow-50 text-yellow-800 p-2 rounded-md text-xs w-full sm:w-auto mb-2 sm:mb-0">
+              Hay cambios pendientes que modificarán el total de la venta
+            </div>
+          )}
+          <div className="flex gap-2 ml-auto">
+            <Button 
+              variant="outline" 
+              onClick={onClose}
+              disabled={isSaving}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSave}
+              disabled={isSaving || isLoading}
+            >
+              {isSaving ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

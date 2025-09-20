@@ -23,15 +23,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     return res.status(200).json(ventasPendientes);
                 }
                 
-                // Obtener todas las ventas (comportamiento original)
-                const ventas = await VentaService.getVentas(id_empresa);
-                return res.status(200).json(ventas);
+                // Obtener ventas paginadas (comportamiento por defecto)
+                const page = req.query.page ? parseInt(req.query.page as string) : 1;
+                const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : 20;
+                
+                const ventasPaginadas = await VentaService.getVentas(id_empresa, page, pageSize);
+                return res.status(200).json(ventasPaginadas);
                 
             case 'POST':
+                console.log('Datos de venta recibidos:', JSON.stringify(req.body, null, 2));
                 const venta = await VentaService.createVenta({
                     ...req.body,
                     id_empresa
                 });
+                console.log('Venta creada correctamente:', JSON.stringify(venta, null, 2));
                 return res.status(201).json(venta);
 
             default:

@@ -19,7 +19,6 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
-import axios from "axios";
 
 // Interfaces
 interface Servicio {
@@ -77,11 +76,6 @@ interface ComprobanteVenta {
   numero: string;
 }
 
-interface EmpresaInfo {
-  nombre: string;
-  ruc: string;
-  direccion: string;
-}
 
 // Definición de la interfaz para el comprobante
 interface NumeracionComprobante {
@@ -96,15 +90,13 @@ export default function VentaPage() {
   const { empresa, user } = useAuthContext(); // Obtener la información de la empresa y usuario del contexto
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
   const [showClienteModal, setShowClienteModal] = useState(false);
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>("Muro");
   const [productosSeleccionados, setProductosSeleccionados] = useState<ProductoSeleccionado[]>([]);
   const [modalProducto, setModalProducto] = useState<Producto | null>(null);
   const [cantidad, setCantidad] = useState<number>(1);
-  const [unidad, setUnidad] = useState<"unidad" | "millar">("unidad");
+  const [unidad, setUnidad] = useState<"unidad" | "millar">("millar");
 
-  const [modalCliente, setModalCliente] = useState<boolean>(false);
   const [clienteVarios, setClienteVarios] = useState<boolean>(false);
 
   const [modalServicios, setModalServicios] = useState<boolean>(false);
@@ -121,7 +113,7 @@ export default function VentaPage() {
 
   // Estados para los nuevos campos del modelo venta
   const [tipoVenta, setTipoVenta] = useState<'DIRECTA' | 'CONTRATO'>('DIRECTA');
-  // const [estadoPago, setEstadoPago] = useState<'PENDIENTE' | 'PAGADO' | 'ANULADO'>('PENDIENTE');
+  // const [estadoPago, setEstadoPago] = useState<'PENDIENTE' | 'PAGADO' | 'ANULADA'>('PENDIENTE');
   const [estadoEntrega, setEstadoEntrega] = useState<'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO'>('NO ENTREGADO');
   const [adelanto, setAdelanto] = useState<number>(0);
   const [saldoPendiente, setSaldoPendiente] = useState<number>(0);
@@ -147,7 +139,7 @@ export default function VentaPage() {
     numero: '000000'
   });
   const [formaPago, setFormaPago] = useState<'EFECTIVO' | 'TRANSFERENCIA' | 'YAPE'>('EFECTIVO');
-  const [estadoPago, setEstadoPago] = useState<'PENDIENTE' | 'CANCELADO' | 'PARCIAL' | 'ANULADO'>('PENDIENTE');
+  const [estadoPago, setEstadoPago] = useState<'PENDIENTE' | 'CANCELADO' | 'PARCIAL' | 'ANULADA'>('PENDIENTE');
   const [documentoCliente, setDocumentoCliente] = useState('');
   const [nombreCliente, setNombreCliente] = useState('');
   const [searchProducto, setSearchProducto] = useState('');
@@ -205,16 +197,33 @@ export default function VentaPage() {
   useEffect(() => {
     const cargarComprobantes = async () => {
       try {
-        const response = await axios.get('/api/numeracion_comprobante');
-        const data = Array.isArray(response.data) ? response.data : [response.data];
-        setComprobantes(data);
-
-        // Seleccionar el primer comprobante por defecto si existe
-        if (data.length > 0) {
-          seleccionarComprobante(data[0]);
+        console.log('Cargando comprobantes...');
+        // Usar cache: 'no-store' para evitar el caché del navegador
+        const response = await fetch('/api/numeracion_comprobante', {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Error al cargar comprobantes');
+        }
+        
+        const data = await response.json();
+        console.log('Comprobantes cargados:', data);
+        
+        const comprobantesArray = Array.isArray(data) ? data : [data];
+        setComprobantes(comprobantesArray);
+        
+        // Si hay comprobantes y ninguno seleccionado, seleccionar el primero
+        if (comprobantesArray.length > 0) {
+          seleccionarComprobante(comprobantesArray[0]);
         }
       } catch (error) {
-        console.error("Error al cargar comprobantes:", error);
+        console.error('Error al cargar comprobantes:', error);
+        toast.error('Error al cargar comprobantes');
       }
     };
 
@@ -431,7 +440,7 @@ export default function VentaPage() {
 
     setModalProducto(null);
     setCantidad(1);
-    setUnidad("unidad");
+    setUnidad("millar");
   };
 
   // Eliminar producto del detalle
@@ -503,7 +512,7 @@ export default function VentaPage() {
         comprobante: {
           tipo_comprobante: comprobanteSeleccionado?.tipo_comprobante || "TICKET",
           serie: comprobanteSeleccionado?.serie || "001",
-          numero: comprobanteSeleccionado?.numero_actual?.toString().padStart(6, '0') || "000000",
+          numero: numero || (((comprobanteSeleccionado?.numero_actual ?? 0) + 1).toString().padStart(6, '0')) || "000000",
           fecha: fecha,
           forma_pago: formaPago || "EFECTIVO",
           id_usuario: user?.id || 1,
@@ -558,11 +567,41 @@ export default function VentaPage() {
         throw new Error(errorData.message || 'Error al registrar la venta');
       }
 
+      const data = await res.json();
+      console.log('Venta registrada:', data);
+      
       toast.success('Venta registrada correctamente');
+      
       // Recargar la lista de ventas si estamos en modo listado
       if (activeTab === 'listado') {
         fetchVentas();
       }
+      
+      // Recargar la lista de comprobantes para tener el número actualizado
+      try {
+        const comprobantesResponse = await fetch('/api/numeracion_comprobante');
+        if (comprobantesResponse.ok) {
+          const comprobantesData = await comprobantesResponse.json();
+          const comprobantesActualizados = Array.isArray(comprobantesData) 
+            ? comprobantesData 
+            : [comprobantesData];
+          
+          setComprobantes(comprobantesActualizados);
+          
+          // Actualizar el comprobante seleccionado con la nueva numeración
+          if (comprobanteSeleccionado) {
+            const comprobanteActualizado = comprobantesActualizados.find(
+              c => c.id_numeracion_comprobante === comprobanteSeleccionado.id_numeracion_comprobante
+            );
+            if (comprobanteActualizado) {
+              seleccionarComprobante(comprobanteActualizado);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error al recargar comprobantes:', error);
+      }
+      
       // Limpiar formulario
       setProductosSeleccionados([]);
       setClienteSeleccionado(null);
@@ -608,7 +647,18 @@ export default function VentaPage() {
   const seleccionarComprobante = (comprobante: NumeracionComprobante) => {
     setComprobanteSeleccionado(comprobante);
     setSerie(comprobante.serie);
-    setNumero((comprobante.numero_actual + 1).toString());
+    
+    // El siguiente número será el actual + 1, formateado con ceros a la izquierda
+    const siguienteNumero = (comprobante.numero_actual + 1).toString().padStart(6, '0');
+    setNumero(siguienteNumero);
+    
+    // Actualizar también el estado del comprobante
+    setComprobante(prev => ({
+      ...prev,
+      tipo: comprobante.tipo_comprobante as 'TICKET' | 'BOLETA' | 'FACTURA',
+      serie: comprobante.serie,
+      numero: siguienteNumero
+    }));
   };
 
   // Función para renderizar el contenido del ticket (reutilizable para desktop y modal)
@@ -1074,7 +1124,7 @@ export default function VentaPage() {
                     <Label className="text-sm">Estado de Pago</Label>
                     <Select 
                       value={estadoPago} 
-                      onValueChange={(value: 'PENDIENTE' | 'CANCELADO' | 'PARCIAL' | 'ANULADO') => {
+                      onValueChange={(value: 'PENDIENTE' | 'CANCELADO' | 'PARCIAL' | 'ANULADA') => {
                         setEstadoPago(value);
                         // Actualizar adelanto y saldo pendiente según el estado seleccionado
                         if (value === 'CANCELADO') {
@@ -1097,7 +1147,7 @@ export default function VentaPage() {
                         <SelectItem value="PENDIENTE">Pendiente</SelectItem>
                         <SelectItem value="CANCELADO">Cancelado</SelectItem>
                         <SelectItem value="PARCIAL">Parcial</SelectItem>
-                        <SelectItem value="ANULADO">Anulado</SelectItem>
+                        <SelectItem value="ANULADA">ANULADA</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1354,8 +1404,8 @@ export default function VentaPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unidad">Unidad</SelectItem>
                     <SelectItem value="millar">Millar</SelectItem>
+                    <SelectItem value="unidad">Unidad</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
