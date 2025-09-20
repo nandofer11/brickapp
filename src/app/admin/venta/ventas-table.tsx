@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import { format } from "date-fns";
-import { Eye, Pencil, Plus, Trash2 } from "lucide-react";
+import { Eye, Pencil, Plus, Trash2, EyeOff } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -58,6 +58,7 @@ export default function VentasTable() {
   const [ventas, setVentas] = useState<Venta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filtro, setFiltro] = useState("");
+  const [mostrarAnuladas, setMostrarAnuladas] = useState(false);
   const [ventaSeleccionada, setVentaSeleccionada] = useState<Venta | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -190,8 +191,14 @@ export default function VentasTable() {
     }
   };
 
-  // Filtrar ventas según el texto de búsqueda
+  // Filtrar ventas según el texto de búsqueda y estado anulado
   const ventasFiltradas = ventas.filter(venta => {
+    // Filtro por estado anulado
+    if (!mostrarAnuladas && (venta.estado_venta === 'ANULADA' || venta.estado_pago === 'ANULADA' || venta.estado_entrega === 'ANULADA')) {
+      return false;
+    }
+    
+    // Filtro por texto de búsqueda
     const searchText = filtro.toLowerCase();
     const clienteInfo = venta.cliente ? 
       `${venta.cliente.nombres_apellidos || ''} ${venta.cliente.razon_social || ''} ${venta.cliente.dni || ''} ${venta.cliente.ruc || ''}`.toLowerCase() : '';
@@ -216,13 +223,35 @@ export default function VentasTable() {
                 Consulte todas las ventas registradas en el sistema.
               </p>
             </div>
-            <div className="w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
               <Input
                 placeholder="Buscar venta..."
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
                 className="text-xs md:text-sm"
               />
+              <Button
+                variant={mostrarAnuladas ? "default" : "outline"}
+                size="sm"
+                onClick={() => setMostrarAnuladas(!mostrarAnuladas)}
+                className={`flex items-center gap-2 whitespace-nowrap text-xs ${
+                  mostrarAnuladas 
+                    ? 'bg-red-600 hover:bg-red-700 text-white' 
+                    : 'hover:bg-red-50 hover:text-red-700 border-red-200'
+                }`}
+              >
+                {mostrarAnuladas ? (
+                  <>
+                    <EyeOff className="h-4 w-4" />
+                    Ocultar Anuladas
+                  </>
+                ) : (
+                  <>
+                    <Eye className="h-4 w-4" />
+                    Ver Anuladas
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </CardHeader>
@@ -241,7 +270,9 @@ export default function VentasTable() {
           ) : (
             <div className="overflow-x-auto">
               <Table>
-                <TableCaption>Lista total de {ventasFiltradas.length} ventas</TableCaption>
+                <TableCaption>
+                  Lista de {ventasFiltradas.length} ventas{!mostrarAnuladas ? " (ventas anuladas ocultas)" : " (incluyendo anuladas)"}
+                </TableCaption>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-20">ID</TableHead>
