@@ -3,7 +3,7 @@
 import { useState, useEffect, ChangeEvent } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserCog, PlusCircle, Trash2, Pencil, Save, X, RefreshCw } from "lucide-react";
+import { Users, UserCog, PlusCircle, Trash2, Pencil, Save, X, RefreshCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,6 +26,12 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { toast } from "react-toastify";
 import { useAuth, AuthUser } from "@/hooks/useAuth";
 
@@ -56,6 +62,8 @@ interface Permiso {
   id_permiso: number;
   nombre: string;
   descripcion: string;
+  codigo: string;
+  categoria: string;
 }
 
 interface Empresa {
@@ -482,6 +490,8 @@ function GestionRolesPermisos() {
   });
   const [selectedRol, setSelectedRol] = useState<Rol | null>(null);
   const [rolPermisos, setRolPermisos] = useState<number[]>([]);
+  const [selectedPermisos, setSelectedPermisos] = useState<number[]>([]); // Para el modal de crear/editar
+  const [openTooltip, setOpenTooltip] = useState<number | null>(null); // Para controlar qué tooltip está abierto
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -514,6 +524,12 @@ function GestionRolesPermisos() {
       if (response.ok) {
         const data = await response.json();
         setRoles(data);
+        
+        // Seleccionar automáticamente el primer rol si existe
+        if (data.length > 0 && !selectedRol) {
+          setSelectedRol(data[0]);
+          fetchRolPermisos(data[0].id_rol);
+        }
       } else {
         toast.error("No se pudieron cargar los roles");
       }
@@ -542,10 +558,12 @@ function GestionRolesPermisos() {
     if (!user?.id_empresa) return;
     
     try {
-      const response = await fetch(`/api/rol/${id}/permisos?id_empresa=${user.id_empresa}`);
+      const response = await fetch(`/api/roles-permisos/${id}/permisos`);
       if (response.ok) {
         const data = await response.json();
-        setRolPermisos(data.map((p: { id_permiso: number }) => p.id_permiso));
+        // Extraer los IDs de permisos desde rol_permiso
+        const permissionIds = data.rol_permiso?.map((rp: any) => rp.id_permiso) || [];
+        setRolPermisos(permissionIds);
       }
     } catch (error) {
       console.error("Error al cargar permisos del rol:", error);
@@ -595,7 +613,16 @@ function GestionRolesPermisos() {
       });
 
       if (response.ok) {
+        const savedRol = await response.json();
+        
         toast.success(`Rol ${isEditing ? 'actualizado' : 'creado'} correctamente`);
+        
+        // Si estamos creando un nuevo rol, seleccionarlo automáticamente para asignar permisos
+        if (!isEditing && savedRol) {
+          setSelectedRol(savedRol);
+          setRolPermisos([]);
+        }
+        
         fetchRoles();
         setDialogOpen(false);
         resetForm();
@@ -615,8 +642,35 @@ function GestionRolesPermisos() {
       descripcion: role.descripcion,
       id_empresa: role.id_empresa,
     });
+    
     setIsEditing(true);
     setDialogOpen(true);
+  };
+
+  const handlePermissionToggle = (permisoId: number, isChecked: boolean) => {
+    setSelectedPermisos(prev => {
+      if (isChecked) {
+        return [...prev, permisoId];
+      } else {
+        return prev.filter(id => id !== permisoId);
+      }
+    });
+  };
+
+  const getPermissionsByCategory = () => {
+    const categories: Record<string, Permiso[]> = {};
+    permisos.forEach(permiso => {
+      const category = (permiso as any).categoria || 'General';
+      if (!categories[category]) {
+        categories[category] = [];
+      }
+      categories[category].push(permiso);
+    });
+    return categories;
+  };
+
+  const handleTooltipToggle = (permisoId: number) => {
+    setOpenTooltip(prev => prev === permisoId ? null : permisoId);
   };
 
   const handleDelete = async () => {
@@ -638,10 +692,15 @@ function GestionRolesPermisos() {
 
       if (response.ok) {
         toast.success("Rol eliminado correctamente");
-        fetchRoles();
+        
+        // Si el rol eliminado era el seleccionado, limpiar la selección
         if (selectedRol?.id_rol === roleToDelete) {
           setSelectedRol(null);
+          setRolPermisos([]);
         }
+        
+        // Recargar roles (que automáticamente seleccionará el primer rol disponible)
+        fetchRoles();
       } else {
         const error = await response.json();
         throw new Error(error.message || 'Error al eliminar rol');
@@ -660,29 +719,85 @@ function GestionRolesPermisos() {
   };
 
   const handlePermissionChange = async (id_permiso: number, checked: boolean) => {
-    if (!selectedRol || !user?.id_empresa) return;
+    if (!selectedRol) return;
 
     try {
-      const method = checked ? 'POST' : 'DELETE';
-      const url = `/api/rol/${selectedRol.id_rol}/permisos/${id_permiso}?id_empresa=${user.id_empresa}`;
+      // Actualizar localmente primero para mejor UX
+      let newPermissions;
+      if (checked) {
+        newPermissions = [...rolPermisos, id_permiso];
+      } else {
+        newPermissions = rolPermisos.filter(id => id !== id_permiso);
+      }
+      
+      setRolPermisos(newPermissions);
 
-      const response = await fetch(url, { method });
+      // Actualizar en el servidor
+      const response = await fetch(`/api/roles-permisos/${selectedRol.id_rol}/permisos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permisoIds: newPermissions }),
+      });
 
       if (response.ok) {
         toast.success(`Permiso ${checked ? 'añadido al' : 'removido del'} rol`);
-        
-        // Actualizar localmente los permisos
-        if (checked) {
-          setRolPermisos(prev => [...prev, id_permiso]);
-        } else {
-          setRolPermisos(prev => prev.filter(id => id !== id_permiso));
-        }
       } else {
         const error = await response.json();
+        // Revertir cambio local si falló
+        setRolPermisos(rolPermisos);
         throw new Error(error.message);
       }
     } catch (error: any) {
       toast.error(error.message || "Error al actualizar permisos");
+    }
+  };
+
+  const handleSelectAllPermissions = async () => {
+    if (!selectedRol) return;
+
+    try {
+      const allPermissionIds = permisos.map(p => p.id_permiso);
+      setRolPermisos(allPermissionIds);
+
+      const response = await fetch(`/api/roles-permisos/${selectedRol.id_rol}/permisos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permisoIds: allPermissionIds }),
+      });
+
+      if (response.ok) {
+        toast.success("Todos los permisos han sido asignados al rol");
+      } else {
+        const error = await response.json();
+        setRolPermisos(rolPermisos); // Revertir cambio local si falló
+        throw new Error(error.message);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Error al asignar todos los permisos");
+    }
+  };
+
+  const handleClearAllPermissions = async () => {
+    if (!selectedRol) return;
+
+    try {
+      setRolPermisos([]);
+
+      const response = await fetch(`/api/roles-permisos/${selectedRol.id_rol}/permisos`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permisoIds: [] }),
+      });
+
+      if (response.ok) {
+        toast.success("Todos los permisos han sido removidos del rol");
+      } else {
+        const error = await response.json();
+        setRolPermisos(rolPermisos); // Revertir cambio local si falló
+        throw new Error(error.message);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Error al remover todos los permisos");
     }
   };
 
@@ -691,7 +806,7 @@ function GestionRolesPermisos() {
       <div className="md:col-span-1 border rounded-lg p-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-medium">Roles</h3>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}> 
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" onClick={() => {
                 resetForm();
@@ -701,13 +816,13 @@ function GestionRolesPermisos() {
                 Nuevo
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>
                   {isEditing ? "Editar Rol" : "Crear Nuevo Rol"}
                 </DialogTitle>
                 <DialogDescription>
-                  Complete el formulario para {isEditing ? "actualizar el" : "crear un nuevo"} rol.
+                  Complete el formulario para {isEditing ? "actualizar el" : "crear un nuevo"} rol. Los permisos se asignan desde el panel de gestión de permisos.
                 </DialogDescription>
               </DialogHeader>
 
@@ -804,26 +919,98 @@ function GestionRolesPermisos() {
             Seleccione un rol de la lista para ver y asignar permisos
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {permisos.map((permiso) => (
-              <div key={permiso.id_permiso} className="flex items-center space-x-2 p-3 border rounded-md">
-                <Checkbox 
-                  id={`permiso-${permiso.id_permiso}`} 
-                  checked={rolPermisos.includes(permiso.id_permiso)}
-                  onCheckedChange={(checked) => 
-                    handlePermissionChange(permiso.id_permiso, checked === true)
-                  }
-                />
-                <div className="grid gap-1.5">
-                  <Label htmlFor={`permiso-${permiso.id_permiso}`}>
-                    {permiso.nombre}
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    {permiso.descripcion}
-                  </p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Object.entries(getPermissionsByCategory()).map(([category, categoryPermissions]) => (
+                <div key={category} className="border rounded-lg p-3 bg-gradient-to-br from-slate-50 to-slate-100/50 hover:shadow-sm transition-shadow">
+                  <div className="flex items-center mb-3">
+                    <div className="w-2 h-2 rounded-full bg-primary mr-2"></div>
+                    <h4 className="font-semibold text-sm text-primary">
+                      {category}
+                    </h4>
+                  </div>
+                  <div className="space-y-0">
+                    {categoryPermissions.map((permiso) => (
+                      <div key={permiso.id_permiso} className="flex items-start space-x-2 p-0.5 rounded-md hover:bg-white/60 transition-colors">
+                        <Checkbox
+                          id={`manage-permission-${permiso.id_permiso}`}
+                          checked={rolPermisos.includes(permiso.id_permiso)}
+                          onCheckedChange={(checked) => 
+                            handlePermissionChange(permiso.id_permiso, !!checked)
+                          }
+                          className="mt-0.5 flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center">
+                            <Label 
+                              htmlFor={`manage-permission-${permiso.id_permiso}`}
+                              className="text-xs font-medium cursor-pointer leading-tight text-slate-800"
+                            >
+                              {permiso.nombre}
+                            </Label>
+                            <TooltipProvider>
+                              <Tooltip open={openTooltip === permiso.id_permiso} onOpenChange={() => {}}>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="flex-shrink-0 ml-1 p-0.5 hover:bg-slate-300 rounded-full transition-colors"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      handleTooltipToggle(permiso.id_permiso);
+                                    }}
+                                  >
+                                    <Info className="h-3 w-3 text-slate-500 hover:text-slate-700" />
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent 
+                                  side="top" 
+                                  className="max-w-xs bg-slate-800 text-slate-100 border-slate-700"
+                                >
+                                  <p className="text-sm">{permiso.descripcion}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              ))}
+            </div>
+            
+            {/* Sección de control y estadísticas */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-3 border-t bg-slate-50/30 p-4 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <span className="text-sm font-medium text-slate-700">
+                  {rolPermisos.length} permisos seleccionados
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  de {permisos.length} disponibles
+                </span>
               </div>
-            ))}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectAllPermissions}
+                  className="text-xs"
+                >
+                  Seleccionar Todos
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearAllPermissions}
+                  className="text-xs"
+                >
+                  Limpiar Selección
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
