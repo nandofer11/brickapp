@@ -17,18 +17,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         switch (req.method) {
             case 'GET':
-                const { dni, page = 1, limit = 10 } = req.query;
+                const { dni, page = 1, limit = 10, search, tipo } = req.query;
                 const offset = (Number(page) - 1) * Number(limit);
                 
                 const clientes = await ClienteService.getClientes(id_empresa);
                 
-                // Aplicar filtro por DNI si existe
-                const clientesFiltrados = dni 
-                    ? clientes.filter(c => 
+                // Aplicar filtros
+                let clientesFiltrados = clientes;
+                
+                // Filtro por búsqueda (DNI, RUC, nombres o razón social)
+                if (search) {
+                    const searchTerm = (search as string).toLowerCase();
+                    clientesFiltrados = clientesFiltrados.filter(c => 
+                        (c.dni && c.dni.toLowerCase().includes(searchTerm)) || 
+                        (c.ruc && c.ruc.toLowerCase().includes(searchTerm)) ||
+                        (c.nombres_apellidos && c.nombres_apellidos.toLowerCase().includes(searchTerm)) ||
+                        (c.razon_social && c.razon_social.toLowerCase().includes(searchTerm))
+                    );
+                }
+                
+                // Filtro por tipo
+                if (tipo && tipo !== 'TODOS') {
+                    clientesFiltrados = clientesFiltrados.filter(c => c.tipo_cliente === tipo);
+                }
+                
+                // Filtro legacy por DNI (mantener compatibilidad)
+                if (dni && !search) {
+                    clientesFiltrados = clientesFiltrados.filter(c => 
                         (c.dni && c.dni.includes(dni as string)) || 
                         (c.ruc && c.ruc.includes(dni as string))
-                      )
-                    : clientes;
+                    );
+                }
 
                 // Aplicar paginación
                 const inicio = offset;
@@ -39,7 +58,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 return res.status(200).json({
                     clientes: clientesPaginados,
                     totalPaginas,
-                    paginaActual: Number(page)
+                    paginaActual: Number(page),
+                    totalClientes: clientesFiltrados.length
                 });
 
             case 'POST':

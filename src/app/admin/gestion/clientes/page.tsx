@@ -41,22 +41,40 @@ export default function ClientesPage() {
     const [searchTerm, setSearchTerm] = useState("");
     const [filterTipo, setFilterTipo] = useState<string>("");
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 20;
+    const [totalPages, setTotalPages] = useState(1);
+    const itemsPerPage = 10;
 
     useEffect(() => {
         document.title = "Gestión de Clientes";
-        fetchClientes();
-    }, []);
+        fetchClientes(currentPage, itemsPerPage, searchTerm, filterTipo);
+    }, [currentPage, searchTerm, filterTipo]);
+    
+    // Resetear a página 1 cuando cambian los filtros
+    useEffect(() => {
+        if (currentPage !== 1) {
+            setCurrentPage(1);
+        }
+    }, [searchTerm, filterTipo]);
 
-    const fetchClientes = async () => {
+    const fetchClientes = async (page = 1, limit = 10, search = '', tipo = '') => {
         try {
             setLoading(true);
-            const res = await fetch("/api/clientes");
+            const searchParams = new URLSearchParams({
+                page: page.toString(),
+                limit: limit.toString()
+            });
+            
+            if (search) searchParams.append('search', search);
+            if (tipo && tipo !== 'TODOS') searchParams.append('tipo', tipo);
+            
+            const res = await fetch(`/api/clientes?${searchParams.toString()}`);
             const data = await res.json();
 
             // La respuesta tiene una estructura { clientes: [], totalPaginas: number }
             if (data && Array.isArray(data.clientes)) {
                 setClientes(data.clientes);
+                setTotalPages(data.totalPaginas || 1);
+                setCurrentPage(data.paginaActual || 1);
             } else {
                 setClientes([]);
                 console.error('Estructura de respuesta inválida:', data);
@@ -170,7 +188,7 @@ export default function ClientesPage() {
             toast.success(currentCliente.id_cliente ? "Cliente actualizado" : "Cliente creado");
             setShowModal(false);
             setCurrentCliente({});
-            fetchClientes();
+            fetchClientes(currentPage, itemsPerPage, searchTerm, filterTipo);
         } catch (error) {
             toast.error("Error al guardar cliente");
         }
@@ -189,7 +207,7 @@ export default function ClientesPage() {
 
             toast.success("Cliente eliminado");
             setShowDeleteDialog(false);
-            fetchClientes();
+            fetchClientes(currentPage, itemsPerPage, searchTerm, filterTipo);
         } catch (error) {
             toast.error("Error al eliminar cliente");
         }
@@ -279,24 +297,9 @@ export default function ClientesPage() {
         }
     };
 
-    // Función para filtrar clientes
-    const filteredClientes = Array.isArray(clientes) ? clientes.filter((cliente) => {
-        const matchSearch = (cliente.dni || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cliente.nombres_apellidos || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cliente.ruc || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (cliente.razon_social || '')?.toLowerCase().includes(searchTerm.toLowerCase());
-
-        const matchTipo = filterTipo === "TODOS" || !filterTipo ? true : cliente.tipo_cliente === filterTipo;
-
-        return matchSearch && matchTipo;
-    }) : [];
-
-    // Calcular paginación
-    const totalPages = Math.ceil(filteredClientes.length / itemsPerPage);
-    const currentClientes = filteredClientes.slice(
-        (currentPage - 1) * itemsPerPage,
-        currentPage * itemsPerPage
-    );
+    // TODO: Implementar filtros del lado del servidor
+    // Por ahora usamos directamente los clientes del servidor
+    const currentClientes = clientes;
 
     return (
         <div className="container mx-auto p-4">
@@ -351,9 +354,9 @@ export default function ClientesPage() {
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             <span className="ml-2">Cargando datos...</span>
                         </div>
-                    ) : filteredClientes.length === 0 ? (
+                    ) : currentClientes.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
-                            No hay clientes registrados.
+                            No hay clientes registrados en esta página.
                         </div>
                     ) : (
                         <div className="rounded-md border">
@@ -416,7 +419,13 @@ export default function ClientesPage() {
             <div className="flex justify-center gap-2 mt-4">
                 <Button
                     variant="outline"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    onClick={() => {
+                        if (currentPage > 1) {
+                            const newPage = currentPage - 1;
+                            setCurrentPage(newPage);
+                            fetchClientes(newPage, itemsPerPage, searchTerm, filterTipo);
+                        }
+                    }}
                     disabled={currentPage === 1}
                 >
                     Anterior
@@ -426,8 +435,14 @@ export default function ClientesPage() {
                 </span>
                 <Button
                     variant="outline"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
+                    onClick={() => {
+                        if (currentPage < totalPages) {
+                            const newPage = currentPage + 1;
+                            setCurrentPage(newPage);
+                            fetchClientes(newPage, itemsPerPage, searchTerm, filterTipo);
+                        }
+                    }}
+                    disabled={currentPage >= totalPages}
                 >
                     Siguiente
                 </Button>
