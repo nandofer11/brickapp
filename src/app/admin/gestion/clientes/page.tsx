@@ -11,8 +11,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, 
-         AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
+import {
+    AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle,
+    AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel
+} from "@/components/ui/alert-dialog";
 
 interface Cliente {
     id_cliente: number;
@@ -51,7 +53,7 @@ export default function ClientesPage() {
             setLoading(true);
             const res = await fetch("/api/clientes");
             const data = await res.json();
-            
+
             // La respuesta tiene una estructura { clientes: [], totalPaginas: number }
             if (data && Array.isArray(data.clientes)) {
                 setClientes(data.clientes);
@@ -70,19 +72,65 @@ export default function ClientesPage() {
 
     const handleSave = async () => {
         try {
+            // 1. Validación obligatoria: tipo de cliente
             if (!currentCliente.tipo_cliente) {
                 toast.error("Debe seleccionar un tipo de cliente");
                 return;
             }
 
-            // Validar formato de celular si se proporciona
-            if (currentCliente.celular && currentCliente.celular.length !== 9) {
-                toast.error("El número de celular debe tener 9 dígitos");
-                return;
+            // 2. Validaciones según tipo de cliente
+            if (currentCliente.tipo_cliente === 'NATURAL') {
+                // Nombres/apellidos es obligatorio para persona natural
+                if (!currentCliente.nombres_apellidos?.trim()) {
+                    toast.error("Los nombres y apellidos son obligatorios para persona natural");
+                    return;
+                }
+                
+                // 3. Validar DNI solo si tiene contenido (no es obligatorio pero si tiene valor debe ser válido)
+                if (currentCliente.dni && currentCliente.dni.trim() !== '') {
+                    if (currentCliente.dni.length !== 8) {
+                        toast.error("El DNI debe tener exactamente 8 dígitos");
+                        return;
+                    }
+                    if (!/^\d{8}$/.test(currentCliente.dni)) {
+                        toast.error("El DNI solo debe contener números");
+                        return;
+                    }
+                }
+            } else if (currentCliente.tipo_cliente === 'JURIDICA') {
+                // Razón social es obligatoria para persona jurídica
+                if (!currentCliente.razon_social?.trim()) {
+                    toast.error("La razón social es obligatoria para persona jurídica");
+                    return;
+                }
+                
+                // 4. Validar RUC solo si tiene contenido (no es obligatorio pero si tiene valor debe ser válido)
+                if (currentCliente.ruc && currentCliente.ruc.trim() !== '') {
+                    if (currentCliente.ruc.length !== 11) {
+                        toast.error("El RUC debe tener exactamente 11 dígitos");
+                        return;
+                    }
+                    if (!/^\d{11}$/.test(currentCliente.ruc)) {
+                        toast.error("El RUC solo debe contener números");
+                        return;
+                    }
+                }
             }
 
-            // Validar formato de email si se proporciona
-            if (currentCliente.correo && !isValidEmail(currentCliente.correo)) {
+            // 6. Validar celular solo si se proporciona (opcional)
+            if (currentCliente.celular && currentCliente.celular.trim() !== '') {
+                if (currentCliente.celular.length !== 9) {
+                    toast.error("El número de celular debe tener exactamente 9 dígitos");
+                    return;
+                }
+                if (!/^\d{9}$/.test(currentCliente.celular)) {
+                    toast.error("El celular solo debe contener números");
+                    return;
+                }
+            }
+
+            // 6. Validar formato de email solo si se proporciona (opcional)
+            if (currentCliente.correo && currentCliente.correo.trim() !== '' && !isValidEmail(currentCliente.correo)) {
                 toast.error("El formato del correo electrónico no es válido");
                 return;
             }
@@ -101,19 +149,14 @@ export default function ClientesPage() {
                     celular: undefined,
                     correo: undefined
                 };
-            } 
-            // Validaciones para otros tipos de cliente
-            else if (currentCliente.tipo_cliente === 'NATURAL') {
-                if (!currentCliente.dni?.trim() || !currentCliente.nombres_apellidos?.trim()) {
-                    toast.error("DNI y Nombres son obligatorios para persona natural");
-                    return;
-                }
-            } else if (currentCliente.tipo_cliente === 'JURIDICA') {
-                if (!currentCliente.ruc?.trim() || !currentCliente.razon_social?.trim()) {
-                    toast.error("RUC y Razón Social son obligatorios para persona jurídica");
-                    return;
-                }
             }
+
+            // Limpiar campos vacíos para enviar null en lugar de strings vacíos
+            if (clienteToSave.dni === '') clienteToSave.dni = undefined;
+            if (clienteToSave.ruc === '') clienteToSave.ruc = undefined;
+            if (clienteToSave.direccion === '') clienteToSave.direccion = undefined;
+            if (clienteToSave.celular === '') clienteToSave.celular = undefined;
+            if (clienteToSave.correo === '') clienteToSave.correo = undefined;
 
             const method = currentCliente.id_cliente ? "PUT" : "POST";
             const res = await fetch("/api/clientes", {
@@ -155,52 +198,76 @@ export default function ClientesPage() {
     const validateDocument = async (tipo: string, numero: string) => {
         try {
             setValidating(true);
+            
             if (tipo === 'NATURAL') {
                 if (!numero || numero.length !== 8) {
-                    toast.error("El DNI debe tener 8 dígitos");
+                    toast.error("El DNI debe tener exactamente 8 dígitos para poder validar");
                     return;
                 }
 
-                const res = await fetch('/api/validar-cliente-dni', {
+                if (!/^\d{8}$/.test(numero)) {
+                    toast.error("El DNI solo debe contener números");
+                    return;
+                }
+
+                const res = await fetch('/api/validar-identidad', {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ dni: numero }),
+                    body: JSON.stringify({
+                        tipo: "cliente",
+                        numero: numero
+                    }),
                 });
 
-                const data = await res.json();
-                
-                if (!data.success) {
-                    toast.error(data.message);
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    toast.error(errorData.message || "Error al validar DNI");
                     return;
                 }
 
+                const data = await res.json();
+
+                // Actualizar para usar los nombres de campo correctos según tu API
                 setCurrentCliente(prev => ({
                     ...prev,
-                    nombres_apellidos: `${data.nombres} ${data.apellidoPaterno} ${data.apellidoMaterno}`.trim()
+                    nombres_apellidos: data.nombre_completo ||
+                        `${data.apellido_paterno} ${data.apellido_materno} ${data.nombres}`.trim()
                 }));
                 toast.success("DNI validado correctamente");
-            } else {
+                
+            } else if (tipo === 'JURIDICA') {
                 if (!numero || numero.length !== 11) {
-                    toast.error("El RUC debe tener 11 dígitos");
+                    toast.error("El RUC debe tener exactamente 11 dígitos para poder validar");
                     return;
                 }
 
-                const res = await fetch('/api/validar-cliente-ruc', {
+                if (!/^\d{11}$/.test(numero)) {
+                    toast.error("El RUC solo debe contener números");
+                    return;
+                }
+
+                const res = await fetch('/api/validar-identidad', {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ruc: numero }),
+                    body: JSON.stringify({
+                        tipo: "cliente",
+                        numero: numero
+                    }),
                 });
+
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    toast.error(errorData.message || "Error al validar RUC");
+                    return;
+                }
 
                 const data = await res.json();
 
-                if (!data.success) {
-                    toast.error(data.message);
-                    return;
-                }
-
+                // Actualizar para usar los nombres de campo correctos según tu API
                 setCurrentCliente(prev => ({
                     ...prev,
-                    razon_social: data.razonSocial
+                    razon_social: data.razon_social,
+                    direccion: data.direccion !== '-' ? data.direccion : prev.direccion
                 }));
                 toast.success("RUC validado correctamente");
             }
@@ -215,12 +282,12 @@ export default function ClientesPage() {
     // Función para filtrar clientes
     const filteredClientes = Array.isArray(clientes) ? clientes.filter((cliente) => {
         const matchSearch = (cliente.dni || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (cliente.nombres_apellidos || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (cliente.ruc || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (cliente.razon_social || '')?.toLowerCase().includes(searchTerm.toLowerCase());
-        
+            (cliente.nombres_apellidos || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cliente.ruc || '')?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (cliente.razon_social || '')?.toLowerCase().includes(searchTerm.toLowerCase());
+
         const matchTipo = filterTipo === "TODOS" || !filterTipo ? true : cliente.tipo_cliente === filterTipo;
-        
+
         return matchSearch && matchTipo;
     }) : [];
 
@@ -373,20 +440,24 @@ export default function ClientesPage() {
                         <DialogTitle>
                             {currentCliente.id_cliente ? "Editar" : "Nuevo"} Cliente
                         </DialogTitle>
+                        <p className="text-sm text-muted-foreground">
+                            Los campos marcados con (*) son obligatorios. 
+                            DNI/RUC son opcionales, pero si se ingresan deben tener el formato correcto.
+                        </p>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="space-y-2">
-                            <Label htmlFor="tipo_cliente">Tipo de Cliente</Label>
+                            <Label htmlFor="tipo_cliente">Tipo de Cliente *</Label>
                             <Select
                                 value={currentCliente.tipo_cliente}
                                 onValueChange={(value) => {
-                                    setCurrentCliente({ 
+                                    setCurrentCliente({
                                         tipo_cliente: value,
                                         // Limpiar campos al cambiar tipo
                                         dni: undefined,
                                         ruc: undefined,
                                         nombres_apellidos: undefined,
-                                        razon_social: undefined 
+                                        razon_social: undefined
                                     });
                                 }}
                             >
@@ -405,22 +476,25 @@ export default function ClientesPage() {
                             <>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="dni">DNI</Label>
+                                        <Label htmlFor="dni">DNI (Opcional)</Label>
                                         <div className="flex gap-2">
                                             <Input
                                                 id="dni"
                                                 maxLength={8}
+                                                placeholder="12345678"
                                                 value={currentCliente.dni || ""}
-                                                onChange={(e) =>
-                                                    setCurrentCliente({ ...currentCliente, dni: e.target.value })
-                                                }
+                                                onChange={(e) => {
+                                                    // Solo permitir números y máximo 8 dígitos
+                                                    const value = e.target.value.replace(/\D/g, '').slice(0, 8);
+                                                    setCurrentCliente({ ...currentCliente, dni: value });
+                                                }}
                                             />
-                                            <Button 
+                                            <Button
                                                 type="button"
                                                 variant="secondary"
                                                 className="bg-green-500 hover:bg-green-600 text-white"
                                                 onClick={() => validateDocument('NATURAL', currentCliente.dni || '')}
-                                                disabled={validating}
+                                                disabled={validating || !currentCliente.dni || currentCliente.dni.length !== 8}
                                             >
                                                 {validating ? (
                                                     <>
@@ -432,16 +506,19 @@ export default function ClientesPage() {
                                                 )}
                                             </Button>
                                         </div>
+                                        {currentCliente.dni && currentCliente.dni.length > 0 && currentCliente.dni.length < 8 && (
+                                            <p className="text-sm text-red-500">El DNI debe tener 8 dígitos completos</p>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="nombres_apellidos">Nombres y Apellidos</Label>
+                                        <Label htmlFor="nombres_apellidos">Nombres y Apellidos *</Label>
                                         <Input
                                             id="nombres_apellidos"
+                                            placeholder="Ingrese nombres y apellidos"
                                             value={currentCliente.nombres_apellidos || ""}
                                             onChange={(e) =>
                                                 setCurrentCliente({ ...currentCliente, nombres_apellidos: e.target.value })
                                             }
-                                            disabled={currentCliente.tipo_cliente === 'NATURAL'}
                                         />
                                     </div>
                                 </div>
@@ -450,22 +527,25 @@ export default function ClientesPage() {
                             <>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="ruc">RUC</Label>
+                                        <Label htmlFor="ruc">RUC (Opcional)</Label>
                                         <div className="flex gap-2">
                                             <Input
                                                 id="ruc"
                                                 maxLength={11}
+                                                placeholder="12345678901"
                                                 value={currentCliente.ruc || ""}
-                                                onChange={(e) =>
-                                                    setCurrentCliente({ ...currentCliente, ruc: e.target.value })
-                                                }
+                                                onChange={(e) => {
+                                                    // Solo permitir números y máximo 11 dígitos
+                                                    const value = e.target.value.replace(/\D/g, '').slice(0, 11);
+                                                    setCurrentCliente({ ...currentCliente, ruc: value });
+                                                }}
                                             />
-                                            <Button 
+                                            <Button
                                                 type="button"
                                                 variant="secondary"
                                                 className="bg-green-500 hover:bg-green-600 text-white"
                                                 onClick={() => validateDocument('JURIDICA', currentCliente.ruc || '')}
-                                                disabled={validating}
+                                                disabled={validating || !currentCliente.ruc || currentCliente.ruc.length !== 11}
                                             >
                                                 {validating ? (
                                                     <>
@@ -477,16 +557,19 @@ export default function ClientesPage() {
                                                 )}
                                             </Button>
                                         </div>
+                                        {currentCliente.ruc && currentCliente.ruc.length > 0 && currentCliente.ruc.length < 11 && (
+                                            <p className="text-sm text-red-500">El RUC debe tener 11 dígitos completos</p>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="razon_social">Razón Social</Label>
+                                        <Label htmlFor="razon_social">Razón Social *</Label>
                                         <Input
                                             id="razon_social"
+                                            placeholder="Ingrese razón social"
                                             value={currentCliente.razon_social || ""}
                                             onChange={(e) =>
                                                 setCurrentCliente({ ...currentCliente, razon_social: e.target.value })
                                             }
-                                            disabled={currentCliente.tipo_cliente === 'JURIDICA'}
                                         />
                                     </div>
                                 </div>
@@ -497,9 +580,10 @@ export default function ClientesPage() {
                         {currentCliente.tipo_cliente !== 'GENERICO' && (
                             <>
                                 <div className="space-y-2">
-                                    <Label htmlFor="direccion">Dirección</Label>
+                                    <Label htmlFor="direccion">Dirección (Opcional)</Label>
                                     <Input
                                         id="direccion"
+                                        placeholder="Ingrese dirección"
                                         value={currentCliente.direccion || ""}
                                         onChange={(e) =>
                                             setCurrentCliente({ ...currentCliente, direccion: e.target.value })
@@ -513,28 +597,27 @@ export default function ClientesPage() {
                                         <Input
                                             id="celular"
                                             maxLength={9}
-                                            pattern="[0-9]*"
+                                            placeholder="987654321"
                                             value={currentCliente.celular || ""}
                                             onChange={(e) => {
-                                                const value = e.target.value.replace(/\D/g, '');
+                                                // Solo permitir números y máximo 9 dígitos
+                                                const value = e.target.value.replace(/\D/g, '').slice(0, 9);
                                                 setCurrentCliente({
                                                     ...currentCliente,
                                                     celular: value
                                                 });
                                             }}
-                                            onInput={(e) => {
-                                                const input = e.target as HTMLInputElement;
-                                                if (input.value.length > 9) {
-                                                    input.value = input.value.slice(0, 9);
-                                                }
-                                            }}
                                         />
+                                        {currentCliente.celular && currentCliente.celular.length > 0 && currentCliente.celular.length < 9 && (
+                                            <p className="text-sm text-red-500">El celular debe tener 9 dígitos completos</p>
+                                        )}
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="correo">Correo (Opcional)</Label>
                                         <Input
                                             id="correo"
                                             type="email"
+                                            placeholder="correo@ejemplo.com"
                                             value={currentCliente.correo || ""}
                                             onChange={(e) =>
                                                 setCurrentCliente({
