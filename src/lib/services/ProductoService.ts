@@ -38,7 +38,7 @@ export class ProductoService {
             nombre: data.nombre,
             descripcion: data.descripcion,
             precio_unitario: new Prisma.Decimal(data.precio_unitario),
-            peso: new Prisma.Decimal(data.peso),
+            peso: data.peso ? new Prisma.Decimal(data.peso) : null, // Manejar null
             dimensiones: data.dimensiones,
             estado: Number(data.estado),
             id_empresa: data.id_empresa,
@@ -52,7 +52,7 @@ export class ProductoService {
         const updateData = {
             ...data,
             precio_unitario: new Prisma.Decimal(data.precio_unitario),
-            peso: new Prisma.Decimal(data.peso),
+            peso: data.peso ? new Prisma.Decimal(data.peso) : null, // Manejar null
             estado: Number(data.estado)
         };
         

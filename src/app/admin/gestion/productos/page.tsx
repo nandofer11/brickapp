@@ -119,7 +119,7 @@ export default function ProductosPage() {
 
     const handleSaveProducto = async () => {
         try {
-            // Validaciones
+            // Validaciones - Solo campos obligatorios
             if (!currentProducto.categoria_id_categoria) {
                 toast.error("Debe seleccionar una categoría");
                 return;
@@ -132,24 +132,17 @@ export default function ProductosPage() {
                 toast.error("El precio unitario debe ser mayor a 0");
                 return;
             }
-            if (!currentProducto.peso || currentProducto.peso <= 0) {
-                toast.error("El peso debe ser mayor a 0");
-                return;
-            }
-            if (!currentProducto.dimensiones?.trim()) {
-                toast.error("Las dimensiones son obligatorias");
-                return;
-            }
+            // Nota: peso, dimensiones y descripción son opcionales
 
             const productoData = {
-                ...(currentProducto.id_producto && { id_producto: currentProducto.id_producto }), // Añadir id_producto si existe
+                ...(currentProducto.id_producto && { id_producto: currentProducto.id_producto }),
                 categoria_id_categoria: Number(currentProducto.categoria_id_categoria),
                 nombre: currentProducto.nombre?.trim(),
                 precio_unitario: Number(currentProducto.precio_unitario),
-                peso: Number(currentProducto.peso),
-                dimensiones: currentProducto.dimensiones?.trim(),
+                peso: currentProducto.peso ? Number(currentProducto.peso) : null, // Opcional
+                dimensiones: currentProducto.dimensiones?.trim() || null, // Opcional
                 estado: 1, // Siempre establecer como activo (disponible)
-                descripcion: currentProducto.descripcion
+                descripcion: currentProducto.descripcion?.trim() || null // Opcional
             };
 
             console.log('Datos a enviar:', productoData); // Para debug
@@ -398,11 +391,14 @@ export default function ProductosPage() {
                         <DialogTitle>
                             {currentProducto.id_producto ? "Editar" : "Nuevo"} Producto
                         </DialogTitle>
+                        <p className="text-sm text-muted-foreground">
+                            Los campos marcados con (*) son obligatorios. Los demás campos son opcionales.
+                        </p>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="categoria">Categoría</Label>
+                                <Label htmlFor="categoria">Categoría *</Label>
                                 <Select
                                     value={currentProducto.categoria_id_categoria?.toString()}
                                     onValueChange={(value) =>
@@ -412,7 +408,7 @@ export default function ProductosPage() {
                                         })
                                     }
                                 >
-                                    <SelectTrigger id="categoria" className="w-full"> {/* Añadido w-full */}
+                                    <SelectTrigger id="categoria" className="w-full">
                                         <SelectValue placeholder="Seleccionar categoría" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -428,9 +424,10 @@ export default function ProductosPage() {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="nombre">Nombre</Label>
+                                <Label htmlFor="nombre">Nombre *</Label>
                                 <Input
                                     id="nombre"
+                                    placeholder="Ingrese el nombre del producto"
                                     value={currentProducto.nombre || ""}
                                     onChange={(e) =>
                                         setCurrentProducto({ ...currentProducto, nombre: e.target.value })
@@ -441,41 +438,47 @@ export default function ProductosPage() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="precio">Precio Unitario (S/.)</Label>
+                                <Label htmlFor="precio">Precio Unitario (S/.) *</Label>
                                 <Input
                                     id="precio"
                                     type="number"
                                     step="0.01"
+                                    min="0.01"
+                                    placeholder="Ej: 25.50"
                                     value={currentProducto.precio_unitario || ""}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
+                                        const value = e.target.value;
                                         setCurrentProducto({
                                             ...currentProducto,
-                                            precio_unitario: Number(e.target.value),
-                                        })
-                                    }
+                                            precio_unitario: value ? Number(value) : undefined,
+                                        });
+                                    }}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="peso">Peso (Kg)</Label>
+                                <Label htmlFor="peso">Peso (Kg) - Opcional</Label>
                                 <Input
                                     id="peso"
                                     type="number"
                                     step="0.01"
+                                    placeholder="Ej: 2.5"
                                     value={currentProducto.peso || ""}
-                                    onChange={(e) =>
+                                    onChange={(e) => {
+                                        const value = e.target.value;
                                         setCurrentProducto({
                                             ...currentProducto,
-                                            peso: Number(e.target.value),
-                                        })
-                                    }
+                                            peso: value ? Number(value) : undefined,
+                                        });
+                                    }}
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="dimensiones">Dimensiones</Label>
+                            <Label htmlFor="dimensiones">Dimensiones - Opcional</Label>
                             <Input
                                 id="dimensiones"
+                                placeholder="Ej: 20x15x10 cm"
                                 value={currentProducto.dimensiones || ""}
                                 onChange={(e) =>
                                     setCurrentProducto({
@@ -487,9 +490,10 @@ export default function ProductosPage() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="descripcion">Descripción (Opcional)</Label>
+                            <Label htmlFor="descripcion">Descripción - Opcional</Label>
                             <Input
                                 id="descripcion"
+                                placeholder="Descripción del producto..."
                                 value={currentProducto.descripcion || ""}
                                 onChange={(e) =>
                                     setCurrentProducto({

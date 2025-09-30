@@ -42,18 +42,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         return res.status(201).json(categoria);
                     }
 
-                    const { categoria_id_categoria, nombre, precio_unitario, peso, dimensiones } = req.body;
+                    const { categoria_id_categoria, nombre, precio_unitario } = req.body;
                     
-                    if (!categoria_id_categoria || !nombre || !precio_unitario || !peso || !dimensiones) {
-                        return res.status(400).json({ message: 'Faltan campos requeridos' });
+                    // Solo validar campos obligatorios
+                    if (!categoria_id_categoria || !nombre || !precio_unitario) {
+                        return res.status(400).json({ message: 'Faltan campos requeridos: categoría, nombre y precio unitario' });
                     }
 
                     const productoData = {
                         nombre: nombre.trim(),
-                        descripcion: req.body.descripcion,
+                        descripcion: req.body.descripcion || null,
                         precio_unitario: Number(precio_unitario),
-                        peso: Number(peso),
-                        dimensiones: dimensiones.trim(),
+                        peso: req.body.peso ? Number(req.body.peso) : null, // Opcional
+                        dimensiones: req.body.dimensiones ? req.body.dimensiones.trim() : null, // Opcional
                         estado: Number(req.body.estado || 1),
                         categoria_id_categoria: Number(categoria_id_categoria),
                         id_empresa
@@ -64,7 +65,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 } catch (error) {
                     console.error('Error al crear producto:', error);
                     return res.status(500).json({ 
-                        message: error instanceof Error ? error.message : 'Error al crear producto'
+                        message: error instanceof Error ? error.message : 'Error al crear producto',
+                        details: error instanceof Error ? error.stack : 'Error desconocido'
                     });
                 }
 
