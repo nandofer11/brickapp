@@ -108,7 +108,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         return res.status(200).json({ message: 'Categoría eliminada' });
                     }
                     await ProductoService.deleteProducto(id);
-                    return res.status(200).json({ message: 'Producto eliminado' });
+                    return res.status(200).json({ message: 'Producto eliminado correctamente' });
                 } catch (error) {
                     console.error('Error DELETE:', error);
                     return res.status(500).json({ 

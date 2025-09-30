@@ -9,7 +9,10 @@ export class ProductoRepository extends BaseRepository {
 
     async findAllByEmpresa(id_empresa: number) {
         return prisma.producto.findMany({
-            where: { id_empresa },
+            where: { 
+                id_empresa,
+                estado: 1 // Solo mostrar productos activos (no eliminados)
+            },
             include: {
                 categoria: true
             },
@@ -54,8 +57,13 @@ export class ProductoRepository extends BaseRepository {
     }
 
     async delete(id: number) {
-        return prisma.producto.delete({
-            where: { id_producto: id }
+        // Soft delete: cambiar estado a 0 en lugar de eliminar el registro
+        return prisma.producto.update({
+            where: { id_producto: id },
+            data: { estado: 0 }, // Marcar como eliminado
+            include: {
+                categoria: true
+            }
         });
     }
 }

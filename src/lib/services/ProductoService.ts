@@ -60,6 +60,7 @@ export class ProductoService {
     }
 
     async deleteProducto(id: number) {
+        // Soft delete: marcar como eliminado (estado = 0)
         return this.productoRepo.delete(id);
     }
 }

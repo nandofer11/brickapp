@@ -31,7 +31,6 @@ interface Producto {
     precio_unitario: number;
     peso: number;
     dimensiones: string;
-    estado: boolean;
     categoria_id_categoria: number;
     id_empresa: number;
     categoria: Categoria;
@@ -141,10 +140,6 @@ export default function ProductosPage() {
                 toast.error("Las dimensiones son obligatorias");
                 return;
             }
-            if (currentProducto.estado === undefined) {
-                toast.error("Debe seleccionar un estado");
-                return;
-            }
 
             const productoData = {
                 ...(currentProducto.id_producto && { id_producto: currentProducto.id_producto }), // Añadir id_producto si existe
@@ -153,7 +148,7 @@ export default function ProductosPage() {
                 precio_unitario: Number(currentProducto.precio_unitario),
                 peso: Number(currentProducto.peso),
                 dimensiones: currentProducto.dimensiones?.trim(),
-                estado: Number(currentProducto.estado), // Convertir boolean a número
+                estado: 1, // Siempre establecer como activo (disponible)
                 descripcion: currentProducto.descripcion
             };
 
@@ -191,8 +186,7 @@ export default function ProductosPage() {
             descripcion: producto.descripcion || undefined,
             precio_unitario: Number(producto.precio_unitario),
             peso: Number(producto.peso),
-            dimensiones: producto.dimensiones,
-            estado: Boolean(producto.estado) // Convertir número a boolean para el select
+            dimensiones: producto.dimensiones
         });
         setShowProductoModal(true);
     };
@@ -262,7 +256,6 @@ export default function ProductosPage() {
                                         <TableHead>Precio</TableHead>
                                         <TableHead>Peso</TableHead>
                                         <TableHead>Dimensiones</TableHead>
-                                        <TableHead>Estado</TableHead>
                                         <TableHead className="text-right">Acciones</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -274,16 +267,6 @@ export default function ProductosPage() {
                                             <TableCell>S/. {producto.precio_unitario}</TableCell>
                                             <TableCell>{producto.peso} Kg</TableCell>
                                             <TableCell>{producto.dimensiones}</TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    variant={producto.estado ? "default" : "destructive"}
-                                                    className={producto.estado
-                                                        ? "bg-green-100 text-green-800 hover:bg-green-100"
-                                                        : "bg-red-50 text-red-600 hover:bg-red-50"}
-                                                >
-                                                    {producto.estado ? "Disponible" : "No disponible"}
-                                                </Badge>
-                                            </TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Button
@@ -489,40 +472,18 @@ export default function ProductosPage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="dimensiones">Dimensiones</Label>
-                                <Input
-                                    id="dimensiones"
-                                    value={currentProducto.dimensiones || ""}
-                                    onChange={(e) =>
-                                        setCurrentProducto({
-                                            ...currentProducto,
-                                            dimensiones: e.target.value,
-                                        })
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="estado">Estado</Label>
-                                <Select
-                                    value={currentProducto.estado?.toString() ?? ""} // Cambiado para permitir valor vacío
-                                    onValueChange={(value) =>
-                                        setCurrentProducto({
-                                            ...currentProducto,
-                                            estado: value === "true"
-                                        })
-                                    }
-                                >
-                                    <SelectTrigger id="estado" className="w-full"> {/* Añadido w-full */}
-                                        <SelectValue placeholder="Seleccionar estado" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="true">Disponible</SelectItem>
-                                        <SelectItem value="false">No disponible</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="dimensiones">Dimensiones</Label>
+                            <Input
+                                id="dimensiones"
+                                value={currentProducto.dimensiones || ""}
+                                onChange={(e) =>
+                                    setCurrentProducto({
+                                        ...currentProducto,
+                                        dimensiones: e.target.value,
+                                    })
+                                }
+                            />
                         </div>
 
                         <div className="space-y-2">
@@ -556,7 +517,8 @@ export default function ProductosPage() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
                         <AlertDialogDescription>
-                            ¿Está seguro de eliminar este {deleteType}? Esta acción no se puede deshacer.
+                            ¿Está seguro de eliminar este {deleteType}? 
+                            {deleteType === 'producto' ? ' El producto será marcado como inactivo y ya no se mostrará en la lista.' : ' Esta acción no se puede deshacer.'}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
