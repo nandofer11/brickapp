@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { toast } from "react-toastify";
+import { formatDateWithDayName } from "@/utils/dateFormat";
 import {
   Dialog,
   DialogContent,
@@ -103,6 +104,7 @@ interface Venta {
   adelanto?: number | string;
   saldo_pendiente?: number | string;
   observaciones?: string;
+  forma_pago?: 'EFECTIVO' | 'TRANSFERENCIA' | 'YAPE';
   detalles?: DetalleVenta[];
   detalle_venta?: DetalleVenta[];
   servicio_venta?: ServicioVenta[];
@@ -124,6 +126,7 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
   // Estados para editar la venta
   const [estadoPago, setEstadoPago] = useState<'PENDIENTE' | 'ANULADO' | 'ANULADA' | 'CANCELADO' | 'PARCIAL'>('PENDIENTE');
   const [estadoEntrega, setEstadoEntrega] = useState<'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO' | 'ANULADA'>('NO ENTREGADO');
+  const [formaPago, setFormaPago] = useState<'EFECTIVO' | 'TRANSFERENCIA' | 'YAPE'>('EFECTIVO');
   const [tipoComprobante, setTipoComprobante] = useState<'BOLETA' | 'FACTURA' | 'NINGUNO'>('NINGUNO');
   const [adelanto, setAdelanto] = useState<number>(0);
   const [observaciones, setObservaciones] = useState<string>("");
@@ -185,6 +188,7 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
       // Inicializar los campos del formulario
       setEstadoPago(data.estado_pago || 'PENDIENTE');
       setEstadoEntrega(data.estado_entrega || 'NO ENTREGADO');
+      setFormaPago(data.forma_pago || 'EFECTIVO');
       
       // Obtener tipo de comprobante del primer elemento si existe
       const tipoComp = data.comprobante_venta && data.comprobante_venta.length > 0 
@@ -226,6 +230,7 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
   const resetForm = () => {
     setEstadoPago('PENDIENTE');
     setEstadoEntrega('NO ENTREGADO');
+    setFormaPago('EFECTIVO');
     setTipoComprobante('NINGUNO');
     setAdelanto(0);
     setObservaciones("");
@@ -256,24 +261,17 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
       let saldoPendiente = parseFloat(venta.saldo_pendiente?.toString() || '0');
       if (isAdelantoDirty) {
         const totalVenta = parseFloat(venta.total.toString());
-        saldoPendiente = totalVenta - adelanto;
+        saldoPendiente = totalVenta - Number(adelanto);
       }
       
       // Calcular el nuevo total si se han modificado los detalles o servicios
       let nuevoTotal = parseFloat(venta.total.toString());
       if (isDirty) {
-        // Sumar todos los subtotales de los detalles
-        const totalDetalles = detallesVenta.reduce((total, detalle) => total + detalle.subtotal, 0);
-        
-        // Sumar servicios adicionales
-        let totalServicios = 0;
-        if (requiereFlete) totalServicios += costoFlete;
-        if (requiereDescarga) totalServicios += costoDescarga;
-        
-        nuevoTotal = totalDetalles + totalServicios;
+        // Usar la función calcularTotalActualizado que ya existe
+        nuevoTotal = calcularTotalActualizado();
         
         // Recalcular saldo pendiente con el nuevo total
-        saldoPendiente = nuevoTotal - adelanto;
+        saldoPendiente = nuevoTotal - Number(adelanto);
       }
       
       // Preparar datos de servicios para actualizar
@@ -281,8 +279,8 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
         requiere_flete: requiereFlete,
         requiere_descarga: requiereDescarga,
         direccion_entrega: direccionEntrega,
-        costo_flete: costoFlete,
-        costo_descarga: costoDescarga,
+        costo_flete: Number(costoFlete || 0),
+        costo_descarga: Number(costoDescarga || 0),
         id_servicio_venta: serviciosVenta.length > 0 ? serviciosVenta[0].id_servicio_venta : undefined
       };
       
@@ -290,13 +288,14 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
       const datosActualizados = {
         estado_pago: estadoPago,
         estado_entrega: estadoEntrega,
+        forma_pago: formaPago,
         tipo_comprobante: tipoComprobante,
-        adelanto: adelanto,
-        saldo_pendiente: saldoPendiente,
+        adelanto: Number(adelanto),
+        saldo_pendiente: Number(saldoPendiente.toFixed(2)),
         observaciones: observaciones,
         detalles: detallesVenta, // Siempre enviar los detalles
         servicios: [servicioActualizado], // Siempre enviar los servicios
-        total: nuevoTotal // Siempre enviar el total actualizado
+        total: Number(nuevoTotal.toFixed(2)) // Siempre enviar el total actualizado
       };
       
       console.log('Datos a actualizar:', datosActualizados);
@@ -825,7 +824,7 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
                   <div className="text-right">
                     <p className="text-sm font-semibold">N° {getComprobanteInfo()}</p>
                     <p className="text-xs text-muted-foreground">
-                      Fecha: {venta.fecha_venta ? format(new Date(venta.fecha_venta), "dd 'de' MMMM 'de' yyyy", { locale: es }) : 'No disponible'}
+                      Fecha: {venta.fecha_venta ? formatDateWithDayName(venta.fecha_venta) : 'No disponible'}
                     </p>
                   </div>
                 </div>
@@ -847,6 +846,21 @@ export default function EditarVentaModal({ isOpen, onClose, ventaId, onVentaActu
                     
                     {/* Campos de estado editables */}
                     <div className="space-y-2">
+                      {/* Forma de Pago */}
+                      <div>
+                        <Label htmlFor="formaPago" className="text-xs">Forma de Pago</Label>
+                        <Select value={formaPago} onValueChange={(value) => setFormaPago(value as any)}>
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="EFECTIVO">Efectivo</SelectItem>
+                            <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
+                            <SelectItem value="YAPE">Yape</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <Label htmlFor="estadoPago" className="text-xs">Estado Pago</Label>

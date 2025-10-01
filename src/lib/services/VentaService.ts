@@ -270,6 +270,7 @@ export class VentaService {
         const {
             estado_pago,
             estado_entrega,
+            forma_pago,
             tipo_comprobante,
             adelanto,
             saldo_pendiente,
@@ -290,6 +291,7 @@ export class VentaService {
                     data: {
                         estado_pago,
                         estado_entrega,
+                        forma_pago,
                         adelanto: adelanto !== undefined ? Number(adelanto) : undefined,
                         saldo_pendiente: saldo_pendiente !== undefined ? Number(saldo_pendiente) : undefined,
                         observaciones: observaciones || '',
