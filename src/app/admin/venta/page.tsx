@@ -288,9 +288,9 @@ export default function VentaPage() {
     }
   };
 
-  const buscarClientePorDni = async (dni: string) => {
+  const buscarClientePorDni = async (termino: string, pagina: number = 1) => {
     try {
-      const res = await fetch(`/api/clientes?dni=${dni}&page=${paginaActual}`);
+      const res = await fetch(`/api/clientes?search=${termino}&page=${pagina}`);
       const data = await res.json();
       
       // Función para ordenar resultados con CLIENTE GENERICO primero
@@ -322,7 +322,7 @@ export default function VentaPage() {
         // Si la respuesta tiene la estructura {clientes, totalPaginas}
         const clientesOrdenados = ordenarResultados(data.clientes);
         setClientesPaginados(clientesOrdenados);
-        setTotalPaginas(data.totalPaginas);
+        setTotalPaginas(data.totalPaginas || 1);
       }
     } catch (error) {
       console.error('Error al buscar cliente:', error);
@@ -332,6 +332,40 @@ export default function VentaPage() {
   };
 
   const registrarNuevoCliente = async () => {
+    // Validaciones mejoradas
+    if (!nuevoCliente.tipo_cliente) {
+      toast.error('Debe seleccionar un tipo de cliente');
+      return;
+    }
+
+    // Validar nombres y apellidos (campo obligatorio)
+    const nombreCompleto = nuevoCliente.tipo_cliente === 'NATURAL' 
+      ? nuevoCliente.nombres_apellidos 
+      : nuevoCliente.razon_social;
+    
+    if (!nombreCompleto || nombreCompleto.trim() === '') {
+      toast.error(nuevoCliente.tipo_cliente === 'NATURAL' 
+        ? 'Debe ingresar nombres y apellidos' 
+        : 'Debe ingresar la razón social');
+      return;
+    }
+
+    // Validar DNI solo si se ingresó un valor
+    if (nuevoCliente.tipo_cliente === 'NATURAL' && nuevoCliente.dni) {
+      if (nuevoCliente.dni.length !== 8) {
+        toast.error('El DNI debe tener exactamente 8 dígitos');
+        return;
+      }
+    }
+
+    // Validar celular solo si se ingresó un valor
+    if (nuevoCliente.celular && nuevoCliente.celular.trim() !== '') {
+      if (nuevoCliente.celular.length !== 9 || !/^\d+$/.test(nuevoCliente.celular)) {
+        toast.error('El celular debe tener exactamente 9 dígitos');
+        return;
+      }
+    }
+
     try {
       const res = await fetch('/api/clientes', {
         method: 'POST',
@@ -345,6 +379,17 @@ export default function VentaPage() {
       setClienteSeleccionado(clienteRegistrado);
       setShowClienteModal(false);
       toast.success('Cliente registrado correctamente');
+      
+      // Limpiar formulario
+      setNuevoCliente({
+        tipo_cliente: 'NATURAL',
+        dni: '',
+        ruc: '',
+        nombres_apellidos: '',
+        razon_social: '',
+        direccion: '',
+        celular: ''
+      });
     } catch (error) {
       toast.error('Error al registrar cliente');
     }
@@ -1494,15 +1539,16 @@ export default function VentaPage() {
             </TabsList>
             <TabsContent value="buscar" className="space-y-2">
               <Input
-                placeholder="Buscar por DNI/RUC..."
+                placeholder="Buscar por DNI/RUC/Nombre..."
                 value={searchDni}
                 className="text-xs md:text-sm"
                 onChange={(e) => {
                   const valor = e.target.value;
                   setSearchDni(valor);
+                  setPaginaActual(1); // Resetear página al buscar
                   // Buscar inmediatamente si hay al menos 3 caracteres
                   if (valor.length >= 3) {
-                    buscarClientePorDni(valor);
+                    buscarClientePorDni(valor, 1);
                   } else if (valor.length === 0) {
                     // Si se borra todo, cargar la lista inicial
                     fetchClientes();
@@ -1547,20 +1593,33 @@ export default function VentaPage() {
                   className="text-xs h-7"
                   disabled={paginaActual === 1}
                   onClick={() => {
-                    setPaginaActual(prev => prev - 1);
-                    buscarClientePorDni(searchDni);
+                    const nuevaPagina = paginaActual - 1;
+                    setPaginaActual(nuevaPagina);
+                    if (searchDni) {
+                      buscarClientePorDni(searchDni, nuevaPagina);
+                    } else {
+                      fetchClientes();
+                    }
                   }}
                 >
                   Anterior
                 </Button>
+                <span className="text-xs self-center">
+                  Página {paginaActual} de {totalPaginas}
+                </span>
                 <Button
                   variant="outline"
                   size="sm"
                   className="text-xs h-7"
-                  disabled={paginaActual === totalPaginas}
+                  disabled={paginaActual >= totalPaginas}
                   onClick={() => {
-                    setPaginaActual(prev => prev + 1);
-                    buscarClientePorDni(searchDni);
+                    const nuevaPagina = paginaActual + 1;
+                    setPaginaActual(nuevaPagina);
+                    if (searchDni) {
+                      buscarClientePorDni(searchDni, nuevaPagina);
+                    } else {
+                      fetchClientes();
+                    }
                   }}
                 >
                   Siguiente
@@ -1570,13 +1629,23 @@ export default function VentaPage() {
             <TabsContent value="nuevo" className="space-y-3 md:space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs md:text-sm">Tipo Cliente</Label>
+                  <Label className="text-xs md:text-sm">Tipo Cliente *</Label>
                   <Select
                     value={nuevoCliente.tipo_cliente}
-                    onValueChange={(v) => setNuevoCliente({ ...nuevoCliente, tipo_cliente: v })}
+                    onValueChange={(v) => {
+                      setNuevoCliente({ 
+                        ...nuevoCliente, 
+                        tipo_cliente: v,
+                        // Limpiar campos al cambiar tipo
+                        dni: '',
+                        ruc: '',
+                        nombres_apellidos: '',
+                        razon_social: ''
+                      });
+                    }}
                   >
                     <SelectTrigger className="text-xs md:text-sm">
-                      <SelectValue />
+                      <SelectValue placeholder="Seleccionar tipo" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="NATURAL">Natural</SelectItem>
@@ -1585,23 +1654,36 @@ export default function VentaPage() {
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs md:text-sm">{nuevoCliente.tipo_cliente === 'NATURAL' ? 'DNI' : 'RUC'}</Label>
+                  <Label className="text-xs md:text-sm">{nuevoCliente.tipo_cliente === 'NATURAL' ? 'DNI (Opcional)' : 'RUC'}</Label>
                   <div className="flex gap-2">
                     <Input
                       className="text-xs md:text-sm"
                       value={nuevoCliente.tipo_cliente === 'NATURAL' ? nuevoCliente.dni : nuevoCliente.ruc}
                       onChange={(e) => {
-                        const value = e.target.value;
-                        // Validar máximo 9 dígitos para DNI y solo permitir números
-                        if (nuevoCliente.tipo_cliente === 'NATURAL' && (value.length > 9 || !/^\d*$/.test(value))) {
-                          return;
+                        const value = e.target.value.replace(/\D/g, ''); // Solo números
+                        
+                        if (nuevoCliente.tipo_cliente === 'NATURAL') {
+                          // Validar máximo 8 dígitos para DNI
+                          if (value.length <= 8) {
+                            setNuevoCliente({
+                              ...nuevoCliente,
+                              dni: value,
+                              // Limpiar nombres si se ingresa DNI
+                              nombres_apellidos: value ? '' : nuevoCliente.nombres_apellidos
+                            });
+                          }
+                        } else {
+                          // Validar máximo 11 dígitos para RUC
+                          if (value.length <= 11) {
+                            setNuevoCliente({
+                              ...nuevoCliente,
+                              ruc: value
+                            });
+                          }
                         }
-                        setNuevoCliente({
-                          ...nuevoCliente,
-                          [nuevoCliente.tipo_cliente === 'NATURAL' ? 'dni' : 'ruc']: value
-                        });
                       }}
-                      maxLength={nuevoCliente.tipo_cliente === 'NATURAL' ? 9 : 11}
+                      maxLength={nuevoCliente.tipo_cliente === 'NATURAL' ? 8 : 11}
+                      placeholder={nuevoCliente.tipo_cliente === 'NATURAL' ? '12345678' : '12345678901'}
                     />
                     <Button
                       size="sm"
@@ -1610,7 +1692,7 @@ export default function VentaPage() {
                         nuevoCliente.tipo_cliente,
                         nuevoCliente.tipo_cliente === 'NATURAL' ? nuevoCliente.dni : nuevoCliente.ruc
                       )}
-                      disabled={isValidating}
+                      disabled={isValidating || (nuevoCliente.tipo_cliente === 'NATURAL' ? !nuevoCliente.dni : !nuevoCliente.ruc)}
                     >
                       {isValidating ? (
                         <>
@@ -1622,9 +1704,14 @@ export default function VentaPage() {
                       )}
                     </Button>
                   </div>
+                  {nuevoCliente.tipo_cliente === 'NATURAL' && (
+                    <p className="text-xs text-gray-500">8 dígitos, ejemplo: 12345678</p>
+                  )}
                 </div>
                 <div className="space-y-1 col-span-1 sm:col-span-2">
-                  <Label className="text-xs md:text-sm">{nuevoCliente.tipo_cliente === 'NATURAL' ? 'Nombres y Apellidos' : 'Razón Social'}</Label>
+                  <Label className="text-xs md:text-sm">
+                    {nuevoCliente.tipo_cliente === 'NATURAL' ? 'Nombres y Apellidos *' : 'Razón Social *'}
+                  </Label>
                   <Input
                     className="text-xs md:text-sm"
                     value={nuevoCliente.tipo_cliente === 'NATURAL' ? nuevoCliente.nombres_apellidos : nuevoCliente.razon_social}
@@ -1632,18 +1719,24 @@ export default function VentaPage() {
                       ...nuevoCliente, 
                       [nuevoCliente.tipo_cliente === 'NATURAL' ? 'nombres_apellidos' : 'razon_social']: e.target.value 
                     })}
-                    disabled={nuevoCliente.tipo_cliente === 'NATURAL' ? 
-                      !!nuevoCliente.nombres_apellidos && nuevoCliente.nombres_apellidos !== '' : 
-                      !!nuevoCliente.razon_social && nuevoCliente.razon_social !== ''}
+                    placeholder={nuevoCliente.tipo_cliente === 'NATURAL' ? 'Juan Pérez García' : 'Empresa SAC'}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs md:text-sm">Celular</Label>
+                  <Label className="text-xs md:text-sm">Celular (Opcional)</Label>
                   <Input
                     className="text-xs md:text-sm"
                     value={nuevoCliente.celular}
-                    onChange={(e) => setNuevoCliente({ ...nuevoCliente, celular: e.target.value })}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, ''); // Solo números
+                      if (value.length <= 9) {
+                        setNuevoCliente({ ...nuevoCliente, celular: value });
+                      }
+                    }}
+                    maxLength={9}
+                    placeholder="987654321"
                   />
+                  <p className="text-xs text-gray-500">9 dígitos, ejemplo: 987654321</p>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs md:text-sm">Dirección</Label>
