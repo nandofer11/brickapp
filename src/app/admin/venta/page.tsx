@@ -119,6 +119,7 @@ export default function VentaPage() {
   const [saldoPendiente, setSaldoPendiente] = useState<number>(0);
   const [observaciones, setObservaciones] = useState<string>('');
   const [showObservacionesModal, setShowObservacionesModal] = useState<boolean>(false);
+  const [fechaEstimadaEntrega, setFechaEstimadaEntrega] = useState<Date | undefined>(undefined);
   
   // Estado para controlar la visibilidad del modal de ticket en dispositivos móviles
   const [showTicketModal, setShowTicketModal] = useState<boolean>(false);
@@ -507,6 +508,12 @@ export default function VentaPage() {
         return;
       }
 
+      // Validación para fecha estimada de entrega en contratos
+      if (tipoVenta === 'CONTRATO' && !fechaEstimadaEntrega) {
+        toast.error('Debe seleccionar una fecha estimada de entrega para ventas tipo contrato');
+        return;
+      }
+
       const ventaData = {
         cliente_id: clienteSeleccionado?.id_cliente,
         comprobante: {
@@ -553,7 +560,8 @@ export default function VentaPage() {
         estado_entrega: estadoEntrega,
         adelanto: adelanto,
         saldo_pendiente: saldoPendiente,
-        observaciones: observaciones
+        observaciones: observaciones,
+        fecha_estimada_entrega: tipoVenta === 'CONTRATO' ? fechaEstimadaEntrega : null
       };
 
       const res = await fetch('/api/ventas', {
@@ -614,6 +622,7 @@ export default function VentaPage() {
       setAdelanto(0);
       setSaldoPendiente(0);
       setObservaciones('');
+      setFechaEstimadaEntrega(undefined);
     } catch (error) {
       console.error('Error al registrar venta:', error);
       toast.error(error instanceof Error ? error.message : 'Error al registrar la venta');
@@ -824,143 +833,189 @@ export default function VentaPage() {
           <div className="flex flex-col lg:grid lg:grid-cols-3 gap-3 md:gap-4">
         {/* Panel Izquierdo: Formulario de Venta */}
         <div className="lg:col-span-2">
-          <Card className="shadow-sm mb-16 lg:mb-0">
-            <CardHeader className="pb-2 md:pb-4">
+          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50 mb-16 lg:mb-0">
+            <CardHeader className="pb-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-lg">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                 <div>
-                  <CardTitle className="text-xl">Venta</CardTitle>
-                  <p className="text-xs md:text-sm text-muted-foreground">
-                    Registre los productos y servicios para la venta.
+                  <CardTitle className="text-xl font-bold">Nueva Venta</CardTitle>
+                  <p className="text-blue-100 text-sm">
+                    Completa para registrar venta directa o contrato.
                   </p>
                 </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full sm:w-[180px] justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {format(fecha, "dd/MM/yyyy")}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={fecha}
-                      onSelect={(date) => date && setFecha(date)}
-                      locale={es}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <div className="bg-white/10 rounded-lg p-1">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" className="text-white hover:bg-white/20 justify-start font-medium text-sm">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(fecha, "dd/MM/yyyy")}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={fecha}
+                        onSelect={(date) => date && setFecha(date)}
+                        locale={es}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3 md:space-y-4">
-              {/* Tipo de Venta y Comprobante en una sola fila para pantallas grandes */}
-              <div className="flex flex-col lg:flex-row lg:items-center lg:gap-4">
-                {/* Tipo de Venta */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 lg:w-1/3">
-                  <Label className="w-full sm:w-32 lg:w-auto">Tipo de Venta</Label>
-                  <div className="flex-1">
-                    <Select 
-                      value={tipoVenta} 
-                      onValueChange={(value: 'DIRECTA' | 'CONTRATO') => setTipoVenta(value)}
-                    >
-                      <SelectTrigger className="w-full text-xs">
-                        <SelectValue placeholder="Tipo de Venta" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="DIRECTA">Directa</SelectItem>
-                        <SelectItem value="CONTRATO">Contrato</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                
-                {/* Comprobante */}
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-3 lg:mt-0 lg:w-2/3">
-                  <Label className="w-full sm:w-32 lg:w-auto">Comprobante</Label>
-                  <div className="flex-1 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-                    <Select value={comprobanteSeleccionado?.id_numeracion_comprobante.toString() || ""} onValueChange={(value) => {
-                      const id = parseInt(value);
-                      const comprobante = comprobantes.find(c => c.id_numeracion_comprobante === id);
-                      if (comprobante) {
-                        seleccionarComprobante(comprobante);
-                      }
-                    }}>
-                      <SelectTrigger className="w-full sm:w-[160px]">
-                        <SelectValue placeholder="Seleccionar comprobante" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {comprobantes.map(comp => (
-                          <SelectItem
-                            key={comp.id_numeracion_comprobante}
-                            value={comp.id_numeracion_comprobante.toString()}
-                          >
-                            {comp.tipo_comprobante}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* Serie y Número como inputs normales */}
-                    <div className="grid grid-cols-2 gap-2 w-full sm:w-auto">
-                      <div>
-                        <Input
-                          id="serie"
-                          type="text"
-                          value={serie}
-                          readOnly
-                          className="bg-gray-50 text-sm"
-                        />
+            <CardContent className="p-4 space-y-4">
+              {/* FILA 1: CONFIGURACIÓN Y CLIENTE */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* SECCIÓN 1: TIPO DE VENTA Y COMPROBANTE */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <h3 className="text-sm font-semibold text-blue-800 mb-2 flex items-center">
+                    <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
+                    Configuración de Venta
+                  </h3>
+                  
+                  <div className="grid grid-cols-1 gap-3">
+                    {/* Tipo de Venta */}
+                    <div className="space-y-1">
+                      <Label className="text-sm font-medium text-gray-700">Tipo de Venta</Label>
+                      <Select 
+                        value={tipoVenta} 
+                        onValueChange={(value: 'DIRECTA' | 'CONTRATO') => {
+                          setTipoVenta(value);
+                          if (value === 'DIRECTA') {
+                            setFechaEstimadaEntrega(undefined);
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="bg-white border-blue-200 focus:border-blue-400">
+                          <SelectValue placeholder="Seleccionar tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="DIRECTA">🔄 Venta Directa</SelectItem>
+                          <SelectItem value="CONTRATO">📋 Contrato</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Fecha Estimada - Solo para CONTRATO */}
+                    {tipoVenta === 'CONTRATO' && (
+                      <div className="space-y-1">
+                        <Label className="text-sm font-medium text-gray-700">Fecha Estimada Entrega</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start bg-white border-blue-200 focus:border-blue-400"
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4 text-blue-600" />
+                              {fechaEstimadaEntrega ? format(fechaEstimadaEntrega, "dd/MM/yyyy", { locale: es }) : "Seleccionar fecha"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={fechaEstimadaEntrega}
+                              onSelect={setFechaEstimadaEntrega}
+                              disabled={(date) => date < new Date()}
+                              initialFocus
+                              locale={es}
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
-                      <div>
-                        <Input
-                          id="numero"
-                          type="text"
-                          value={numero}
-                          readOnly
-                          className="bg-gray-50 text-sm"
-                        />
+                    )}
+
+                    {/* Comprobante */}
+                    <div className="mt-2 pt-2 border-t border-blue-200">
+                      <Label className="text-sm font-medium text-gray-700 mb-1 block">Comprobante</Label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <Select value={comprobanteSeleccionado?.id_numeracion_comprobante.toString() || ""} onValueChange={(value) => {
+                          const id = parseInt(value);
+                          const comprobante = comprobantes.find(c => c.id_numeracion_comprobante === id);
+                          if (comprobante) {
+                            seleccionarComprobante(comprobante);
+                          }
+                        }}>
+                          <SelectTrigger className="bg-white border-blue-200">
+                            <SelectValue placeholder="Tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {comprobantes.map(comp => (
+                              <SelectItem
+                                key={comp.id_numeracion_comprobante}
+                                value={comp.id_numeracion_comprobante.toString()}
+                              >
+                                {comp.tipo_comprobante}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input value={serie} readOnly className="bg-gray-50 text-center font-mono" />
+                        <Input value={numero} readOnly className="bg-gray-50 text-center font-mono" />
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Cliente con input deshabilitado y botón de búsqueda */}
-              <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
-                <Label className="w-full sm:w-32">Cliente</Label>
-                <div className="flex-1">
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      className="bg-gray-50 text-sm"
-                      disabled
-                      value={clienteSeleccionado ? 
-                        `${clienteSeleccionado.dni || clienteSeleccionado.ruc || ''} - ${clienteSeleccionado.nombres_apellidos || clienteSeleccionado.razon_social || ''}` 
-                        : ''}
-                    />
-                    <Button variant="outline" size="sm" onClick={() => setShowClienteModal(true)}>
-                      <UserSearch className="h-4 w-4 mr-1 sm:mr-2" />
-                      <span className="hidden sm:inline">Buscar</span>
-                    </Button>
+                {/* SECCIÓN 2: CLIENTE */}
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <h3 className="text-sm font-semibold text-green-800 mb-2 flex items-center">
+                    <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                    Información del Cliente
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        className="bg-white border-green-200 flex-1"
+                        disabled
+                        placeholder="No hay cliente seleccionado"
+                        value={clienteSeleccionado ? 
+                          `${clienteSeleccionado.dni || clienteSeleccionado.ruc || ''} - ${clienteSeleccionado.nombres_apellidos || clienteSeleccionado.razon_social || ''}` 
+                          : ''}
+                      />
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setShowClienteModal(true)}
+                        className="bg-green-600 text-white hover:bg-green-700 border-green-600"
+                      >
+                        <UserSearch className="h-4 w-4 mr-1" />
+                        Buscar
+                      </Button>
+                    </div>
+                    
+                    {/* Información adicional del cliente si está seleccionado */}
+                    {clienteSeleccionado && (
+                      <div className="text-xs text-gray-600 bg-white p-2 rounded border border-green-200">
+                        <div className="grid grid-cols-1 gap-1">
+                          <div><strong>Tipo:</strong> {clienteSeleccionado.tipo_cliente}</div>
+                          {clienteSeleccionado.direccion && (
+                            <div><strong>Dirección:</strong> {clienteSeleccionado.direccion}</div>
+                          )}
+                          {clienteSeleccionado.celular && (
+                            <div><strong>Celular:</strong> {clienteSeleccionado.celular}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Productos */}
-              <div className="space-y-3 md:space-y-4">
-                {/* Comentado según solicitud
-                <Input
-                  placeholder="Buscar producto por nombre..."
-                  value={searchProducto}
-                  onChange={(e) => setSearchProducto(e.target.value)}
-                  className="text-xs md:text-sm"
-                />
-                */}
+              {/* SECCIÓN 3: PRODUCTOS */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
+                <h3 className="text-sm font-semibold text-orange-800 mb-2 flex items-center">
+                  <div className="w-2 h-2 bg-orange-600 rounded-full mr-2"></div>
+                  Selección de Productos
+                </h3>
+                
                 <Tabs value={categoriaSeleccionada} onValueChange={setCategoriaSeleccionada} className="w-full">
                   <ScrollArea className="w-full max-w-full pb-2">
-                    <TabsList className="w-max justify-start inline-flex">
+                    <TabsList className="w-max justify-start inline-flex bg-orange-100 border border-orange-200">
                       {categorias.map((cat) => (
                         <TabsTrigger 
                           key={cat.id_categoria} 
                           value={cat.id_categoria.toString()}
-                          className="text-xs md:text-sm"
+                          className="text-xs font-medium data-[state=active]:bg-orange-600 data-[state=active]:text-white"
                         >
                           {cat.nombre}
                         </TabsTrigger>
@@ -968,23 +1023,23 @@ export default function VentaPage() {
                     </TabsList>
                   </ScrollArea>
                   {categorias.map((cat) => (
-                    <TabsContent key={cat.id_categoria} value={cat.id_categoria.toString()} className="mt-2 md:mt-4">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    <TabsContent key={cat.id_categoria} value={cat.id_categoria.toString()} className="mt-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
                         {productos
                           .filter((p) => p.categoria.id_categoria === cat.id_categoria)
                           .map((p) => (
                             <Button
                               key={p.id_producto}
                               variant="outline"
-                              className={`h-16 md:h-20 flex flex-col py-1 px-2 text-xs md:text-sm ${
+                              className={`h-16 flex flex-col py-1 px-2 text-xs transition-all duration-200 ${
                                 productosSeleccionados.some(ps => ps.id_producto === p.id_producto) 
-                                ? "bg-green-50 border-green-200" 
-                                : ""
+                                ? "bg-orange-100 border-orange-400 shadow-md" 
+                                : "bg-white border-orange-200 hover:bg-orange-50 hover:border-orange-300"
                               }`}
                               onClick={() => setModalProducto(p)}
                             >
-                              <span className="font-bold line-clamp-1">{p.nombre}</span>
-                              <span>S/ {Number(p.precio_unitario).toFixed(2)}</span>
+                              <span className="font-bold line-clamp-2 text-center mb-1">{p.nombre}</span>
+                              <span className="text-orange-700 font-semibold">S/ {Number(p.precio_unitario).toFixed(2)}</span>
                             </Button>
                           ))}
                       </div>
@@ -993,12 +1048,15 @@ export default function VentaPage() {
                 </Tabs>
               </div>
 
-              <Separator className="my-2 md:my-4" />
-
-              {/* Servicios */}
-              <div className="space-y-2 md:space-y-3">
-                <Label>Servicios</Label>
-                <div className="flex items-center gap-4">
+              {/* SECCIÓN 4: SERVICIOS ADICIONALES */}
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                <h3 className="text-sm font-semibold text-purple-800 mb-2 flex items-center">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+                  Servicios Adicionales
+                </h3>
+                
+                {/* Checkboxes de servicios */}
+                <div className="flex gap-4 mb-3">
                   <div className="flex items-center gap-2">
                     <Checkbox
                       id="flete"
@@ -1008,15 +1066,15 @@ export default function VentaPage() {
                         setServicio(prev => ({ 
                           ...prev!, 
                           requiere_flete: !!checked,
-                          // Si se desactiva, reseteamos los valores relacionados
                           ...((!checked) ? {
                             direccion_entrega: '',
                             coste_flete: 0
                           } : {})
                         }));
                       }}
+                      className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
                     />
-                    <Label htmlFor="flete" className="w-12 text-sm">Flete</Label>
+                    <Label htmlFor="flete" className="text-sm font-medium">🚚 Servicio de Flete</Label>
                   </div>
                   <div className="flex items-center gap-2">
                     <Checkbox
@@ -1027,106 +1085,114 @@ export default function VentaPage() {
                         setServicio(prev => ({ 
                           ...prev!, 
                           requiere_descarga: !!checked,
-                          // Si se desactiva, reseteamos el costo de descarga
                           ...((!checked) ? {
                             coste_descarga: 0
                           } : {})
                         }));
                       }}
+                      className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
                     />
-                    <Label htmlFor="descarga" className="w-16 text-sm">Descarga</Label>
+                    <Label htmlFor="descarga" className="text-sm font-medium">📦 Servicio de Descarga</Label>
                   </div>
                 </div>
                 
-                {/* Grid para campos de servicio */}
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Input de celular */}
-                  <Input
-                    placeholder="Celular"
-                    className={`text-xs ${!activarFlete ? "bg-gray-100" : ""}`}
-                    disabled={!activarFlete}
-                    value={activarFlete ? (clienteSeleccionado?.celular || '') : ''}
-                    onChange={(e) => {
-                      // Solo permitir 9 dígitos
-                      const value = e.target.value.replace(/\D/g, '').substring(0, 9);
-                      
-                      // Si se está usando, permitimos la edición directa
-                      if (clienteSeleccionado) {
-                        // Crear una copia actualizada del cliente seleccionado con el nuevo celular
-                        setClienteSeleccionado({
-                          ...clienteSeleccionado,
-                          celular: value
-                        });
-                      }
-                    }}
-                    required={activarFlete}
-                  />
-                  
-                  {/* Costo de flete */}
-                  <Input
-                    placeholder="Costo de flete"
-                    className={`text-xs ${!activarFlete ? "bg-gray-100" : ""}`}
-                    disabled={!activarFlete}
-                    type="number"
-                    value={activarFlete ? (servicio?.coste_flete || '') : ''}
-                    onChange={(e) =>
-                      setServicio(prev => ({ ...prev!, coste_flete: Number(e.target.value) }))
-                    }
-                    required={activarFlete}
-                  />
-                </div>
-                
-                {/* Dirección condicionada por flete */}
-                <Input
-                  placeholder="Dirección de entrega"
-                  className={`text-xs ${!activarFlete ? "bg-gray-100" : ""}`}
-                  disabled={!activarFlete}
-                  value={activarFlete ? (servicio?.direccion_entrega || '') : ''}
-                  onChange={(e) =>
-                    setServicio(prev => ({ ...prev!, direccion_entrega: e.target.value }))
-                  }
-                  required={activarFlete}
-                />
-                
-                {/* Costo de descarga condicionado */}
-                <Input
-                  placeholder="Costo de descarga"
-                  className={`text-xs ${!activarDescarga ? "bg-gray-100" : ""}`}
-                  disabled={!activarDescarga}
-                  type="number"
-                  value={activarDescarga ? (servicio?.coste_descarga || '') : ''}
-                  onChange={(e) =>
-                    setServicio(prev => ({ ...prev!, coste_descarga: Number(e.target.value) }))
-                  }
-                  required={activarDescarga}
-                />
+                {/* Campos condicionados */}
+                {(activarFlete || activarDescarga) && (
+                  <div className="space-y-2 p-2 bg-white rounded-lg border border-purple-200">
+                    {activarFlete && (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs text-gray-600 mb-1 block">Celular de contacto</Label>
+                            <Input
+                              placeholder="Ej: 987654321"
+                              className="bg-white border-purple-200"
+                              value={clienteSeleccionado?.celular || ''}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/\D/g, '').substring(0, 9);
+                                if (clienteSeleccionado) {
+                                  setClienteSeleccionado({
+                                    ...clienteSeleccionado,
+                                    celular: value
+                                  });
+                                }
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-gray-600 mb-1 block">Costo del flete (S/)</Label>
+                            <Input
+                              placeholder="0.00"
+                              className="bg-white border-purple-200"
+                              type="number"
+                              value={servicio?.coste_flete || ''}
+                              onChange={(e) =>
+                                setServicio(prev => ({ ...prev!, coste_flete: Number(e.target.value) }))
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-gray-600 mb-1 block">Dirección de entrega</Label>
+                          <Input
+                            placeholder="Ingrese la dirección completa"
+                            className="bg-white border-purple-200"
+                            value={servicio?.direccion_entrega || ''}
+                            onChange={(e) =>
+                              setServicio(prev => ({ ...prev!, direccion_entrega: e.target.value }))
+                            }
+                          />
+                        </div>
+                      </>
+                    )}
+                    
+                    {activarDescarga && (
+                      <div>
+                        <Label className="text-xs text-gray-600 mb-1 block">Costo de descarga (S/)</Label>
+                        <Input
+                          placeholder="0.00"
+                          className="bg-white border-purple-200"
+                          type="number"
+                          value={servicio?.coste_descarga || ''}
+                          onChange={(e) =>
+                            setServicio(prev => ({ ...prev!, coste_descarga: Number(e.target.value) }))
+                          }
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Pagos */}
-              <div className="grid grid-cols-2 gap-3 md:gap-4">
-                {/* Forma de Pago, Estado de Pago y Estado de Entrega en una fila para pantallas grandes */}
-                <div className="col-span-2 grid grid-cols-1 lg:grid-cols-3 gap-3 md:gap-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm">Forma de Pago</Label>
+              {/* SECCIÓN 5: INFORMACIÓN DE PAGO */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <h3 className="text-sm font-semibold text-yellow-800 mb-2 flex items-center">
+                  <div className="w-2 h-2 bg-yellow-600 rounded-full mr-2"></div>
+                  Información de Pago y Entrega
+                </h3>
+                
+                {/* Grid de información de pago - Todo en una fila */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-3 p-2 bg-white rounded-lg border border-yellow-200">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-700">Forma de Pago</Label>
                     <Select value={formaPago} onValueChange={(value: 'EFECTIVO' | 'TRANSFERENCIA' | 'YAPE') => setFormaPago(value)}>
-                      <SelectTrigger className="w-full text-xs">
+                      <SelectTrigger className="bg-white border-yellow-200 text-xs h-8">
                         <SelectValue placeholder="Seleccionar" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="EFECTIVO">Efectivo</SelectItem>
-                        <SelectItem value="TRANSFERENCIA">Transferencia</SelectItem>
-                        <SelectItem value="YAPE">Yape</SelectItem>
+                        <SelectItem value="EFECTIVO">💵 Efectivo</SelectItem>
+                        <SelectItem value="TRANSFERENCIA">🏦 Transferencia</SelectItem>
+                        <SelectItem value="YAPE">📱 Yape</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-sm">Estado de Pago</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-700">Estado Pago</Label>
                     <Select 
                       value={estadoPago} 
                       onValueChange={(value: 'PENDIENTE' | 'CANCELADO' | 'PARCIAL' | 'ANULADA') => {
                         setEstadoPago(value);
-                        // Actualizar adelanto y saldo pendiente según el estado seleccionado
                         if (value === 'CANCELADO') {
                           setAdelanto(total);
                           setSaldoPendiente(0);
@@ -1134,84 +1200,82 @@ export default function VentaPage() {
                           setAdelanto(0);
                           setSaldoPendiente(total);
                         } else if (value === 'PARCIAL') {
-                          // En caso de parcial, mantener el adelanto actual y recalcular saldo
                           const saldo = total - adelanto;
                           setSaldoPendiente(saldo >= 0 ? saldo : 0);
                         }
                       }}
                     >
-                      <SelectTrigger className="w-full text-xs">
+                      <SelectTrigger className="bg-white border-yellow-200 text-xs h-8">
                         <SelectValue placeholder="Estado" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="PENDIENTE">Pendiente</SelectItem>
-                        <SelectItem value="CANCELADO">Cancelado</SelectItem>
-                        <SelectItem value="PARCIAL">Parcial</SelectItem>
-                        <SelectItem value="ANULADA">ANULADA</SelectItem>
+                        <SelectItem value="PENDIENTE">⏳ Pendiente</SelectItem>
+                        <SelectItem value="CANCELADO">✅ Pagado</SelectItem>
+                        <SelectItem value="PARCIAL">🔄 Parcial</SelectItem>
+                        <SelectItem value="ANULADA">❌ Anulada</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-sm">Estado de Entrega</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-700">Estado Entrega</Label>
                     <Select 
                       value={estadoEntrega} 
                       onValueChange={(value: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO') => setEstadoEntrega(value)}
                     >
-                      <SelectTrigger className="w-full text-xs">
-                        <SelectValue placeholder="Estado de Entrega" />
+                      <SelectTrigger className="bg-white border-yellow-200 text-xs h-8">
+                        <SelectValue placeholder="Estado" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="NO ENTREGADO">No Entregado</SelectItem>
-                        <SelectItem value="PARCIAL">Parcial</SelectItem>
-                        <SelectItem value="ENTREGADO">Entregado</SelectItem>
+                        <SelectItem value="NO ENTREGADO">📦 No Entregado</SelectItem>
+                        <SelectItem value="PARCIAL">🚛 Parcial</SelectItem>
+                        <SelectItem value="ENTREGADO">✅ Entregado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
 
-                <div className="col-span-2 grid grid-cols-2 gap-3 mt-4">
-                  <div className="space-y-2">
-                    <Label className="text-sm">Adelanto (S/.)</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-700">Adelanto (S/)</Label>
                     <Input 
                       type="number" 
                       value={estadoPago === 'CANCELADO' ? total : (estadoPago === 'PENDIENTE' ? 0 : adelanto)} 
                       onChange={(e) => {
                         const value = parseFloat(e.target.value) || 0;
                         setAdelanto(value);
-                        // Actualizar saldo pendiente basado en el total y adelanto
                         const saldo = parseFloat(String(total)) - value;
                         setSaldoPendiente(saldo >= 0 ? saldo : 0);
                       }} 
-                      className="text-xs"
+                      className="bg-white border-yellow-200 text-xs h-8"
                       disabled={estadoPago === 'CANCELADO' || estadoPago === 'PENDIENTE'}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm">Saldo Pendiente (S/.)</Label>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-medium text-gray-700">Saldo Pendiente (S/)</Label>
                     <Input 
                       type="number" 
                       value={estadoPago === 'CANCELADO' ? 0 : (estadoPago === 'PENDIENTE' ? total : saldoPendiente)} 
                       readOnly 
-                      className={`text-xs bg-gray-50 ${estadoPago === 'CANCELADO' || estadoPago === 'PENDIENTE' ? 'opacity-70' : ''}`}
+                      className="bg-gray-50 border-yellow-200 text-xs h-8"
                     />
                   </div>
                 </div>
 
-                <div className="col-span-2 space-y-2 mt-4">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-sm">Observaciones</Label>
+                {/* Observaciones */}
+                <div className="mt-3">
+                  <div className="flex justify-between items-center mb-1">
+                    <Label className="text-sm font-medium text-gray-700">Observaciones</Label>
                     <Button 
                       variant="outline" 
                       size="sm" 
                       onClick={() => setShowObservacionesModal(true)}
-                      className="text-xs h-7"
+                      className="text-xs h-6 border-yellow-300 hover:bg-yellow-100"
                     >
-                      Editar
+                      ✏️ Editar
                     </Button>
                   </div>
-                  <div className="border rounded p-2 text-xs h-16 overflow-auto bg-gray-50">
-                    {observaciones || "Sin observaciones"}
+                  <div className="p-2 bg-white rounded-lg border border-yellow-200 min-h-[50px] text-sm text-gray-600">
+                    {observaciones || "Sin observaciones adicionales"}
                   </div>
                 </div>
               </div>

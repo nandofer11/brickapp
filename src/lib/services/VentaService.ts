@@ -14,7 +14,8 @@ export class VentaService {
             estado_entrega,
             adelanto,
             saldo_pendiente,
-            observaciones
+            observaciones,
+            fecha_estimada_entrega
         } = data;
 
         try {
@@ -277,7 +278,8 @@ export class VentaService {
             observaciones,
             detalles,
             servicios,
-            total
+            total,
+            fecha_estimada_entrega
         } = data;
 
         try {
@@ -292,6 +294,7 @@ export class VentaService {
                         estado_pago,
                         estado_entrega,
                         forma_pago,
+                        fecha_estimada_entrega: fecha_estimada_entrega !== undefined ? fecha_estimada_entrega : undefined,
                         adelanto: adelanto !== undefined ? Number(adelanto) : undefined,
                         saldo_pendiente: saldo_pendiente !== undefined ? Number(saldo_pendiente) : undefined,
                         observaciones: observaciones || '',
