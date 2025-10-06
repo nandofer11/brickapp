@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // Interfaces
 interface Servicio {
@@ -96,6 +97,10 @@ export default function VentaPage() {
   const [modalProducto, setModalProducto] = useState<Producto | null>(null);
   const [cantidad, setCantidad] = useState<number>(1);
   const [unidad, setUnidad] = useState<"unidad" | "millar">("millar");
+  
+  // Estados para el manejo de precios
+  const [tipoPrecio, setTipoPrecio] = useState<"base" | "modificado">("base");
+  const [precioModificado, setPrecioModificado] = useState<string>("");
 
   const [clienteVarios, setClienteVarios] = useState<boolean>(false);
 
@@ -461,32 +466,46 @@ export default function VentaPage() {
   const agregarProducto = () => {
     if (!modalProducto) return;
 
+    // Determinar el precio a usar
+    const precioAUsar = tipoPrecio === "base" 
+      ? Number(modalProducto.precio_unitario) 
+      : Number(precioModificado || modalProducto.precio_unitario);
+
     const productoExistente = productosSeleccionados.find(p => p.id_producto === modalProducto.id_producto);
 
     if (productoExistente) {
       const nuevaCantidad = productoExistente.cantidad + (unidad === "unidad" ? cantidad : cantidad * 1000);
-      const nuevoPrecioTotal = nuevaCantidad * Number(productoExistente.precio_unitario);
+      const nuevoPrecioTotal = nuevaCantidad * precioAUsar;
 
       setProductosSeleccionados(productosSeleccionados.map(p =>
         p.id_producto === modalProducto.id_producto
-          ? { ...p, cantidad: nuevaCantidad, precioTotal: nuevoPrecioTotal }
+          ? { 
+              ...p, 
+              cantidad: nuevaCantidad, 
+              precio_unitario: precioAUsar.toString(), // Actualizar el precio unitario
+              precioTotal: nuevoPrecioTotal 
+            }
           : p
       ));
     } else {
       const cantidadTotal = unidad === "unidad" ? cantidad : cantidad * 1000;
-      const precioTotal = cantidadTotal * Number(modalProducto.precio_unitario);
+      const precioTotal = cantidadTotal * precioAUsar;
 
       setProductosSeleccionados([...productosSeleccionados, {
         ...modalProducto,
         cantidad: cantidadTotal,
         unidad: "unidad",
+        precio_unitario: precioAUsar.toString(), // Usar el precio seleccionado
         precioTotal
       }]);
     }
 
+    // Limpiar el modal
     setModalProducto(null);
     setCantidad(1);
     setUnidad("millar");
+    setTipoPrecio("base");
+    setPrecioModificado("");
   };
 
   // Eliminar producto del detalle
@@ -880,8 +899,8 @@ export default function VentaPage() {
           <div className="flex flex-col lg:grid lg:grid-cols-3 gap-3 md:gap-4">
         {/* Panel Izquierdo: Formulario de Venta */}
         <div className="lg:col-span-2">
-          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50 mb-16 lg:mb-0">
-            <CardHeader className="pb-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-lg">
+          <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50 mb-16 lg:mb-0 p-0">
+            <CardHeader className="py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-lg">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                 <div>
                   <CardTitle className="text-xl font-bold">Nueva Venta</CardTitle>
@@ -1491,39 +1510,176 @@ export default function VentaPage() {
       {/* Modales existentes actualizados con componentes shadcn/ui */}
       {/* Modal Cantidad */}
       {modalProducto && (
-        <Dialog open={modalProducto !== null} onOpenChange={() => setModalProducto(null)}>
-          <DialogContent className="max-w-xs sm:max-w-sm">
-            <DialogHeader>
+        <Dialog open={modalProducto !== null} onOpenChange={() => {
+          setModalProducto(null);
+          // Limpiar estados del modal
+          setCantidad(1);
+          setUnidad("millar");
+          setTipoPrecio("base");
+          setPrecioModificado("");
+        }}>
+          <DialogContent className="max-w-sm sm:max-w-md">
+            <DialogHeader className="pb-2">
               <DialogTitle className="text-sm md:text-base">
                 {modalProducto.nombre}
               </DialogTitle>
             </DialogHeader>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs md:text-sm">Cantidad</Label>
-                <Input 
-                  type="number" 
-                  value={cantidad} 
-                  onChange={(e) => setCantidad(Number(e.target.value))} 
-                  className="text-xs md:text-sm"
-                />
+            
+            <div className="space-y-3">
+              {/* Selección de tipo de precio */}
+              <div className="space-y-2">
+                <Label className="text-xs md:text-sm font-medium">Precio del Producto</Label>
+                
+                <RadioGroup 
+                  value={tipoPrecio} 
+                  onValueChange={(value) => {
+                    setTipoPrecio(value as "base" | "modificado");
+                    if (value === "base") {
+                      setPrecioModificado("");
+                    } else {
+                      setPrecioModificado(modalProducto.precio_unitario);
+                    }
+                  }}
+                  className="space-y-1"
+                >
+                  <div className={`flex items-center space-x-2 p-2 border rounded-lg transition-all ${
+                    tipoPrecio === "base" 
+                      ? "border-blue-500 bg-blue-50 shadow-sm" 
+                      : "border-gray-200 bg-gray-50 opacity-60"
+                  }`}>
+                    <RadioGroupItem value="base" id="precio-base" />
+                    <Label htmlFor="precio-base" className="flex-1 cursor-pointer">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs md:text-sm">Precio Base</span>
+                        <span className="text-xs md:text-sm font-semibold text-green-600">
+                          S/ {Number(modalProducto.precio_unitario).toFixed(2)}
+                        </span>
+                      </div>
+                    </Label>
+                  </div>
+                  
+                  <div className={`flex items-center space-x-2 p-2 border rounded-lg transition-all ${
+                    tipoPrecio === "modificado" 
+                      ? "border-orange-500 bg-orange-50 shadow-sm" 
+                      : "border-gray-200 bg-gray-50 opacity-60"
+                  }`}>
+                    <RadioGroupItem value="modificado" id="precio-modificado" />
+                    <Label htmlFor="precio-modificado" className="flex-1 cursor-pointer">
+                      <span className="text-xs md:text-sm">Modificar Precio</span>
+                    </Label>
+                  </div>
+                </RadioGroup>
+
+                {/* Input para precio modificado */}
+                {tipoPrecio === "modificado" && (
+                  <div className="ml-4 space-y-1 animate-in slide-in-from-left-2 duration-200">
+                    <Label className="text-xs text-gray-600">Nuevo Precio (S/)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={precioModificado}
+                      onChange={(e) => setPrecioModificado(e.target.value)}
+                      placeholder="0.00"
+                      className="text-xs md:text-sm h-8"
+                    />
+                    {precioModificado && (
+                      <div className="text-xs text-gray-500">
+                        Diferencia: S/ {(Number(modalProducto.precio_unitario) - Number(precioModificado || 0)).toFixed(2)}
+                        {Number(precioModificado) > Number(modalProducto.precio_unitario) ? (
+                          <span className="text-amber-600 ml-1">(Aumento)</span>
+                        ) : (
+                          <span className="text-green-600 ml-1">(Descuento)</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs md:text-sm">Unidad</Label>
-                <Select value={unidad} onValueChange={(value) => setUnidad(value as "unidad" | "millar")}>
-                  <SelectTrigger className="text-xs md:text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="millar">Millar</SelectItem>
-                    <SelectItem value="unidad">Unidad</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              {/* Cantidad y Unidad */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs md:text-sm">Cantidad</Label>
+                  <Input 
+                    type="number" 
+                    min="1"
+                    value={cantidad} 
+                    onChange={(e) => setCantidad(Number(e.target.value) || 1)} 
+                    className="text-xs md:text-sm h-8"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs md:text-sm">Unidad</Label>
+                  <Select value={unidad} onValueChange={(value) => setUnidad(value as "unidad" | "millar")}>
+                    <SelectTrigger className="text-xs md:text-sm h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="millar">Millar</SelectItem>
+                      <SelectItem value="unidad">Unidad</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Resumen del total */}
+              <div className="bg-gray-50 p-2 rounded-lg border">
+                <div className="text-xs text-gray-600 mb-1">Resumen:</div>
+                <div className="space-y-0.5 text-xs">
+                  <div className="flex justify-between">
+                    <span>Cantidad total:</span>
+                    <span className="font-medium">
+                      {unidad === "unidad" ? cantidad : cantidad * 1000} unidades
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Precio unitario:</span>
+                    <span className="font-medium">
+                      S/ {tipoPrecio === "base" 
+                        ? Number(modalProducto.precio_unitario).toFixed(2)
+                        : Number(precioModificado || modalProducto.precio_unitario).toFixed(2)
+                      }
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-semibold border-t pt-1 mt-1">
+                    <span>Subtotal:</span>
+                    <span className="text-blue-600">
+                      S/ {(
+                        (unidad === "unidad" ? cantidad : cantidad * 1000) * 
+                        (tipoPrecio === "base" 
+                          ? Number(modalProducto.precio_unitario) 
+                          : Number(precioModificado || modalProducto.precio_unitario)
+                        )
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-            <Button className="w-full text-xs md:text-sm" onClick={agregarProducto}>
-              Añadir
-            </Button>
+
+            <div className="flex gap-2 pt-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setModalProducto(null);
+                  setCantidad(1);
+                  setUnidad("millar");
+                  setTipoPrecio("base");
+                  setPrecioModificado("");
+                }} 
+                className="flex-1 text-xs md:text-sm h-8"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={agregarProducto}
+                disabled={tipoPrecio === "modificado" && (!precioModificado || Number(precioModificado) <= 0)}
+                className="flex-1 text-xs md:text-sm h-8"
+              >
+                Añadir
+              </Button>
+            </div>
           </DialogContent>
         </Dialog>
       )}
