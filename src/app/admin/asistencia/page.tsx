@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "react-toastify"
-import { Edit, Check, X, AlertCircle, Plus, Loader2, NotebookPen, Calendar1, Timer, Flame, Wind } from "lucide-react"
+import { Edit, Check, X, AlertCircle, Plus, Loader2, NotebookPen, Calendar1, Timer, Flame, Wind, DollarSign, ClipboardList, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -21,6 +21,8 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { formatDateForInput, getCurrentDateForLima } from "@/utils/dateFormat" // Importar ambas funciones
 
 interface Personal {
@@ -78,6 +80,32 @@ interface CoccionTurno {
   cargo?: string
   nombre_coccion?: string
   nombre_horno?: string
+}
+
+// Interfaces para adelantos y tareas extra
+interface AdelantoPersonal {
+  id_adelanto_pago: number;
+  id_personal: number;
+  id_semana_laboral: number;
+  fecha: string;
+  monto: number;
+  comentario?: string;
+  estado: string;
+  personal?: Personal;
+  updated_at?: string;
+}
+
+interface TareaExtra {
+  id_tarea_extra?: number;
+  id_personal: number;
+  id_semana_laboral: number;
+  fecha: string;
+  monto: string | number;
+  descripcion: string;
+  created_at: string;
+  updated_at: string;
+  personal?: Personal;
+  semana_laboral?: Semana;
 }
 
 // Nueva interfaz para Cargo Coccion
@@ -148,6 +176,26 @@ export default function AsistenciaPage() {
 
   // Nuevo estado para almacenar los turnos de todos los trabajadores
   const [turnosSemana, setTurnosSemana] = useState<TurnoInfo[]>([])
+
+  // Estados para adelantos de pago
+  const [adelantoModalOpen, setAdelantoModalOpen] = useState(false);
+  const [adelantoData, setAdelantoData] = useState<Partial<AdelantoPersonal>>({
+    fecha: new Date().toISOString().split('T')[0],
+  });
+  const [adelantos, setAdelantos] = useState<AdelantoPersonal[]>([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [adelantoToDelete, setAdelantoToDelete] = useState<number | null>(null);
+
+  // Estados para tareas extra
+  const [tareaModalOpen, setTareaModalOpen] = useState(false);
+  const [tareaData, setTareaData] = useState<Partial<TareaExtra>>({
+    fecha: new Date().toISOString().split('T')[0],
+  });
+  const [tareasExtra, setTareasExtra] = useState<TareaExtra[]>([]);
+  const [showConfirmDeleteTareaModal, setShowConfirmDeleteTareaModal] = useState(false);
+  const [tareaToDelete, setTareaToDelete] = useState<number | null>(null);
+  const [isMultipleSelection, setIsMultipleSelection] = useState(false);
+  const [selectedPersonal, setSelectedPersonal] = useState<number[]>([]);
 
   useEffect(() => {
     document.title = "Asistencia"
@@ -423,6 +471,13 @@ export default function AsistenciaPage() {
 
     patchAPI();
   }, []);
+
+  // Cargar tareas extra cuando se abre el modal y hay una semana seleccionada
+  useEffect(() => {
+    if (tareaModalOpen && selectedSemana) {
+      fetchTareasExtra(selectedSemana);
+    }
+  }, [tareaModalOpen, selectedSemana]);
 
   const handleRegisterTurno = async () => {
     if (!selectedCoccion) {
@@ -1086,6 +1141,286 @@ export default function AsistenciaPage() {
     return selectedDate >= start && selectedDate <= end;
   }
 
+  // Funciones para manejo de adelantos
+  const handleEditAdelanto = (adelanto: AdelantoPersonal) => {
+    const formatISODate = (dateString: string) => {
+      const date = new Date(dateString);
+      date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+      return date.toISOString().split('T')[0];
+    };
+
+    setAdelantoData({
+      ...adelanto,
+      fecha: formatISODate(adelanto.fecha)
+    });
+    setAdelantoModalOpen(true);
+  };
+
+  const handleDeleteAdelanto = (id: number) => {
+    setAdelantoToDelete(id);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDeleteAdelanto = async () => {
+    if (adelantoToDelete === null) return;
+
+    try {
+      const response = await fetch(`/api/adelanto_pago/?id=${adelantoToDelete}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Error al eliminar adelanto');
+
+      toast.success('Adelanto eliminado correctamente');
+      
+      if (selectedSemana) {
+        fetchAdelantos(selectedSemana);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Error al eliminar el adelanto');
+    } finally {
+      setAdelantoToDelete(null);
+      setShowConfirmModal(false);
+    }
+  };
+
+  const handleAdelantoSubmit = async () => {
+    if (!selectedSemana) {
+      toast.error("Debe seleccionar una semana laboral");
+      return;
+    }
+
+    if (!adelantoData.id_personal) {
+      toast.error("Debe seleccionar un personal");
+      return;
+    }
+
+    if (!adelantoData.fecha) {
+      toast.error("Debe ingresar una fecha");
+      return;
+    }
+
+    if (!adelantoData.monto || adelantoData.monto <= 0) {
+      toast.error("Debe ingresar un monto válido");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const dataToSubmit = {
+        ...(adelantoData.id_adelanto_pago && { id_adelanto_pago: adelantoData.id_adelanto_pago }),
+        fecha: new Date(adelantoData.fecha + 'T00:00:00.000Z').toISOString(),
+        monto: Number(adelantoData.monto),
+        comentario: adelantoData.comentario || "",
+        estado: "Pendiente",
+        ...((!adelantoData.id_adelanto_pago) && {
+          id_personal: Number(adelantoData.id_personal),
+          id_semana_laboral: Number(selectedSemana),
+        })
+      };
+
+      const response = await fetch("/api/adelanto_pago", {
+        method: adelantoData.id_adelanto_pago ? "PUT" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dataToSubmit),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Error al procesar adelanto");
+      }
+
+      toast.success(
+        adelantoData.id_adelanto_pago
+          ? "Adelanto actualizado correctamente"
+          : "Adelanto registrado correctamente"
+      );
+
+      setAdelantoModalOpen(false);
+      setAdelantoData({
+        fecha: new Date().toISOString().split('T')[0]
+      });
+
+      if (selectedSemana) {
+        fetchAdelantos(selectedSemana);
+      }
+
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error(error instanceof Error ? error.message : "Error al procesar el adelanto");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const fetchAdelantos = async (idSemana: number) => {
+    try {
+      const response = await fetch(`/api/adelanto_pago?id_semana=${idSemana}`);
+      if (!response.ok) throw new Error('Error al cargar adelantos');
+      
+      const data = await response.json();
+      setAdelantos(data);
+    } catch (error) {
+      console.error("Error al cargar adelantos:", error);
+      toast.error("Error al cargar los adelantos");
+    }
+  };
+
+  // Funciones para manejo de tareas extra
+  const handleSubmitTarea = async () => {
+    if (!selectedSemana) {
+      toast.error("Debe seleccionar una semana laboral");
+      return;
+    }
+
+    if (isMultipleSelection) {
+      if (selectedPersonal.length === 0) {
+        toast.error("Debe seleccionar al menos un personal");
+        return;
+      }
+    } else {
+      if (!tareaData.id_personal) {
+        toast.error("Debe seleccionar un personal");
+        return;
+      }
+    }
+
+    if (!tareaData.fecha) {
+      toast.error("Debe ingresar una fecha");
+      return;
+    }
+
+    if (!tareaData.monto || Number(tareaData.monto) <= 0) {
+      toast.error("El monto debe ser mayor a 0");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      const tareaToSubmit = {
+        fecha: new Date(tareaData.fecha + 'T00:00:00.000Z').toISOString(),
+        monto: Number(tareaData.monto),
+        descripcion: tareaData.descripcion || "",
+        id_semana_laboral: Number(selectedSemana),
+      };
+
+      if (tareaData.id_tarea_extra) {
+        const response = await fetch(`/api/tarea_extra?id=${tareaData.id_tarea_extra}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...tareaToSubmit,
+            id_tarea_extra: tareaData.id_tarea_extra,
+            id_personal: tareaData.id_personal
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Error al actualizar la tarea extra");
+        }
+
+        toast.success("Tarea extra actualizada correctamente");
+      } else {
+        if (isMultipleSelection) {
+          const tareasMultiples = selectedPersonal.map(idPersonal => ({
+            ...tareaToSubmit,
+            id_personal: idPersonal,
+          }));
+
+          const response = await fetch("/api/tarea_extra", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(tareasMultiples),
+          });
+
+          if (!response.ok) {
+            throw new Error("Error al registrar las tareas extras");
+          }
+
+          toast.success(`${selectedPersonal.length} tareas extras registradas correctamente`);
+        } else {
+          const response = await fetch("/api/tarea_extra", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...tareaToSubmit,
+              id_personal: Number(tareaData.id_personal),
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Error al registrar la tarea extra");
+          }
+
+          toast.success("Tarea extra registrada correctamente");
+        }
+      }
+
+      setTareaModalOpen(false);
+      setTareaData({ fecha: new Date().toISOString().split('T')[0] });
+      setSelectedPersonal([]);
+      setIsMultipleSelection(false);
+
+      if (selectedSemana) {
+        fetchTareasExtra(selectedSemana);
+      }
+
+    } catch (error) {
+      console.error("Error:", error);
+      toast.error("Error al procesar la tarea extra");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const confirmDeleteTareaExtra = (id: number) => {
+    setTareaToDelete(id);
+    setShowConfirmDeleteTareaModal(true);
+  };
+
+  const handleDeleteTareaExtra = async () => {
+    if (!tareaToDelete) return;
+
+    try {
+      const response = await fetch(`/api/tarea_extra/?id=${tareaToDelete}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('Error al eliminar tarea extra');
+
+      toast.success('Tarea extra eliminada correctamente');
+
+      if (selectedSemana) {
+        fetchTareasExtra(selectedSemana);
+      }
+
+      setShowConfirmDeleteTareaModal(false);
+      setTareaToDelete(null);
+
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Error al eliminar la tarea extra');
+    }
+  };
+
+  const fetchTareasExtra = async (idSemana: number) => {
+    try {
+      const response = await fetch(`/api/tarea_extra?id_semana=${idSemana}`);
+      if (!response.ok) throw new Error('Error al cargar tareas extra');
+      
+      const data = await response.json();
+      setTareasExtra(data);
+    } catch (error) {
+      console.error("Error al cargar tareas extra:", error);
+      toast.error("Error al cargar las tareas extra");
+    }
+  };
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
       <h1 className="text-2xl font-bold mb-2">Asistencia del Personal</h1>
@@ -1125,6 +1460,38 @@ export default function AsistenciaPage() {
           {/* Botón para registrar turno */}
           <Button onClick={handleOpenTurnoModal} variant="secondary" className="text-xs sm:text-sm h-9 sm:h-10">
             <Timer className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" /> Turno Cocción
+          </Button>
+
+          {/* Botones de Adelanto Pago y Tarea Extra */}
+          <Button 
+            onClick={() => setAdelantoModalOpen(true)} 
+            variant="outline" 
+            className="text-xs sm:text-sm h-9 sm:h-10"
+          >
+            <DollarSign className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" /> 
+            Adelanto Pago
+          </Button>
+
+          <Button 
+            onClick={() => {
+              // Limpiar el formulario para nueva tarea
+              setTareaData({ 
+                fecha: new Date().toISOString().split('T')[0],
+                id_semana_laboral: selectedSemana || undefined
+              });
+              setSelectedPersonal([]);
+              setIsMultipleSelection(false);
+              
+              if (selectedSemana) {
+                fetchTareasExtra(selectedSemana);
+              }
+              setTareaModalOpen(true);
+            }} 
+            variant="outline" 
+            className="text-xs sm:text-sm h-9 sm:h-10"
+          >
+            <ClipboardList className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4" /> 
+            Tarea Extra
           </Button>
         </div>
       </div>
@@ -1818,6 +2185,372 @@ export default function AsistenciaPage() {
                   Eliminando...
                 </>
               ) : 'Eliminar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Adelanto de Pago */}
+      <Dialog open={adelantoModalOpen} onOpenChange={setAdelantoModalOpen}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>
+              {adelantoData.id_adelanto_pago ? "Actualizar Adelanto" : "Registrar Adelanto"}
+            </DialogTitle>
+            <DialogDescription>
+              {adelantoData.id_adelanto_pago
+                ? "Modifique los detalles del adelanto de pago."
+                : "Ingrese los detalles del adelanto de pago para el personal."
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Personal Select */}
+            <div className="grid gap-2">
+              <Label htmlFor="personal">Personal</Label>
+              <Select
+                value={adelantoData.id_personal?.toString()}
+                onValueChange={(value) =>
+                  setAdelantoData({
+                    ...adelantoData,
+                    id_personal: Number(value),
+                  })
+                }
+                disabled={!!adelantoData.id_adelanto_pago}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccione al personal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {personal.map((p) => (
+                    <SelectItem key={p.id_personal} value={p.id_personal.toString()}>
+                      {p.nombre_completo}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="fecha">Fecha de adelanto</Label>
+              <Input
+                id="fecha"
+                type="date"
+                value={adelantoData.fecha}
+                onChange={(e) =>
+                  setAdelantoData({ ...adelantoData, fecha: e.target.value })
+                }
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="monto">Monto</Label>
+              <Input
+                id="monto"
+                type="number"
+                value={adelantoData.monto || ""}
+                onChange={(e) =>
+                  setAdelantoData({ ...adelantoData, monto: Number(e.target.value) })
+                }
+                placeholder="0.00"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="descripcion">Descripción (Opcional)</Label>
+              <Textarea
+                id="descripcion"
+                value={adelantoData.comentario || ""}
+                onChange={(e) =>
+                  setAdelantoData({ ...adelantoData, comentario: e.target.value })
+                }
+                placeholder="Ingrese una descripción"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdelantoModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleAdelantoSubmit} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {adelantoData.id_adelanto_pago ? "Actualizando..." : "Guardando..."}
+                </>
+              ) : (
+                adelantoData.id_adelanto_pago ? "Actualizar" : "Guardar"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Tarea Extra */}
+      <Dialog open={tareaModalOpen} onOpenChange={setTareaModalOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[1000px] p-2 sm:p-4 h-[90vh] overflow-hidden">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-sm sm:text-xl">
+              {tareaData.id_tarea_extra ? "Editar Tarea Extra" : "Registrar Tarea Extra"}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {tareaData.id_tarea_extra
+                ? "Modifique los detalles de la tarea extra."
+                : "Ingrese los detalles de la tarea extra realizada por el personal."
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 h-[calc(100%-70px)] sm:h-[calc(100%-90px)] overflow-hidden">
+            {/* Columna del formulario */}
+            <div className="flex flex-col gap-2 sm:gap-3 overflow-y-auto pr-1">
+              {/* Checkbox para selección múltiple */}
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="multiple-selection"
+                  checked={isMultipleSelection}
+                  onCheckedChange={(checked) => {
+                    setIsMultipleSelection(!!checked);
+                    setSelectedPersonal([]);
+                    if (!checked) {
+                      setTareaData({ ...tareaData, id_personal: undefined });
+                    }
+                  }}
+                />
+                <Label htmlFor="multiple-selection" className="text-xs sm:text-sm">
+                  Asignar tarea extra a múltiple personal
+                </Label>
+              </div>
+
+              {/* Personal Select o Multiple Select */}
+              {!isMultipleSelection ? (
+                <div className="space-y-1">
+                  <Label htmlFor="personal" className="text-xs sm:text-sm">Personal</Label>
+                  <Select
+                    value={tareaData.id_personal?.toString()}
+                    onValueChange={(value) =>
+                      setTareaData({ ...tareaData, id_personal: Number(value) })
+                    }
+                  >
+                    <SelectTrigger className="text-xs sm:text-sm">
+                      <SelectValue placeholder="Seleccione al personal" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {personal.map((p) => (
+                        <SelectItem key={p.id_personal} value={p.id_personal.toString()}>
+                          {p.nombre_completo}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <Label className="text-xs sm:text-sm">Personal (Selección múltiple)</Label>
+                  <div className="max-h-32 overflow-y-auto border rounded-md p-2">
+                    {personal.map((p) => (
+                      <div key={p.id_personal} className="flex items-center space-x-2 py-1">
+                        <Checkbox
+                          id={`personal-${p.id_personal}`}
+                          checked={selectedPersonal.includes(p.id_personal)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedPersonal([...selectedPersonal, p.id_personal]);
+                            } else {
+                              setSelectedPersonal(selectedPersonal.filter(id => id !== p.id_personal));
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`personal-${p.id_personal}`} className="text-xs sm:text-sm">
+                          {p.nombre_completo}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label htmlFor="fecha-tarea" className="text-xs sm:text-sm">Fecha</Label>
+                <Input
+                  id="fecha-tarea"
+                  type="date"
+                  value={tareaData.fecha}
+                  onChange={(e) =>
+                    setTareaData({ ...tareaData, fecha: e.target.value })
+                  }
+                  className="text-xs sm:text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="monto-tarea" className="text-xs sm:text-sm">Monto</Label>
+                <Input
+                  id="monto-tarea"
+                  type="number"
+                  value={tareaData.monto || ""}
+                  onChange={(e) =>
+                    setTareaData({ ...tareaData, monto: Number(e.target.value) })
+                  }
+                  placeholder="0.00"
+                  className="text-xs sm:text-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="descripcion-tarea" className="text-xs sm:text-sm">Descripción</Label>
+                <Textarea
+                  id="descripcion-tarea"
+                  value={tareaData.descripcion || ""}
+                  onChange={(e) =>
+                    setTareaData({ ...tareaData, descripcion: e.target.value })
+                  }
+                  placeholder="Describa la tarea extra realizada"
+                  className="text-xs sm:text-sm"
+                />
+              </div>
+
+              <div className="mt-2 sm:mt-4 flex-shrink-0 flex gap-2">
+                <Button variant="outline" onClick={() => setTareaModalOpen(false)} className="text-xs sm:text-sm h-8 sm:h-10 flex-1">
+                  Cancelar
+                </Button>
+                <Button onClick={handleSubmitTarea} disabled={isSubmitting} className="text-xs sm:text-sm h-8 sm:h-10 flex-1">
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4 animate-spin" />
+                      {tareaData.id_tarea_extra ? "Actualizando..." : "Guardando..."}
+                    </>
+                  ) : (
+                    tareaData.id_tarea_extra ? "Actualizar" : "Guardar"
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* Columna de la tabla de tareas extra registradas */}
+            <div className="flex flex-col gap-2 sm:gap-3 overflow-hidden h-full">
+              <div className="text-xs sm:text-sm font-medium">
+                Tareas extra registradas para la semana:
+              </div>
+              <div className="border rounded-md flex-grow overflow-hidden">
+                {!selectedSemana ? (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
+                    Seleccione una semana para ver las tareas extra
+                  </div>
+                ) : tareasExtra.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
+                    No hay tareas extra registradas para esta semana
+                  </div>
+                ) : (
+                  <div className="h-full overflow-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-white z-10">
+                        <TableRow>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Personal</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Fecha</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Monto</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Descripción</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tareasExtra.map((tarea) => (
+                          <TableRow key={tarea.id_tarea_extra}>
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                              {tarea.personal?.nombre_completo || "Sin nombre"}
+                            </TableCell>
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                              {new Date(tarea.fecha).toLocaleDateString('es-PE')}
+                            </TableCell>
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                              S/ {Number(tarea.monto).toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2 max-w-[150px]">
+                              <div className="truncate" title={tarea.descripcion}>
+                                {tarea.descripcion}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setTareaData({
+                                      id_tarea_extra: tarea.id_tarea_extra,
+                                      id_personal: tarea.id_personal,
+                                      id_semana_laboral: tarea.id_semana_laboral,
+                                      fecha: new Date(tarea.fecha).toISOString().split('T')[0],
+                                      monto: tarea.monto,
+                                      descripcion: tarea.descripcion
+                                    });
+                                  }}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setTareaToDelete(tarea.id_tarea_extra!);
+                                    setShowConfirmDeleteTareaModal(true);
+                                  }}
+                                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para eliminar adelanto */}
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea eliminar este adelanto? Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmModal(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteAdelanto}>
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para eliminar tarea extra */}
+      <Dialog open={showConfirmDeleteTareaModal} onOpenChange={setShowConfirmDeleteTareaModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogDescription>
+              ¿Está seguro que desea eliminar esta tarea extra? Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmDeleteTareaModal(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteTareaExtra}>
+              Eliminar
             </Button>
           </DialogFooter>
         </DialogContent>

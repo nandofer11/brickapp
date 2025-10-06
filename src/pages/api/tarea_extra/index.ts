@@ -22,6 +22,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const id = parseInt(req.query.id as string, 10);
           const tarea = await TareaExtraService.findById(id);
           return res.status(200).json(tarea);
+        } else if (req.query.id_semana) {
+          // Filtrar por semana laboral
+          const idSemana = parseInt(req.query.id_semana as string, 10);
+          
+          const tareasPorSemana = await prisma.tarea_extra.findMany({
+            where: {
+              id_semana_laboral: idSemana,
+              personal: {
+                id_empresa: id_empresa
+              }
+            },
+            include: {
+              personal: true,
+              semana_laboral: true
+            },
+            orderBy: {
+              fecha: 'desc'
+            }
+          });
+          
+          return res.status(200).json(tareasPorSemana);
         } else if (req.query.fechaInicio && req.query.fechaFin) {
           // Filtrar por rango de fechas
           const fechaInicio = new Date(req.query.fechaInicio as string);
