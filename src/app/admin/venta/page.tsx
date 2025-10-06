@@ -606,7 +606,9 @@ export default function VentaPage() {
         adelanto: adelanto,
         saldo_pendiente: saldoPendiente,
         observaciones: observaciones,
-        fecha_estimada_entrega: tipoVenta === 'CONTRATO' ? fechaEstimadaEntrega : null
+        fecha_estimada_entrega: tipoVenta === 'CONTRATO' && fechaEstimadaEntrega 
+          ? fechaEstimadaEntrega.toISOString().split('T')[0] 
+          : null
       };
 
       const res = await fetch('/api/ventas', {

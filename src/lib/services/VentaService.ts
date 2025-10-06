@@ -18,6 +18,12 @@ export class VentaService {
             fecha_estimada_entrega
         } = data;
 
+        console.log('Datos recibidos en VentaService.createVenta:', {
+            tipo_venta,
+            fecha_estimada_entrega,
+            fecha_estimada_entrega_type: typeof fecha_estimada_entrega
+        });
+
         try {
             // Crear una venta en una única transacción
             return await prisma.$transaction(async (tx) => {
@@ -30,6 +36,20 @@ export class VentaService {
                     console.log(`La venta NO cumple con las condiciones para ser CERRADA. Estado pago: ${estado_pago}, Estado entrega: ${estado_entrega}`);
                 }
                 
+                console.log('Creando venta con fecha_estimada_entrega:', fecha_estimada_entrega);
+                
+                // Convertir fecha_estimada_entrega si es string
+                let fechaEstimadaFormateada = null;
+                if (fecha_estimada_entrega) {
+                    if (typeof fecha_estimada_entrega === 'string') {
+                        fechaEstimadaFormateada = new Date(fecha_estimada_entrega);
+                    } else if (fecha_estimada_entrega instanceof Date) {
+                        fechaEstimadaFormateada = fecha_estimada_entrega;
+                    }
+                }
+                
+                console.log('Fecha estimada formateada:', fechaEstimadaFormateada);
+                
                 // 1. Crear la venta primero
                 const venta = await tx.venta.create({
                     data: {
@@ -37,6 +57,7 @@ export class VentaService {
                         total,
                         estado_pago: estado_pago || 'PENDIENTE',
                         fecha_venta: comprobante?.fecha || new Date(),
+                        fecha_estimada_entrega: fechaEstimadaFormateada,
                         forma_pago: comprobante?.forma_pago || 'EFECTIVO',
                         estado_entrega: estado_entrega || 'PENDIENTE',
                         empresa: { connect: { id_empresa } },
@@ -140,7 +161,7 @@ export class VentaService {
                 }
 
                 // 6. Retornar la venta completa
-                return await tx.venta.findUnique({
+                const ventaCompleta = await tx.venta.findUnique({
                     where: { id_venta: venta.id_venta },
                     include: {
                         detalle_venta: true,
@@ -148,6 +169,10 @@ export class VentaService {
                         comprobante_venta: true
                     }
                 });
+                
+                console.log('Venta creada con fecha_estimada_entrega:', ventaCompleta?.fecha_estimada_entrega);
+                
+                return ventaCompleta;
             });
         } catch (error) {
             console.error("Error al crear venta:", error);
