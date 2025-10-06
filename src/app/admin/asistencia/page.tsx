@@ -1652,17 +1652,18 @@ export default function AsistenciaPage() {
           </DialogHeader>
 
           <div className="flex flex-col gap-3 py-1 sm:py-2">
-            <div className="grid grid-cols-1 gap-2 sm:gap-3">
+            {/* Selectores en dos columnas */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Selector de Semana */}
               <div className="space-y-1.5">
-                <Label htmlFor="semana-modal" className="text-sm">Seleccionar Semana:</Label>
+                <Label htmlFor="semana-modal" className="text-sm font-medium">Seleccionar Semana:</Label>
                 <div className="flex items-center gap-2">
                   <Select
                     value={selectedSemana?.toString() || ""}
                     onValueChange={(value) => setSelectedSemana(Number(value))}
                     disabled
                   >
-                    <SelectTrigger id="semana-modal" className="w-full text-sm">
+                    <SelectTrigger id="semana-modal" className="w-full text-sm h-9">
                       <SelectValue placeholder="Seleccione..." />
                     </SelectTrigger>
                     <SelectContent>
@@ -1679,7 +1680,7 @@ export default function AsistenciaPage() {
                         ))}
                     </SelectContent>
                   </Select>
-                  <Button size="icon" onClick={() => router.push("/admin/dashboard")} disabled={modoEdicion} className="shrink-0">
+                  <Button size="icon" onClick={() => router.push("/admin/dashboard")} disabled={modoEdicion} className="shrink-0 h-9 w-9">
                     <Plus className="h-4 w-4" />
                   </Button>
                 </div>
@@ -1687,7 +1688,7 @@ export default function AsistenciaPage() {
 
               {/* Selector de Fecha */}
               <div className="space-y-1.5">
-                <Label htmlFor="fecha" className="text-sm">Seleccionar Fecha:</Label>
+                <Label htmlFor="fecha" className="text-sm font-medium">Seleccionar Fecha:</Label>
                 <Input
                   id="fecha"
                   type="date"
@@ -1695,7 +1696,7 @@ export default function AsistenciaPage() {
                   onChange={(e) => setSelectedDate(e.target.value)}
                   max={new Date(new Date().setHours(0, 0, 0, 0)).toISOString().split("T")[0]}
                   disabled={modoEdicion}
-                  className="w-full text-sm"
+                  className="w-full text-sm h-9"
                 />
               </div>
             </div>
@@ -1840,27 +1841,27 @@ export default function AsistenciaPage() {
 
       {/* Modal para Registro de Turno */}
       <Dialog open={turnoModalOpen} onOpenChange={setTurnoModalOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[900px] p-2 sm:p-4 h-[90vh] overflow-hidden">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-sm sm:text-xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[900px] max-h-[90vh] p-3 sm:p-4">
+          <DialogHeader className="space-y-1 pb-3">
+            <DialogTitle className="text-base sm:text-xl">
               Registro de Turno
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
               Seleccione la cocción, fecha y personal para el turno
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 h-[calc(100%-70px)] sm:h-[calc(100%-90px)] overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Columna del formulario */}
-            <div className="flex flex-col gap-2 sm:gap-3 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-4 min-h-0">
               {/* Selector de Cocción */}
-              <div className="space-y-1">
-                <Label htmlFor="coccion-modal" className="text-xs sm:text-sm">Cocción:</Label>
+              <div className="space-y-2">
+                <Label htmlFor="coccion-modal" className="text-xs sm:text-sm font-medium">Cocción:</Label>
                 <Select
                   value={selectedCoccion?.toString() || ""}
                   onValueChange={handleCoccionChange}
                 >
-                  <SelectTrigger id="coccion-modal" className="w-full text-xs sm:text-sm">
+                  <SelectTrigger id="coccion-modal" className="w-full text-xs sm:text-sm h-9 sm:h-10">
                     <SelectValue placeholder="Seleccionar cocción disponible" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1901,14 +1902,14 @@ export default function AsistenciaPage() {
                   return (
                     <div className="mt-1">
                       {hornoActual && (
-                        <div className="text-xs text-muted-foreground">
-                          Horno: {hornoActual.nombre} - Humeadores: {hornoActual.cantidad_humeadores || 0},
+                        <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded border">
+                          <strong>Horno:</strong> {hornoActual.nombre} - Humeadores: {hornoActual.cantidad_humeadores || 0},
                           Quemadores: {hornoActual.cantidad_quemadores || 0}
                         </div>
                       )}
 
                       {esCoccionDeSemanaAnterior && (
-                        <div className="text-xs text-amber-600 font-medium mt-1">
+                        <div className="text-xs text-amber-600 font-medium mt-1 p-2 bg-amber-50 rounded border border-amber-200">
                           ⚠️ Esta cocción comenzó en una semana anterior pero continúa en proceso.
                         </div>
                       )}
@@ -1918,21 +1919,21 @@ export default function AsistenciaPage() {
               </div>
 
               {/* Selector de Tipo de Personal */}
-              <div className="space-y-1">
-                <Label className="text-xs sm:text-sm">Tipo de Personal:</Label>
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm font-medium">Tipo de Personal:</Label>
                 <RadioGroup
                   value={tipoPersonal}
                   onValueChange={(value) => {
                     setTipoPersonal(value)
                     resetSeleccionPersonal()
                   }}
-                  className="flex gap-2 sm:gap-4"
+                  className="flex gap-4"
                 >
-                  <div className="flex items-center space-x-1 sm:space-x-2">
+                  <div className="flex items-center space-x-2">
                     <RadioGroupItem value="interno" id="interno" />
                     <Label htmlFor="interno" className="text-xs sm:text-sm">Personal Interno</Label>
                   </div>
-                  <div className="flex items-center space-x-1 sm:space-x-2">
+                  <div className="flex items-center space-x-2">
                     <RadioGroupItem value="externo" id="externo" />
                     <Label htmlFor="externo" className="text-xs sm:text-sm">Personal Externo</Label>
                   </div>
@@ -1940,25 +1941,25 @@ export default function AsistenciaPage() {
               </div>
 
               {/* Selector de Fecha */}
-              <div className="space-y-1">
-                <Label htmlFor="fecha-turno" className="text-xs sm:text-sm">Fecha del Turno:</Label>
+              <div className="space-y-2">
+                <Label htmlFor="fecha-turno" className="text-xs sm:text-sm font-medium">Fecha del Turno:</Label>
                 <Input
                   id="fecha-turno"
                   type="date"
                   value={turnoDate}
                   onChange={(e) => setTurnoDate(e.target.value)}
-                  className="w-full text-xs sm:text-sm"
+                  className="w-full text-xs sm:text-sm h-9 sm:h-10"
                 />
               </div>
 
               {/* Selección de cargo para ambos tipos de personal (interno y externo) */}
-              <div className="space-y-1">
-                <Label htmlFor="cargo-turno" className="text-xs sm:text-sm">Cargo:</Label>
+              <div className="space-y-2">
+                <Label htmlFor="cargo-turno" className="text-xs sm:text-sm font-medium">Cargo:</Label>
                 <Select
                   value={selectedCargo}
                   onValueChange={handleCargoChange}
                 >
-                  <SelectTrigger id="cargo-turno" className="w-full text-xs sm:text-sm">
+                  <SelectTrigger id="cargo-turno" className="w-full text-xs sm:text-sm h-9 sm:h-10">
                     <SelectValue placeholder="Seleccione un cargo" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1984,9 +1985,8 @@ export default function AsistenciaPage() {
 
                 {/* Mostrar información de límite de selección */}
                 {limitePuestos > 0 && (
-                  <div className="mt-1 text-xs text-primary">
-                    Personal seleccionado: {puestosSeleccionados}/{limitePuestos} {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'
-                    }
+                  <div className="mt-1 text-xs text-primary bg-blue-50 p-2 rounded">
+                    Personal seleccionado: <strong>{puestosSeleccionados}/{limitePuestos}</strong> {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'}
                   </div>
                 )}
               </div>
@@ -1994,24 +1994,24 @@ export default function AsistenciaPage() {
               {/* Campos según tipo de personal */}
               {tipoPersonal === "interno" ? (
                 // Lista de Personal con checkboxes
-                <div className="space-y-1 border rounded-md p-1 sm:p-2">
-                  <Label className="text-xs sm:text-sm mb-1 sm:mb-2 block">
+                <div className="space-y-2 border rounded-lg p-3 bg-gray-50">
+                  <Label className="text-xs sm:text-sm font-medium block">
                     Seleccionar Personal:
                     {limitePuestos > 0 && (
-                      <span className="ml-1 sm:ml-2 font-normal text-muted-foreground text-[10px] sm:text-xs">
+                      <span className="ml-2 font-normal text-muted-foreground text-xs">
                         (Cantidad recomendada: {limitePuestos} {tipoCargo === 'humeador' ? 'humeador(es)' : 'quemador(es)'})
                       </span>
                     )}
                   </Label>
 
-                  <div className="max-h-[120px] sm:max-h-[150px] overflow-y-auto pr-1">
+                  <div className="max-h-32 overflow-y-auto pr-1">
                     {personal.length === 0 ? (
-                      <div className="text-xs sm:text-sm text-center text-gray-500 py-2 sm:py-4">
+                      <div className="text-xs sm:text-sm text-center text-gray-500 py-4">
                         No hay personal registrado
                       </div>
                     ) : (
                       personal.map((p) => (
-                        <div key={p.id_personal} className="flex items-center space-x-1 sm:space-x-2 py-1 px-1">
+                        <div key={p.id_personal} className="flex items-center space-x-2 py-1 px-1">
                           <input
                             type="checkbox"
                             id={`personal-check-${p.id_personal}`}
@@ -2019,10 +2019,7 @@ export default function AsistenciaPage() {
                             onChange={(e) => {
                               handlePersonalSelection(p.id_personal, e.target.checked);
                             }}
-                            disabled={
-                              !selectedCargo // Deshabilitar solo si no hay cargo seleccionado
-                              // Ya no deshabilitamos por límite de puestos
-                            }
+                            disabled={!selectedCargo}
                             className="h-3 w-3 sm:h-4 sm:w-4 rounded border-gray-300"
                           />
                           <Label
@@ -2038,19 +2035,26 @@ export default function AsistenciaPage() {
                 </div>
               ) : (
                 /* Campo para personal externo */
-                <div className="space-y-1">
-                  <Label htmlFor="nombre-externo" className="text-xs sm:text-sm">Nombre del Personal Externo:</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="nombre-externo" className="text-xs sm:text-sm font-medium">Nombre del Personal Externo:</Label>
                   <Input
                     id="nombre-externo"
                     value={nombreExterno}
                     onChange={(e) => setNombreExterno(e.target.value)}
                     placeholder="Ingrese el nombre completo"
-                    className="w-full text-xs sm:text-sm h-8 sm:h-10"
+                    className="w-full text-xs sm:text-sm h-9 sm:h-10"
                   />
                 </div>
               )}
 
-              <div className="mt-2 sm:mt-4 flex-shrink-0">
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setTurnoModalOpen(false)}
+                  className="text-xs sm:text-sm h-9 sm:h-10 flex-1"
+                >
+                  Cerrar
+                </Button>
                 <Button
                   onClick={handleRegisterTurno}
                   disabled={isSubmittingTurno ||
@@ -2058,7 +2062,7 @@ export default function AsistenciaPage() {
                     !selectedCargo ||
                     (tipoPersonal === "interno" && !Object.values(personalSeleccionado).some(Boolean)) ||
                     (tipoPersonal === "externo" && !nombreExterno.trim())}
-                  className="w-full text-xs sm:text-sm h-8 sm:h-10"
+                  className="text-xs sm:text-sm h-9 sm:h-10 flex-1"
                 >
                   {isSubmittingTurno ? (
                     <>
@@ -2073,66 +2077,81 @@ export default function AsistenciaPage() {
             </div>
 
             {/* Columna de la tabla de turnos registrados */}
-            <div className="flex flex-col gap-2 sm:gap-3 overflow-hidden h-full">
-              <div className="text-xs sm:text-sm font-medium">
-                Turnos registrados:
+            <div className="flex flex-col gap-3 min-h-0">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs sm:text-sm font-medium text-gray-700">
+                  Turnos Registrados
+                </h3>
+                {selectedCoccion && (
+                  <span className="text-xs text-muted-foreground">
+                    {turnosRegistrados.length} registro(s)
+                  </span>
+                )}
               </div>
-              <div className="border rounded-md flex-grow overflow-hidden">
+              
+              <div className="border rounded-lg bg-white min-h-[350px] max-h-[450px] overflow-hidden">
                 {cargandoTurnos ? (
-                  <div className="h-full flex items-center justify-center">
-                    <Loader2 className="h-4 sm:h-6 w-4 sm:w-6 animate-spin text-primary" />
+                  <div className="h-[350px] flex items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
                     <span className="ml-2 text-xs sm:text-sm">Cargando turnos...</span>
                   </div>
                 ) : !selectedCoccion ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
-                    Seleccione una cocción para ver los turnos
+                  <div className="h-[350px] flex flex-col items-center justify-center text-muted-foreground text-xs sm:text-sm p-4">
+                    <Timer className="h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-center">Seleccione una cocción para ver los turnos</p>
                   </div>
                 ) : turnosRegistrados.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
-                    No hay turnos registrados para esta cocción
+                  <div className="h-[350px] flex flex-col items-center justify-center text-muted-foreground text-xs sm:text-sm p-4">
+                    <Timer className="h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-center">No hay turnos registrados para esta cocción</p>
                   </div>
                 ) : (
                   <div className="h-full overflow-auto">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-white z-10">
+                      <TableHeader className="sticky top-0 bg-gray-50 z-10">
                         <TableRow>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">ID</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Horno</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Personal</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Cargo</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Fecha</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Acciones</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2">ID</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2">Horno</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2">Personal</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2 hidden sm:table-cell">Cargo</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2 text-center">Fecha</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2 text-center">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {turnosRegistrados.map((turno) => (
-                          <TableRow key={turno.id_coccion_personal}>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                          <TableRow key={turno.id_coccion_personal} className="hover:bg-gray-50">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2 font-medium">
                               {turno.coccion_id_coccion}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2">
                               {turno.nombre_horno || getNombreHorno(
                                 cocciones.find(c => c.id_coccion === turno.coccion_id_coccion)?.horno_id_horno ?? 0
                               )}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
-                              {turno.personal_externo || turno.nombre_personal || "Sin nombre"}
+                            <TableCell className="text-xs sm:text-sm py-2 px-2">
+                              <div className="font-medium">
+                                {turno.personal_externo || turno.nombre_personal || "Sin nombre"}
+                              </div>
+                              <div className="sm:hidden text-xs text-muted-foreground mt-1">
+                                {turno.cargo || getNombreCargo(turno.cargo_coccion_id_cargo_coccion)}
+                              </div>
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2 hidden sm:table-cell">
                               {turno.cargo || getNombreCargo(turno.cargo_coccion_id_cargo_coccion)}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2 text-center">
                               {formatDate(turno.fecha)}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2 text-center">
                               <Button 
                                 variant="ghost" 
-                                size="icon"
-                                className="h-6 sm:h-7 w-6 sm:w-7" 
+                                size="sm"
+                                className="h-6 w-6 p-0 text-destructive hover:bg-red-100 hover:text-destructive" 
                                 onClick={() => confirmDeleteTurno(turno.id_coccion_personal)}
                                 title="Eliminar turno"
                               >
-                                <X className="h-3 sm:h-4 w-3 sm:w-4 text-destructive" />
+                                <X className="h-3 w-3" />
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -2142,14 +2161,6 @@ export default function AsistenciaPage() {
                   </div>
                 )}
               </div>
-
-              <Button
-                variant="outline"
-                onClick={() => setTurnoModalOpen(false)}
-                className="text-xs sm:text-sm h-8 sm:h-10 flex-shrink-0"
-              >
-                Cerrar
-              </Button>
             </div>
           </div>
         </DialogContent>
@@ -2290,12 +2301,12 @@ export default function AsistenciaPage() {
 
       {/* Modal de Tarea Extra */}
       <Dialog open={tareaModalOpen} onOpenChange={setTareaModalOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[1000px] p-2 sm:p-4 h-[90vh] overflow-hidden">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-sm sm:text-xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[1000px] max-h-[90vh] p-3 sm:p-4">
+          <DialogHeader className="space-y-1 pb-3">
+            <DialogTitle className="text-base sm:text-xl">
               {tareaData.id_tarea_extra ? "Editar Tarea Extra" : "Registrar Tarea Extra"}
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
               {tareaData.id_tarea_extra
                 ? "Modifique los detalles de la tarea extra."
                 : "Ingrese los detalles de la tarea extra realizada por el personal."
@@ -2303,11 +2314,11 @@ export default function AsistenciaPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4 h-[calc(100%-70px)] sm:h-[calc(100%-90px)] overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Columna del formulario */}
-            <div className="flex flex-col gap-2 sm:gap-3 overflow-y-auto pr-1">
+            <div className="flex flex-col gap-4 min-h-0">
               {/* Checkbox para selección múltiple */}
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <Checkbox 
                   id="multiple-selection"
                   checked={isMultipleSelection}
@@ -2318,23 +2329,24 @@ export default function AsistenciaPage() {
                       setTareaData({ ...tareaData, id_personal: undefined });
                     }
                   }}
+                  className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                 />
-                <Label htmlFor="multiple-selection" className="text-xs sm:text-sm">
+                <Label htmlFor="multiple-selection" className="text-xs sm:text-sm font-medium">
                   Asignar tarea extra a múltiple personal
                 </Label>
               </div>
 
               {/* Personal Select o Multiple Select */}
               {!isMultipleSelection ? (
-                <div className="space-y-1">
-                  <Label htmlFor="personal" className="text-xs sm:text-sm">Personal</Label>
+                <div className="space-y-2">
+                  <Label htmlFor="personal" className="text-xs sm:text-sm font-medium">Personal</Label>
                   <Select
                     value={tareaData.id_personal?.toString()}
                     onValueChange={(value) =>
                       setTareaData({ ...tareaData, id_personal: Number(value) })
                     }
                   >
-                    <SelectTrigger className="text-xs sm:text-sm">
+                    <SelectTrigger className="text-xs sm:text-sm h-9 sm:h-10">
                       <SelectValue placeholder="Seleccione al personal" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2347,9 +2359,9 @@ export default function AsistenciaPage() {
                   </Select>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  <Label className="text-xs sm:text-sm">Personal (Selección múltiple)</Label>
-                  <div className="max-h-32 overflow-y-auto border rounded-md p-2">
+                <div className="space-y-2">
+                  <Label className="text-xs sm:text-sm font-medium">Personal (Selección múltiple)</Label>
+                  <div className="max-h-32 overflow-y-auto border rounded-md p-2 bg-gray-50">
                     {personal.map((p) => (
                       <div key={p.id_personal} className="flex items-center space-x-2 py-1">
                         <Checkbox
@@ -2362,6 +2374,7 @@ export default function AsistenciaPage() {
                               setSelectedPersonal(selectedPersonal.filter(id => id !== p.id_personal));
                             }
                           }}
+                          className="data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                         />
                         <Label htmlFor={`personal-${p.id_personal}`} className="text-xs sm:text-sm">
                           {p.nombre_completo}
@@ -2372,35 +2385,37 @@ export default function AsistenciaPage() {
                 </div>
               )}
 
-              <div className="space-y-1">
-                <Label htmlFor="fecha-tarea" className="text-xs sm:text-sm">Fecha</Label>
-                <Input
-                  id="fecha-tarea"
-                  type="date"
-                  value={tareaData.fecha}
-                  onChange={(e) =>
-                    setTareaData({ ...tareaData, fecha: e.target.value })
-                  }
-                  className="text-xs sm:text-sm"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="fecha-tarea" className="text-xs sm:text-sm font-medium">Fecha</Label>
+                  <Input
+                    id="fecha-tarea"
+                    type="date"
+                    value={tareaData.fecha}
+                    onChange={(e) =>
+                      setTareaData({ ...tareaData, fecha: e.target.value })
+                    }
+                    className="text-xs sm:text-sm h-9 sm:h-10"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="monto-tarea" className="text-xs sm:text-sm font-medium">Monto (S/)</Label>
+                  <Input
+                    id="monto-tarea"
+                    type="number"
+                    value={tareaData.monto || ""}
+                    onChange={(e) =>
+                      setTareaData({ ...tareaData, monto: Number(e.target.value) })
+                    }
+                    placeholder="0.00"
+                    className="text-xs sm:text-sm h-9 sm:h-10"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="monto-tarea" className="text-xs sm:text-sm">Monto</Label>
-                <Input
-                  id="monto-tarea"
-                  type="number"
-                  value={tareaData.monto || ""}
-                  onChange={(e) =>
-                    setTareaData({ ...tareaData, monto: Number(e.target.value) })
-                  }
-                  placeholder="0.00"
-                  className="text-xs sm:text-sm"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="descripcion-tarea" className="text-xs sm:text-sm">Descripción</Label>
+              <div className="space-y-2">
+                <Label htmlFor="descripcion-tarea" className="text-xs sm:text-sm font-medium">Descripción</Label>
                 <Textarea
                   id="descripcion-tarea"
                   value={tareaData.descripcion || ""}
@@ -2408,15 +2423,16 @@ export default function AsistenciaPage() {
                     setTareaData({ ...tareaData, descripcion: e.target.value })
                   }
                   placeholder="Describa la tarea extra realizada"
-                  className="text-xs sm:text-sm"
+                  className="text-xs sm:text-sm min-h-[70px] resize-none"
+                  rows={3}
                 />
               </div>
 
-              <div className="mt-2 sm:mt-4 flex-shrink-0 flex gap-2">
-                <Button variant="outline" onClick={() => setTareaModalOpen(false)} className="text-xs sm:text-sm h-8 sm:h-10 flex-1">
+              <div className="flex gap-3 pt-2">
+                <Button variant="outline" onClick={() => setTareaModalOpen(false)} className="text-xs sm:text-sm h-9 sm:h-10 flex-1">
                   Cancelar
                 </Button>
-                <Button onClick={handleSubmitTarea} disabled={isSubmitting} className="text-xs sm:text-sm h-8 sm:h-10 flex-1">
+                <Button onClick={handleSubmitTarea} disabled={isSubmitting} className="text-xs sm:text-sm h-9 sm:h-10 flex-1">
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-1 sm:mr-2 h-3 sm:h-4 w-3 sm:w-4 animate-spin" />
@@ -2430,50 +2446,68 @@ export default function AsistenciaPage() {
             </div>
 
             {/* Columna de la tabla de tareas extra registradas */}
-            <div className="flex flex-col gap-2 sm:gap-3 overflow-hidden h-full">
-              <div className="text-xs sm:text-sm font-medium">
-                Tareas extra registradas para la semana:
+            <div className="flex flex-col gap-3 min-h-0">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs sm:text-sm font-medium text-gray-700">
+                  Tareas Extra Registradas
+                </h3>
+                {selectedSemana && (
+                  <span className="text-xs text-muted-foreground">
+                    {tareasExtra.length} registro(s)
+                  </span>
+                )}
               </div>
-              <div className="border rounded-md flex-grow overflow-hidden">
+              
+              <div className="border rounded-lg bg-white min-h-[300px] max-h-[400px] overflow-hidden">
                 {!selectedSemana ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
-                    Seleccione una semana para ver las tareas extra
+                  <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground text-xs sm:text-sm p-4">
+                    <ClipboardList className="h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-center">Seleccione una semana para ver las tareas extra</p>
                   </div>
                 ) : tareasExtra.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
-                    No hay tareas extra registradas para esta semana
+                  <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground text-xs sm:text-sm p-4">
+                    <ClipboardList className="h-8 w-8 mb-2 opacity-50" />
+                    <p className="text-center">No hay tareas extra registradas para esta semana</p>
                   </div>
                 ) : (
                   <div className="h-full overflow-auto">
                     <Table>
-                      <TableHeader className="sticky top-0 bg-white z-10">
+                      <TableHeader className="sticky top-0 bg-gray-50 z-10">
                         <TableRow>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Personal</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Fecha</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Monto</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Descripción</TableHead>
-                          <TableHead className="text-xs sm:text-sm py-1 sm:py-2">Acciones</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2">Personal</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2 text-center">Fecha</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2 text-right">Monto</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2 hidden sm:table-cell">Descripción</TableHead>
+                          <TableHead className="text-xs sm:text-sm py-2 px-2 text-center">Acciones</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {tareasExtra.map((tarea) => (
-                          <TableRow key={tarea.id_tarea_extra}>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
-                              {tarea.personal?.nombre_completo || "Sin nombre"}
+                          <TableRow key={tarea.id_tarea_extra} className="hover:bg-gray-50">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2">
+                              <div className="font-medium">
+                                {tarea.personal?.nombre_completo || "Sin nombre"}
+                              </div>
+                              <div className="sm:hidden text-xs text-muted-foreground mt-1">
+                                {tarea.descripcion ? tarea.descripcion.substring(0, 30) + '...' : ''}
+                              </div>
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
-                              {new Date(tarea.fecha).toLocaleDateString('es-PE')}
+                            <TableCell className="text-xs sm:text-sm py-2 px-2 text-center">
+                              {new Date(tarea.fecha).toLocaleDateString('es-PE', { 
+                                day: '2-digit', 
+                                month: '2-digit' 
+                              })}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2 text-right font-medium">
                               S/ {Number(tarea.monto).toFixed(2)}
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2 max-w-[150px]">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2 max-w-[120px] hidden sm:table-cell">
                               <div className="truncate" title={tarea.descripcion}>
                                 {tarea.descripcion}
                               </div>
                             </TableCell>
-                            <TableCell className="text-xs sm:text-sm py-1 sm:py-2">
-                              <div className="flex gap-1">
+                            <TableCell className="text-xs sm:text-sm py-2 px-2">
+                              <div className="flex gap-1 justify-center">
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -2487,7 +2521,8 @@ export default function AsistenciaPage() {
                                       descripcion: tarea.descripcion
                                     });
                                   }}
-                                  className="h-6 w-6 p-0"
+                                  className="h-6 w-6 p-0 hover:bg-blue-100"
+                                  title="Editar"
                                 >
                                   <Edit className="h-3 w-3" />
                                 </Button>
@@ -2498,7 +2533,8 @@ export default function AsistenciaPage() {
                                     setTareaToDelete(tarea.id_tarea_extra!);
                                     setShowConfirmDeleteTareaModal(true);
                                   }}
-                                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                  className="h-6 w-6 p-0 text-destructive hover:bg-red-100 hover:text-destructive"
+                                  title="Eliminar"
                                 >
                                   <Trash2 className="h-3 w-3" />
                                 </Button>
