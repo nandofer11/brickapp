@@ -32,6 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { formatDateString, formatDateRange, toISODateString } from '@/lib/utils/dates'
 import { Separator } from "@/components/ui/separator"
+import { formatTime, formatTimeAMPM } from "@/utils/dateFormat"
 
 // Interfaces
 interface Horno {
@@ -620,13 +621,13 @@ export default function CoccionPage() {
                       <TableCell>{coccion.fecha_apagado ? formatDate(coccion.fecha_apagado) : '-'}</TableCell>
                       {/* <TableCell>{coccion.humedad_inicial || '-'}</TableCell> */}
                       <TableCell>
-                        <Badge 
+                        <Badge
                           className={
-                            coccion.estado === "En Proceso" ? 
-                            "bg-green-100 text-green-800 hover:bg-green-100" : 
-                            coccion.estado === "Finalizado" ? 
-                            "bg-red-50 text-red-600 hover:bg-red-50" : 
-                            ""
+                            coccion.estado === "En Proceso" ?
+                              "bg-green-100 text-green-800 hover:bg-green-100" :
+                              coccion.estado === "Finalizado" ?
+                                "bg-red-50 text-red-600 hover:bg-red-50" :
+                                ""
                           }
                         >
                           {coccion.estado}
@@ -938,6 +939,9 @@ export default function CoccionPage() {
                 </div>
                 <div className="pt-4">
                   <Button onClick={handleSaveCargo} className="w-full sm:w-auto">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"/>
+                    </svg>
                     {currentCargo.id_cargo_coccion ? "Actualizar Cargo" : "Guardar Cargo"}
                   </Button>
                 </div>
@@ -950,12 +954,12 @@ export default function CoccionPage() {
               <div className="rounded-md border overflow-x-auto max-h-[400px]">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Cod. Horno</TableHead>
-                      <TableHead>Horno</TableHead>
-                      <TableHead>Cargo</TableHead>
-                      <TableHead>Costo</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
+                    <TableRow className="bg-gray-50 hover:bg-gray-50">
+                      <TableHead className="font-semibold text-gray-700">Cod. Horno</TableHead>
+                      <TableHead className="font-semibold text-gray-700">Horno</TableHead>
+                      <TableHead className="font-semibold text-gray-700">Cargo</TableHead>
+                      <TableHead className="font-semibold text-gray-700">Costo</TableHead>
+                      <TableHead className="text-right font-semibold text-gray-700">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -963,7 +967,15 @@ export default function CoccionPage() {
                       const horno = hornos.find((h) => h.id_horno === cargo.id_horno);
                       return (
                         <TableRow key={cargo.id_cargo_coccion}>
-                          <TableCell>{horno?.prefijo || "-"}</TableCell>
+                          <TableCell>
+                            {horno?.prefijo ? (
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300 font-medium">
+                                {horno.prefijo}
+                              </Badge>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </TableCell>
                           <TableCell>{horno?.nombre || "-"}</TableCell>
                           <TableCell>{cargo.nombre_cargo}</TableCell>
                           <TableCell>S/. {Number(cargo.costo_cargo).toFixed(2)}</TableCell>
@@ -1012,13 +1024,13 @@ export default function CoccionPage() {
         }}
       >
         <DialogContent className="sm:max-w-[95%] md:max-w-[800px] p-4 sm:p-6 overflow-y-auto max-h-[90vh]">
-          <DialogHeader className="mb-4">
+          <DialogHeader className="">
             <DialogTitle className="text-xl sm:text-2xl font-bold">Gestión de Hornos</DialogTitle>
             <DialogDescription>Administre los hornos registrados.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-2">
             {/* Columna 1: Formulario de Hornos */}
-            <div className="space-y-4 bg-muted/20 p-4 rounded-lg">
+            <div className="space-y-4 bg-muted/20 p-0 rounded-lg">
               <h3 className="text-lg font-semibold border-b pb-2">Datos del Horno</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1074,56 +1086,81 @@ export default function CoccionPage() {
               </div>
             </div>
 
-            {/* Columna 2: Tabla de Hornos */}
-            <div className="bg-muted/20 rounded-lg p-4">
+            {/* Columna 2: Cards de Hornos */}
+            <div className="bg-muted/20 rounded-lg p-0">
               <h3 className="text-lg font-semibold border-b pb-2 mb-4">Hornos Registrados</h3>
-              <div className="rounded-md border overflow-x-auto max-h-[400px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cód.</TableHead>
-                      <TableHead>Nombre</TableHead>
-                      <TableHead>Humeadores</TableHead>
-                      <TableHead>Quemadores</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
+              <div className="max-h-[400px] overflow-y-auto">
+                {hornos.length === 0 ? (
+                  <div className="text-center py-6 text-gray-500">
+                    <div className="text-3xl mb-2">🏭</div>
+                    <p className="text-sm">No hay hornos registrados</p>
+                    <p className="text-xs text-gray-400">Agregue el primer horno</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
                     {hornos.map((horno) => (
-                      <TableRow key={horno.id_horno}>
-                        <TableCell>{horno.prefijo}</TableCell>
-                        <TableCell>{horno.nombre}</TableCell>
-                        <TableCell>{horno.cantidad_humeadores || "-"}</TableCell>
-                        <TableCell>{horno.cantidad_quemadores || "-"}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                      <Card key={horno.id_horno} className="p-3 hover:shadow-md transition-shadow gap-0">
+                        <div className="space-y-1">
+                          {/* Header con nombre y código */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <Badge variant="outline" className="text-xs bg-orange-50 text-orange-700 border-orange-300 flex-shrink-0">
+                                {horno.prefijo}
+                              </Badge>
+                              <span className="font-medium text-gray-900 text-xs truncate">{horno.nombre}</span>
+                            </div>
+                          </div>
+                          {/* Humeadores */}
+                          <div className="flex items-center gap-1 m-0">
+                            <Users className="w-3 h-3 text-primary flex-shrink-0" />
+                            <p className="text-xs">Humeadores:</p>
+                            <span className="text-gray-700">
+                              <p className="text-sm">{horno.cantidad_humeadores || 0}</p>
+                            </span>
+                          </div>
+
+                          {/* Quemadores */}
+                          <div className="flex items-center gap-1 m-0">
+                            <Users className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                            <p className="text-xs">Quemadores</p>
+                            <span className="text-gray-700">
+                              <p className="text-sm">{horno.cantidad_quemadores || 0}</p>
+                            </span>
+                          </div>
+                        </div>
+                        {/* Información compacta */}
+                        <div className="flex items-center text-xs justfy-center">
+
+
+                          {/* Botones de acción */}
+                          <div className="flex justify-end gap-1 pt-1">
                             <Button
                               variant="outline"
-                              size="icon"
+                              size="sm"
+                              className="border-blue-200 text-blue-600 hover:bg-blue-50 h-6 w-6 p-0"
                               onClick={() => {
                                 setCurrentHorno(horno);
-                                setShowHornoModal(true);
                               }}
                             >
-                              <Pencil className="h-4 w-4" />
+                              <Pencil className="h-2.5 w-2.5" />
                             </Button>
                             <Button
                               variant="outline"
-                              size="icon"
-                              className="text-destructive hover:text-destructive"
+                              size="sm"
+                              className="border-red-200 text-red-600 hover:bg-red-50 h-6 w-6 p-0"
                               onClick={() => {
                                 setDeleteHornoId(horno.id_horno);
                                 setShowDeleteHornoDialog(true);
                               }}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-2.5 w-2.5" />
                             </Button>
                           </div>
-                        </TableCell>
-                      </TableRow>
+                        </div>
+                      </Card>
                     ))}
-                  </TableBody>
-                </Table>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1204,11 +1241,11 @@ export default function CoccionPage() {
                     <span className="font-medium text-muted-foreground">Estado:</span>
                     <Badge
                       className={
-                        selectedCoccion.estado === "En Proceso" ? 
-                        "bg-green-100 text-green-800 hover:bg-green-100 text-xs" : 
-                        selectedCoccion.estado === "Finalizado" ? 
-                        "bg-red-50 text-red-600 hover:bg-red-50 text-xs" : 
-                        "text-xs"
+                        selectedCoccion.estado === "En Proceso" ?
+                          "bg-green-100 text-green-800 hover:bg-green-100 text-xs" :
+                          selectedCoccion.estado === "Finalizado" ?
+                            "bg-red-50 text-red-600 hover:bg-red-50 text-xs" :
+                            "text-xs"
                       }
                     >
                       {selectedCoccion.estado}
@@ -1233,7 +1270,7 @@ export default function CoccionPage() {
                     <div className="w-1/2 pl-1">
                       <div className="flex justify-between border-b pb-1 items-center">
                         <span className="font-medium text-muted-foreground text-[10px] sm:text-xs">H. Inicio:</span>
-                        <span className="font-semibold text-right text-[10px] sm:text-xs">{selectedCoccion.hora_inicio || '-'}</span>
+                        <span className="font-semibold text-right text-[10px] sm:text-xs">{selectedCoccion.hora_inicio ? formatTimeAMPM(selectedCoccion.hora_inicio) : '-'}</span>
                       </div>
                     </div>
                   </div>
@@ -1250,7 +1287,7 @@ export default function CoccionPage() {
                     <div className="w-1/2 pl-1">
                       <div className="flex justify-between border-b pb-1 items-center">
                         <span className="font-medium text-muted-foreground text-[10px] sm:text-xs">H. Fin:</span>
-                        <span className="font-semibold text-right text-[10px] sm:text-xs">{selectedCoccion.hora_fin || '-'}</span>
+                        <span className="font-semibold text-right text-[10px] sm:text-xs">{selectedCoccion.hora_fin ? formatTimeAMPM(selectedCoccion.hora_fin) : '-'}</span>
                       </div>
                     </div>
                   </div>
@@ -1286,15 +1323,26 @@ export default function CoccionPage() {
                       <Table className="w-full table-fixed">
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="whitespace-nowrap text-[10px] sm:text-xs p-1 sm:p-2 w-[40%]">Nombre</TableHead>
-                            <TableHead className="whitespace-nowrap text-[10px] sm:text-xs p-1 sm:p-2 w-[40%]">Cargo</TableHead>
+                            <TableHead className="whitespace-nowrap text-[10px] sm:text-xs p-1 sm:p-2 w-[60%]">Nombre</TableHead>
+                            <TableHead className="whitespace-nowrap text-[10px] sm:text-xs p-1 sm:p-2 w-[20%]">Cargo</TableHead>
                             <TableHead className="whitespace-nowrap text-[10px] sm:text-xs p-1 sm:p-2 w-[20%]">Costo</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {coccionOperadores.map((operador, index) => (
                             <TableRow key={operador.id_coccion_personal || operador.id_coccion_operador || `${index}-${operador.coccion_id_coccion}-${operador.personal_id_personal}`}>
-                              <TableCell className="p-1 sm:p-2 text-[10px] sm:text-xs truncate">{operador.nombre_personal || operador.Personal?.nombre_completo || 'No asignado'}</TableCell>
+                              <TableCell className="p-1 sm:p-2 text-[10px] sm:text-xs">
+                                <div className="flex flex-row gap-1">
+                                  <span className="truncate">
+                                    {operador.personal_externo || operador.nombre_personal || operador.Personal?.nombre_completo || 'No asignado'}
+                                  </span>
+                                  {operador.personal_externo && (
+                                    <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1 py-0 bg-orange-100 text-orange-700 border-orange-300 w-fit">
+                                      Personal Externo
+                                    </Badge>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell className="p-1 sm:p-2 text-[10px] sm:text-xs truncate">{operador.cargo_coccion?.nombre_cargo || operador.CargoCocion?.nombre_cargo || 'No asignado'}</TableCell>
                               <TableCell className="p-1 sm:p-2 text-[10px] sm:text-xs">
                                 {(operador.cargo_coccion?.costo_cargo || operador.CargoCocion?.costo_cargo)
