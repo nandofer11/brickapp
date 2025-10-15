@@ -101,12 +101,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             }
           });
           
-          // Combinamos ambos conjuntos de resultados
-          const todosLosTurnos = [...turnosPorCoccion, ...turnosPorFecha];
+          // Consulta 3: Turnos que pertenecen a cocciones que están activas 
+          // durante la semana solicitada, independientemente de la semana_laboral_id
+          // de la cocción y de la fecha específica del turno
+          const turnosDeCocci = await prisma.coccion_turno.findMany({
+            where: {
+              coccion: {
+                id_empresa: id_empresa,
+                // Cocciones que se superponen con la semana solicitada
+                AND: [
+                  {
+                    fecha_encendido: {
+                      lte: fechaFin
+                    }
+                  },
+                  {
+                    fecha_apagado: {
+                      gte: fechaInicio
+                    }
+                  }
+                ],
+                // Excluimos las cocciones que ya obtuvimos en la primera consulta
+                NOT: {
+                  semana_laboral_id_semana_laboral: id_semana
+                }
+              },
+              // Excluimos turnos que ya obtuvimos en las consultas anteriores
+              NOT: {
+                OR: [
+                  {
+                    fecha: {
+                      gte: fechaInicio,
+                      lt: fechaFin
+                    }
+                  }
+                ]
+              }
+            },
+            include: {
+              coccion: true,
+              cargo_coccion: true
+            }
+          });
+          
+          // Combinamos los tres conjuntos de resultados
+          const todosLosTurnos = [...turnosPorCoccion, ...turnosPorFecha, ...turnosDeCocci];
           
           console.log(`Total turnos recuperados para semana ${id_semana}: ${todosLosTurnos.length}`);
           console.log(`- Por cocción: ${turnosPorCoccion.length}`);
           console.log(`- Por fecha: ${turnosPorFecha.length}`);
+          console.log(`- De cocciones extendidas: ${turnosDeCocci.length}`);
           
           return res.status(200).json(todosLosTurnos);
         } 
@@ -130,15 +174,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           // Añadimos un día al final para incluir todo el último día
           fechaFin.setDate(fechaFin.getDate() + 1);
           
-          // Buscamos turnos de este personal en el rango de fechas de la semana
-          const turnos = await prisma.coccion_turno.findMany({
+          // Consulta 1: Turnos de este personal en cocciones asociadas directamente a esta semana
+          const turnosPorCoccion = await prisma.coccion_turno.findMany({
             where: {
               personal_id_personal: idPersonal,
-              fecha: {
-                gte: fechaInicio,
-                lt: fechaFin
-              },
               coccion: {
+                semana_laboral_id_semana_laboral: idSemana,
                 id_empresa: id_empresa
               }
             },
@@ -149,13 +190,100 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 }
               },
               cargo_coccion: true
-            },
-            orderBy: {
-              fecha: 'asc'
             }
           });
           
-          return res.status(200).json(turnos);
+          // Consulta 2: Turnos de este personal cuya fecha cae dentro del rango de esta semana,
+          // incluso si la cocción está asociada a otra semana
+          const turnosPorFecha = await prisma.coccion_turno.findMany({
+            where: {
+              personal_id_personal: idPersonal,
+              fecha: {
+                gte: fechaInicio,
+                lt: fechaFin
+              },
+              coccion: {
+                id_empresa: id_empresa
+              },
+              // Excluimos los que ya obtuvimos en la consulta anterior
+              NOT: {
+                coccion: {
+                  semana_laboral_id_semana_laboral: idSemana
+                }
+              }
+            },
+            include: {
+              coccion: {
+                include: {
+                  horno: true
+                }
+              },
+              cargo_coccion: true
+            }
+          });
+          
+          // Consulta 3: Turnos de este personal que pertenecen a cocciones activas 
+          // durante la semana solicitada, independientemente de la fecha del turno
+          const turnosDeCocci = await prisma.coccion_turno.findMany({
+            where: {
+              personal_id_personal: idPersonal,
+              coccion: {
+                id_empresa: id_empresa,
+                // Cocciones que se superponen con la semana solicitada
+                AND: [
+                  {
+                    fecha_encendido: {
+                      lte: fechaFin
+                    }
+                  },
+                  {
+                    fecha_apagado: {
+                      gte: fechaInicio
+                    }
+                  }
+                ],
+                // Excluimos las cocciones que ya obtuvimos en la primera consulta
+                NOT: {
+                  semana_laboral_id_semana_laboral: idSemana
+                }
+              },
+              // Excluimos turnos que ya obtuvimos en las consultas anteriores
+              NOT: {
+                OR: [
+                  {
+                    fecha: {
+                      gte: fechaInicio,
+                      lt: fechaFin
+                    }
+                  }
+                ]
+              }
+            },
+            include: {
+              coccion: {
+                include: {
+                  horno: true
+                }
+              },
+              cargo_coccion: true
+            }
+          });
+          
+          // Combinamos los tres conjuntos de resultados
+          const todosLosTurnos = [...turnosPorCoccion, ...turnosPorFecha, ...turnosDeCocci];
+          
+          console.log(`Total turnos recuperados para personal ${idPersonal} en semana ${idSemana}: ${todosLosTurnos.length}`);
+          console.log(`- Por cocción: ${turnosPorCoccion.length}`);
+          console.log(`- Por fecha: ${turnosPorFecha.length}`);
+          console.log(`- De cocciones extendidas: ${turnosDeCocci.length}`);
+          
+          return res.status(200).json(
+            todosLosTurnos.sort((a, b) => {
+              const fechaA = a.fecha ? new Date(a.fecha).getTime() : 0;
+              const fechaB = b.fecha ? new Date(b.fecha).getTime() : 0;
+              return fechaA - fechaB;
+            })
+          );
         } 
         // Consulta turnos por id_coccion si se proporciona un parámetro
         else if (req.query.id_coccion) {
