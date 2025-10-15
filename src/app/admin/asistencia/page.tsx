@@ -7,6 +7,7 @@ import { Edit, Check, X, AlertCircle, Plus, Loader2, NotebookPen, Calendar1, Tim
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -990,9 +991,13 @@ export default function AsistenciaPage() {
       const fechaAsistenciaISO = new Date(selectedDate ?? new Date()).toISOString();
 
       // Construye los datos de asistencia según el modo (edición o creación)
-      const asistenciaData = Object.entries(selectedAsistencia)
+      // Separamos entre registros para actualizar (que tienen id_asistencia) y registros nuevos
+      const asistenciasParaActualizar: any[] = [];
+      const asistenciasParaCrear: any[] = [];
+
+      Object.entries(selectedAsistencia)
         .filter(([_, datos]) => datos.estado !== "-") // Filtra elementos con estado "-"
-        .map(([id_personal, datos]) => {
+        .forEach(([id_personal, datos]) => {
           const baseData = {
             id_personal: Number(id_personal),
             id_semana_laboral: selectedSemana,
@@ -1000,36 +1005,68 @@ export default function AsistenciaPage() {
             estado: datos.estado,
           };
 
-          // Si estamos en modo edición y tenemos un id_asistencia, lo incluimos
+          // Si estamos en modo edición y tenemos un id_asistencia, es para actualizar
           if (modoEdicion && datos.id_asistencia) {
-            return {
+            asistenciasParaActualizar.push({
               ...baseData,
               id_asistencia: datos.id_asistencia,
-            };
+            });
+          } else {
+            // Si no tiene id_asistencia, es un registro nuevo (personal recién reactivado)
+            asistenciasParaCrear.push(baseData);
           }
-
-          return baseData;
         });
 
-      if (asistenciaData.length === 0) {
+      const totalAsistencias = asistenciasParaActualizar.length + asistenciasParaCrear.length;
+
+      if (totalAsistencias === 0) {
         toast.error("Seleccione al menos un trabajador con un estado de asistencia válido");
         setIsSubmitting(false);
         return;
       }
 
-      const response = await fetch("/api/asistencia", {
-        method: modoEdicion ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(asistenciaData),
-      });
+      // Procesar actualizaciones si hay registros para actualizar
+      if (asistenciasParaActualizar.length > 0) {
+        const responseUpdate = await fetch("/api/asistencia", {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(asistenciasParaActualizar),
+        });
 
-      if (!response.ok) {
-        throw new Error(modoEdicion ? "Error al actualizar la asistencia" : "Error al registrar la asistencia");
+        if (!responseUpdate.ok) {
+          throw new Error("Error al actualizar registros de asistencia existentes");
+        }
       }
 
-      toast.success(modoEdicion ? "Asistencia actualizada correctamente" : "Asistencia guardada correctamente");
+      // Procesar creaciones si hay registros para crear
+      if (asistenciasParaCrear.length > 0) {
+        const responseCreate = await fetch("/api/asistencia", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(asistenciasParaCrear),
+        });
+
+        if (!responseCreate.ok) {
+          throw new Error("Error al crear nuevos registros de asistencia");
+        }
+      }
+
+      // Mostrar mensaje de éxito más informativo
+      if (modoEdicion) {
+        if (asistenciasParaActualizar.length > 0 && asistenciasParaCrear.length > 0) {
+          toast.success(`Asistencia actualizada: ${asistenciasParaActualizar.length} registros actualizados y ${asistenciasParaCrear.length} nuevos registros creados`);
+        } else if (asistenciasParaActualizar.length > 0) {
+          toast.success("Asistencia actualizada correctamente");
+        } else {
+          toast.success("Nuevos registros de asistencia creados correctamente");
+        }
+      } else {
+        toast.success("Asistencia guardada correctamente");
+      }
       fetchAsistencia();
       setModalOpen(false);
       resetModal();
@@ -2426,6 +2463,65 @@ export default function AsistenciaPage() {
                   className="text-xs sm:text-sm min-h-[70px] resize-none"
                   rows={3}
                 />
+                
+                {/* Hashtags/Badges de descripción común */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-gray-500">Descripciones comunes:</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge 
+                      variant="outline" 
+                      className="cursor-pointer hover:bg-blue-50 hover:border-blue-300 text-xs px-2 py-1 transition-colors"
+                      onClick={() => {
+                        const descripcionActual = tareaData.descripcion || "";
+                        const nuevaDescripcion = descripcionActual.trim() 
+                          ? `${descripcionActual}, Estiba de ladrillos`
+                          : "Estiba de ladrillos";
+                        setTareaData({ ...tareaData, descripcion: nuevaDescripcion });
+                      }}
+                    >
+                      #EstibaLadrillos
+                    </Badge>
+                    <Badge 
+                      variant="outline" 
+                      className="cursor-pointer hover:bg-orange-50 hover:border-orange-300 text-xs px-2 py-1 transition-colors"
+                      onClick={() => {
+                        const descripcionActual = tareaData.descripcion || "";
+                        const nuevaDescripcion = descripcionActual.trim() 
+                          ? `${descripcionActual}, Encendido y cuidado de horno`
+                          : "Encendido y cuidado de horno";
+                        setTareaData({ ...tareaData, descripcion: nuevaDescripcion });
+                      }}
+                    >
+                      #EncendidoHorno
+                    </Badge>
+                    <Badge 
+                      variant="outline" 
+                      className="cursor-pointer hover:bg-green-50 hover:border-green-300 text-xs px-2 py-1 transition-colors"
+                      onClick={() => {
+                        const descripcionActual = tareaData.descripcion || "";
+                        const nuevaDescripcion = descripcionActual.trim() 
+                          ? `${descripcionActual}, Limpieza general`
+                          : "Limpieza general";
+                        setTareaData({ ...tareaData, descripcion: nuevaDescripcion });
+                      }}
+                    >
+                      #Limpieza
+                    </Badge>
+                    <Badge 
+                      variant="outline" 
+                      className="cursor-pointer hover:bg-purple-50 hover:border-purple-300 text-xs px-2 py-1 transition-colors"
+                      onClick={() => {
+                        const descripcionActual = tareaData.descripcion || "";
+                        const nuevaDescripcion = descripcionActual.trim() 
+                          ? `${descripcionActual}, Carga y descarga`
+                          : "Carga y descarga";
+                        setTareaData({ ...tareaData, descripcion: nuevaDescripcion });
+                      }}
+                    >
+                      #CargaDescarga
+                    </Badge>
+                  </div>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-2">
