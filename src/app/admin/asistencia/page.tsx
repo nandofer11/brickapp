@@ -24,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
-import { formatDateForInput, getCurrentDateForLima } from "@/utils/dateFormat" // Importar ambas funciones
+import { formatDateForInput, getCurrentDateForLima, formatDate } from "@/utils/dateFormat" // Importar funciones de fecha
 
 interface Personal {
   id_personal: number
@@ -182,8 +182,10 @@ export default function AsistenciaPage() {
   const [adelantoModalOpen, setAdelantoModalOpen] = useState(false);
   const [adelantoData, setAdelantoData] = useState<Partial<AdelantoPersonal>>({
     fecha: new Date().toISOString().split('T')[0],
+    estado: "Pendiente"
   });
   const [adelantos, setAdelantos] = useState<AdelantoPersonal[]>([]);
+  const [adelantosPendientes, setAdelantosPendientes] = useState<AdelantoPersonal[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [adelantoToDelete, setAdelantoToDelete] = useState<number | null>(null);
 
@@ -479,6 +481,23 @@ export default function AsistenciaPage() {
       fetchTareasExtra(selectedSemana);
     }
   }, [tareaModalOpen, selectedSemana]);
+
+  // Cargar adelantos pendientes cuando se abre el modal
+  useEffect(() => {
+    if (adelantoModalOpen) {
+      fetchAdelantosPendientes();
+    }
+  }, [adelantoModalOpen]);
+
+  // Monitorear cambios en adelantoData para depuración
+  useEffect(() => {
+    console.log('=== CAMBIO EN adelantoData ===');
+    console.log('Nuevo estado de adelantoData:', adelantoData);
+    if (adelantoData.id_personal) {
+      const personalEncontrado = personal.find(p => p.id_personal === adelantoData.id_personal);
+      console.log('Personal correspondiente al id_personal:', personalEncontrado);
+    }
+  }, [adelantoData, personal]);
 
   const handleRegisterTurno = async () => {
     if (!selectedCoccion) {
@@ -1179,18 +1198,49 @@ export default function AsistenciaPage() {
   }
 
   // Funciones para manejo de adelantos
-  const handleEditAdelanto = (adelanto: AdelantoPersonal) => {
-    const formatISODate = (dateString: string) => {
-      const date = new Date(dateString);
-      date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-      return date.toISOString().split('T')[0];
+  const handleOpenAdelantoModal = () => {
+    console.log('=== ABRIENDO MODAL ADELANTO (NUEVO) ===');
+    // Limpiar el formulario para nuevo adelanto
+    const initialData = {
+      fecha: new Date().toISOString().split('T')[0],
+      estado: "Pendiente"
     };
-
-    setAdelantoData({
-      ...adelanto,
-      fecha: formatISODate(adelanto.fecha)
-    });
+    console.log('Data inicial para nuevo adelanto:', initialData);
+    setAdelantoData(initialData);
+    
+    // Cargar adelantos pendientes
+    fetchAdelantosPendientes();
+    
     setAdelantoModalOpen(true);
+  };
+
+  const handleEditAdelanto = (adelanto: AdelantoPersonal) => {
+    console.log('=== DEPURACIÓN EDITAR ADELANTO ===');
+    console.log('Adelanto recibido:', adelanto);
+    console.log('ID Personal del adelanto:', adelanto.id_personal);
+    console.log('Personal disponible en el estado:', personal);
+    console.log('Personal encontrado:', personal.find(p => p.id_personal === adelanto.id_personal));
+    
+    const dataToSet = {
+      id_adelanto_pago: adelanto.id_adelanto_pago,
+      id_personal: adelanto.id_personal,
+      id_semana_laboral: adelanto.id_semana_laboral,
+      fecha: formatDateForInput(adelanto.fecha),
+      monto: adelanto.monto,
+      comentario: adelanto.comentario || '',
+      estado: adelanto.estado
+    };
+    
+    console.log('Data que se va a setear en adelantoData:', dataToSet);
+    
+    setAdelantoData(dataToSet);
+    
+    // Verificar el estado después del seteo (esto se ejecutará en el próximo render)
+    setTimeout(() => {
+      console.log('Estado actual de adelantoData después del seteo:', dataToSet);
+    }, 100);
+    
+    // No cerramos el modal, solo cargamos los datos para editar
   };
 
   const handleDeleteAdelanto = (id: number) => {
@@ -1212,6 +1262,7 @@ export default function AsistenciaPage() {
       
       if (selectedSemana) {
         fetchAdelantos(selectedSemana);
+        fetchAdelantosPendientes(); // Recargar adelantos pendientes
       }
     } catch (error) {
       console.error('Error:', error);
@@ -1251,7 +1302,7 @@ export default function AsistenciaPage() {
         fecha: new Date(adelantoData.fecha + 'T00:00:00.000Z').toISOString(),
         monto: Number(adelantoData.monto),
         comentario: adelantoData.comentario || "",
-        estado: "Pendiente",
+        estado: adelantoData.estado || "Pendiente",
         ...((!adelantoData.id_adelanto_pago) && {
           id_personal: Number(adelantoData.id_personal),
           id_semana_laboral: Number(selectedSemana),
@@ -1277,13 +1328,15 @@ export default function AsistenciaPage() {
           : "Adelanto registrado correctamente"
       );
 
-      setAdelantoModalOpen(false);
+      // Limpiar el formulario pero no cerrar el modal
       setAdelantoData({
-        fecha: new Date().toISOString().split('T')[0]
+        fecha: new Date().toISOString().split('T')[0],
+        estado: "Pendiente"
       });
 
       if (selectedSemana) {
         fetchAdelantos(selectedSemana);
+        fetchAdelantosPendientes(); // Recargar adelantos pendientes
       }
 
     } catch (error) {
@@ -1304,6 +1357,23 @@ export default function AsistenciaPage() {
     } catch (error) {
       console.error("Error al cargar adelantos:", error);
       toast.error("Error al cargar los adelantos");
+    }
+  };
+
+  const fetchAdelantosPendientes = async () => {
+    try {
+      const response = await fetch('/api/adelanto_pago');
+      if (!response.ok) throw new Error('Error al cargar adelantos pendientes');
+      
+      const data = await response.json();
+      // Filtrar solo los adelantos con estado "Pendiente"
+      const adelantosFiltrados = data.filter((adelanto: AdelantoPersonal) => 
+        adelanto.estado?.toLowerCase() === 'pendiente'
+      );
+      setAdelantosPendientes(adelantosFiltrados);
+    } catch (error) {
+      console.error("Error al cargar adelantos pendientes:", error);
+      toast.error("Error al cargar los adelantos pendientes");
     }
   };
 
@@ -1501,7 +1571,7 @@ export default function AsistenciaPage() {
 
           {/* Botones de Adelanto Pago y Tarea Extra */}
           <Button 
-            onClick={() => setAdelantoModalOpen(true)} 
+            onClick={handleOpenAdelantoModal} 
             variant="outline" 
             className="text-xs sm:text-sm h-9 sm:h-10"
           >
@@ -2240,12 +2310,12 @@ export default function AsistenciaPage() {
 
       {/* Modal de Adelanto de Pago */}
       <Dialog open={adelantoModalOpen} onOpenChange={setAdelantoModalOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>
+        <DialogContent className="max-w-[95vw] sm:max-w-[90vw] md:max-w-[1200px] max-h-[90vh] p-3 sm:p-4">
+          <DialogHeader className="space-y-1 pb-3">
+            <DialogTitle className="text-base sm:text-xl">
               {adelantoData.id_adelanto_pago ? "Actualizar Adelanto" : "Registrar Adelanto"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm text-muted-foreground">
               {adelantoData.id_adelanto_pago
                 ? "Modifique los detalles del adelanto de pago."
                 : "Ingrese los detalles del adelanto de pago para el personal."
@@ -2253,86 +2323,206 @@ export default function AsistenciaPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
-            {/* Personal Select */}
-            <div className="grid gap-2">
-              <Label htmlFor="personal">Personal</Label>
-              <Select
-                value={adelantoData.id_personal?.toString()}
-                onValueChange={(value) =>
-                  setAdelantoData({
-                    ...adelantoData,
-                    id_personal: Number(value),
-                  })
-                }
-                disabled={!!adelantoData.id_adelanto_pago}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccione al personal" />
-                </SelectTrigger>
-                <SelectContent>
-                  {personal.map((p) => (
-                    <SelectItem key={p.id_personal} value={p.id_personal.toString()}>
-                      {p.nombre_completo}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-h-[75vh] overflow-hidden">
+            {/* Columna Izquierda - Formulario */}
+            <div className="space-y-4 lg:col-span-1">
+              <h3 className="text-sm font-medium text-gray-900 border-b pb-2">
+                Datos del Adelanto
+              </h3>
+              
+              {/* Personal Select */}
+              <div className="grid gap-2">
+                <Label htmlFor="personal" className="text-xs">Personal</Label>
+                <Select
+                  value={(() => {
+                    const valueToShow = adelantoData.id_personal?.toString() || "";
+                    console.log('=== SELECT PERSONAL DEBUG ===');
+                    console.log('adelantoData completo:', adelantoData);
+                    console.log('adelantoData.id_personal:', adelantoData.id_personal);
+                    console.log('Valor del Select (value):', valueToShow);
+                    console.log('Personal disponible:', personal.map(p => ({ id: p.id_personal, nombre: p.nombre_completo })));
+                    return valueToShow;
+                  })()}
+                  onValueChange={(value) => {
+                    console.log('Select onChange - Nuevo valor seleccionado:', value);
+                    setAdelantoData({
+                      ...adelantoData,
+                      id_personal: Number(value),
+                    });
+                  }}
+                  disabled={!!adelantoData.id_adelanto_pago}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Seleccione al personal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {personal.map((p) => (
+                      <SelectItem key={p.id_personal} value={p.id_personal.toString()}>
+                        {p.nombre_completo}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="fecha" className="text-xs">Fecha de adelanto</Label>
+                <Input
+                  id="fecha"
+                  type="date"
+                  value={adelantoData.fecha}
+                  onChange={(e) =>
+                    setAdelantoData({ ...adelantoData, fecha: e.target.value })
+                  }
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="monto" className="text-xs">Monto</Label>
+                <Input
+                  id="monto"
+                  type="number"
+                  value={adelantoData.monto || ""}
+                  onChange={(e) =>
+                    setAdelantoData({ ...adelantoData, monto: Number(e.target.value) })
+                  }
+                  placeholder="0.00"
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              {/* Estado - Solo habilitado al editar */}
+              <div className="grid gap-2">
+                <Label htmlFor="estado" className="text-xs">Estado</Label>
+                <Select
+                  value={adelantoData.estado || "Pendiente"}
+                  onValueChange={(value) =>
+                    setAdelantoData({ ...adelantoData, estado: value })
+                  }
+                  disabled={!adelantoData.id_adelanto_pago}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Seleccione el estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pendiente">Pendiente</SelectItem>
+                    <SelectItem value="Cancelado">Cancelado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="descripcion" className="text-xs">Descripción (Opcional)</Label>
+                <Textarea
+                  id="descripcion"
+                  value={adelantoData.comentario || ""}
+                  onChange={(e) =>
+                    setAdelantoData({ ...adelantoData, comentario: e.target.value })
+                  }
+                  placeholder="Ingrese una descripción"
+                  className="text-xs resize-none"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button variant="outline" onClick={() => setAdelantoModalOpen(false)} className="text-xs h-8">
+                  Cancelar
+                </Button>
+                <Button onClick={handleAdelantoSubmit} disabled={isSubmitting} className="text-xs h-8">
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                      {adelantoData.id_adelanto_pago ? "Actualizando..." : "Guardando..."}
+                    </>
+                  ) : (
+                    adelantoData.id_adelanto_pago ? "Actualizar" : "Guardar"
+                  )}
+                </Button>
+              </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label htmlFor="fecha">Fecha de adelanto</Label>
-              <Input
-                id="fecha"
-                type="date"
-                value={adelantoData.fecha}
-                onChange={(e) =>
-                  setAdelantoData({ ...adelantoData, fecha: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="monto">Monto</Label>
-              <Input
-                id="monto"
-                type="number"
-                value={adelantoData.monto || ""}
-                onChange={(e) =>
-                  setAdelantoData({ ...adelantoData, monto: Number(e.target.value) })
-                }
-                placeholder="0.00"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="descripcion">Descripción (Opcional)</Label>
-              <Textarea
-                id="descripcion"
-                value={adelantoData.comentario || ""}
-                onChange={(e) =>
-                  setAdelantoData({ ...adelantoData, comentario: e.target.value })
-                }
-                placeholder="Ingrese una descripción"
-              />
+            {/* Columna Derecha - Tabla de Adelantos Pendientes */}
+            <div className="space-y-4 lg:col-span-2">
+              <h3 className="text-sm font-medium text-gray-900 border-b pb-2">
+                Adelantos Pendientes ({adelantosPendientes.length})
+              </h3>
+              
+              <div className="border rounded-md max-h-[500px] overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs h-8">Personal</TableHead>
+                      <TableHead className="text-xs h-8">Fecha</TableHead>
+                      <TableHead className="text-xs h-8 text-right">Monto</TableHead>
+                      <TableHead className="text-xs h-8 text-center">Estado</TableHead>
+                      <TableHead className="text-xs h-8 text-center">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {adelantosPendientes.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-xs text-gray-500 h-16">
+                          No hay adelantos pendientes
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      adelantosPendientes.map((adelanto) => (
+                        <TableRow key={adelanto.id_adelanto_pago}>
+                          <TableCell className="text-xs py-2">
+                            {adelanto.personal?.nombre_completo || 'Personal no disponible'}
+                          </TableCell>
+                          <TableCell className="text-xs py-2">
+                            {formatDate(adelanto.fecha)}
+                          </TableCell>
+                          <TableCell className="text-xs py-2 text-right">
+                            S/. {Number(adelanto.monto).toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-xs py-2 text-center">
+                            <Badge 
+                              variant={
+                                adelanto.estado?.toLowerCase() === 'pendiente' 
+                                  ? 'destructive' 
+                                  : adelanto.estado?.toLowerCase() === 'cancelado'
+                                  ? 'secondary'
+                                  : 'secondary'
+                              }
+                              className={`text-xs ${adelanto.estado?.toLowerCase() === 'pendiente' ? 'text-white' : ''}`}
+                            >
+                              {adelanto.estado}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-xs py-2">
+                            <div className="flex gap-1 justify-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditAdelanto(adelanto)}
+                                className="h-6 w-6 p-0"
+                                title="Editar"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleDeleteAdelanto(adelanto.id_adelanto_pago)}
+                                className="h-6 w-6 p-0"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAdelantoModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleAdelantoSubmit} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {adelantoData.id_adelanto_pago ? "Actualizando..." : "Guardando..."}
-                </>
-              ) : (
-                adelantoData.id_adelanto_pago ? "Actualizar" : "Guardar"
-              )}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

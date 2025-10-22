@@ -28,6 +28,10 @@ export class AdelantoPagoService {
     return adelantoPagoRepository.findByPersonalAndFecha(id_personal, fechaInicio, fechaFin, estado);
   }
 
+  async findBySemanaLaboral(id_semana_laboral: number) {
+    return adelantoPagoRepository.findBySemanaLaboral(id_semana_laboral);
+  }
+
 
   async addDetalle(id_adelanto_pago: number, data: Prisma.adelanto_pago_detalleCreateInput) {
     return adelantoPagoRepository.addDetalle(id_adelanto_pago, data);

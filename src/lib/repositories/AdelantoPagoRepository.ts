@@ -74,6 +74,21 @@ export class AdelantoPagoRepository extends BaseRepository {
     });
   }
 
+  async findBySemanaLaboral(id_semana_laboral: number) {
+    return prisma.adelanto_pago.findMany({
+      where: {
+        id_semana_laboral,
+      },
+      include: {
+        personal: true,
+        semana_laboral: true,
+      },
+      orderBy: {
+        fecha: "desc",
+      },
+    });
+  }
+
   async addDetalle(id_adelanto_pago: number, data: Prisma.adelanto_pago_detalleCreateInput) {
     // Ya no eliminamos semana_laboral porque es un campo requerido
     return prisma.adelanto_pago_detalle.create({
