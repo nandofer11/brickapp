@@ -24,10 +24,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import {
   Eye,
   Loader2,
+  AlertTriangle,
   Check,
   X,
   AlertCircle,
@@ -170,8 +177,12 @@ interface ReportePersonal {
   totalHumeada: number;
   tareasExtras: TareaExtra[];
   totalTareasExtras: number;
+  totalDescuentos: number; // Total de descuentos de todas las semanas
+  totalAdelantos: number; // Total de adelantos de todas las semanas
+  totalPagoFinal: number; // Total final de pago de todas las semanas
   costoPagoDiario?: number; // Costo del pago diario
   totalAsistencias: number; // Total calculado por asistencias
+  diasLaboralesPeriodo?: number; // Total de días laborales en el periodo
 }
 
 // Interfaz para la información de la empresa
@@ -203,6 +214,25 @@ export default function Page() {
   // Estados para los filtros
   const [semanasLaborales, setSemanasLaborales] = useState<SemanaLaboral[]>([]);
   const [semanaSeleccionada, setSemanaSeleccionada] = useState<string>("");
+  
+  // Estados para filtro por mes
+  const [tipoFiltro, setTipoFiltro] = useState<string>("semana"); // "semana" o "mes"
+  const [mesSeleccionado, setMesSeleccionado] = useState<string>("");
+  const [anioSeleccionado, setAnioSeleccionado] = useState<string>(new Date().getFullYear().toString());
+  const meses = [
+    { value: "1", label: "Enero" },
+    { value: "2", label: "Febrero" },
+    { value: "3", label: "Marzo" },
+    { value: "4", label: "Abril" },
+    { value: "5", label: "Mayo" },
+    { value: "6", label: "Junio" },
+    { value: "7", label: "Julio" },
+    { value: "8", label: "Agosto" },
+    { value: "9", label: "Septiembre" },
+    { value: "10", label: "Octubre" },
+    { value: "11", label: "Noviembre" },
+    { value: "12", label: "Diciembre" }
+  ];
 
   // Cargar datos de personal al inicio
   useEffect(() => {
@@ -278,6 +308,118 @@ export default function Page() {
     establecerRangoSegunSemana(value);
   };
 
+  // Manejador para cambio de tipo de filtro
+  const handleTipoFiltroChange = async (value: string) => {
+    setTipoFiltro(value);
+    // Limpiar los valores del filtro anterior
+    if (value === "semana") {
+      setMesSeleccionado("");
+      // Cargar las últimas 4 semanas laborales para el filtro por semana
+      try {
+        setLoading(true);
+        const response = await fetch('/api/semana_laboral?limit=4');
+        if (!response.ok) {
+          throw new Error(`Error al cargar semanas laborales: ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Ordenar las semanas por fecha_inicio de más reciente a más antigua
+        const semanasOrdenadas = data.sort((a: SemanaLaboral, b: SemanaLaboral) => {
+          return new Date(b.fecha_inicio).getTime() - new Date(a.fecha_inicio).getTime();
+        });
+
+        setSemanasLaborales(semanasOrdenadas);
+      } catch (error) {
+        console.error('Error al cargar semanas laborales:', error);
+        toast.error(`Error al cargar semanas laborales: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setSemanaSeleccionada("");
+    }
+  };
+
+  // Manejador para cambio de mes
+  const handleMesChange = async (value: string) => {
+    setMesSeleccionado(value);
+    await establecerRangoSegunMes(value, anioSeleccionado);
+  };
+
+  // Manejador para cambio de año
+  const handleAnioChange = async (value: string) => {
+    setAnioSeleccionado(value);
+    if (mesSeleccionado) {
+      await establecerRangoSegunMes(mesSeleccionado, value);
+    }
+  };
+
+  // Función para establecer el rango de fechas según el mes seleccionado
+  const establecerRangoSegunMes = async (mes: string, anio: string) => {
+    if (!mes || !anio) return;
+    
+    const mesNum = parseInt(mes);
+    const anioNum = parseInt(anio);
+    
+    // Primer día del mes
+    const primerDia = new Date(anioNum, mesNum - 1, 1);
+    // Último día del mes
+    const ultimoDia = new Date(anioNum, mesNum, 0);
+    
+    const formatoFecha = (fecha: Date) => {
+      const yyyy = fecha.getFullYear();
+      const mm = String(fecha.getMonth() + 1).padStart(2, '0');
+      const dd = String(fecha.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+    
+    const fechaInicio = formatoFecha(primerDia);
+    const fechaFin = formatoFecha(ultimoDia);
+    
+    console.log(`Estableciendo rango de fechas para mes ${mes}/${anio}: ${fechaInicio} - ${fechaFin}`);
+    
+    setFechaInicio(fechaInicio);
+    setFechaFin(fechaFin);
+    
+    // Cargar todas las semanas laborales del mes
+    try {
+      setLoading(true);
+      const url = `/api/semana_laboral?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+      console.log("Consultando semanas laborales con URL:", url);
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Error al cargar semanas laborales para el mes: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Semanas laborales para el mes ${mes}/${anio}:`, data);
+      
+      // Filtrar las semanas para asegurarnos de que realmente se solapan con el mes
+      const semanasEnMes = data.filter((semana: any) => {
+        const inicioSemana = new Date(semana.fecha_inicio);
+        const finSemana = new Date(semana.fecha_fin);
+        // Una semana está en el mes si hay solapamiento
+        return inicioSemana <= ultimoDia && finSemana >= primerDia;
+      });
+      
+      console.log(`Semanas filtradas que realmente se solapan con el mes: ${semanasEnMes.length}`);
+      
+      if (semanasEnMes.length === 0) {
+        toast.warning(`No se encontraron semanas laborales para el mes ${meses.find(m => m.value === mes)?.label} de ${anio}`);
+      }
+      
+      // Actualizar las semanas laborales disponibles para este mes
+      setSemanasLaborales(semanasEnMes);
+    } catch (error) {
+      console.error('Error al cargar semanas laborales para el mes:', error);
+      toast.error(`Error al cargar semanas laborales para el mes seleccionado: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Función para establecer el rango de fechas según la semana laboral seleccionada
   const establecerRangoSegunSemana = (idSemana: string) => {
     if (!idSemana) return;
@@ -312,8 +454,14 @@ export default function Page() {
 
   // Función para generar el reporte
   const generarReporte = async () => {
-    if (!semanaSeleccionada) {
+    // Validar que se haya seleccionado un filtro apropiado
+    if (tipoFiltro === "semana" && !semanaSeleccionada) {
       toast.error("Seleccione una semana laboral para generar el reporte");
+      return;
+    }
+    
+    if (tipoFiltro === "mes" && (!mesSeleccionado || !anioSeleccionado)) {
+      toast.error("Seleccione un mes y un año para generar el reporte");
       return;
     }
 
@@ -323,43 +471,251 @@ export default function Page() {
     setTotalPagado(0);
 
     try {
-      console.log(`Generando reporte para la semana laboral ID: ${semanaSeleccionada}`);
-      
-      // Si es filtro por semana, usar el ID de semana directamente
-      const url = `/api/pago_personal_semana?id_semana=${semanaSeleccionada}`;
-      console.log(`Consultando pagos por ID de semana: ${semanaSeleccionada}`);
+      if (tipoFiltro === "semana") {
+        console.log(`Generando reporte para la semana laboral ID: ${semanaSeleccionada}`);
+        // Lógica existente para semanas usando pago_personal_semana
+        const url = `/api/pago_personal_semana?id_semana=${semanaSeleccionada}`;
+        console.log(`Consultando pagos por ID de semana: ${semanaSeleccionada}`);
+        
+        // Obtener pagos realizados para esta semana
+        const responsePagos = await fetch(url);
+        if (!responsePagos.ok) {
+          throw new Error(`Error al cargar pagos: ${responsePagos.status}`);
+        }
+        const pagosData = await responsePagos.json();
+        console.log(`Pagos cargados para la semana: ${pagosData.length} registros`);
+        
+        // Establecer los datos de pagos
+        setPagosRealizados(pagosData);
 
-      // Obtener pagos realizados
-      console.log("Cargando pagos realizados...");
-      const responsePagos = await fetch(url);
-      if (!responsePagos.ok) {
-        throw new Error(`Error al cargar pagos: ${responsePagos.status}`);
+        // Procesar los datos de pagos para mostrarlos en el reporte (lógica anterior)
+        console.log("Procesando datos para el reporte semanal...");
+        import('./procesarPagosParaReporte').then(module => {
+          module.procesarPagosParaReporte(
+            pagosData,
+            personal,
+            fechaInicio,
+            fechaFin,
+            setReportePersonal,
+            setTotalPagado,
+            setError,
+            semanasLaborales
+          );
+        });
+      } else if (tipoFiltro === "mes") {
+        // Nueva lógica para reportes mensuales usando datos transaccionales
+        console.log(`Generando reporte mensual para: ${fechaInicio} - ${fechaFin}`);
+        
+        const url = `/api/reportes/pagos-mensuales?fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(`Error al generar reporte mensual: ${errorData.message || response.status}`);
+        }
+        
+        const reporteData = await response.json();
+        console.log(`Reporte mensual generado: ${reporteData.length} registros`);
+        
+        // Calcular total pagado
+        const total = reporteData.reduce((sum: number, persona: any) => 
+          sum + (persona.totalPagoFinal || 0), 0);
+        
+        setReportePersonal(reporteData);
+        setTotalPagado(total);
+        setPagosRealizados([]); // Limpiar pagos realizados ya que no los usamos en reportes mensuales
+        
+        toast.success(`Reporte mensual generado: ${reporteData.length} empleados procesados`);
       }
-      const dataPagos = await responsePagos.json();
-      console.log(`Pagos cargados: ${dataPagos.length} registros`);
-      setPagosRealizados(dataPagos);
-
-      // Procesar los datos de pagos para mostrarlos en el reporte
-      console.log("Procesando datos para el reporte...");
-      // Importar y utilizar la función procesarPagosParaReporte
-      import('./procesarPagosParaReporte').then(module => {
-        module.procesarPagosParaReporte(
-          dataPagos,
-          personal,
-          fechaInicio,
-          fechaFin,
-          setReportePersonal,
-          setTotalPagado,
-          setError
-        );
-      });
     } catch (error) {
       console.error('Error al generar reporte:', error);
       setError(`Error al generar reporte: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-
       toast.error("Ocurrió un error al generar el reporte. Inténtelo nuevamente.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Función para imprimir el reporte en PDF usando la API nativa del navegador
+  const imprimirPDF = () => {
+    if (reportePersonal.length === 0) {
+      toast.error("No hay datos para imprimir. Genere primero un reporte.");
+      return;
+    }
+
+    // Crear el contenido HTML para impresión
+    const periodoTexto = tipoFiltro === 'semana' 
+      ? `Semana del ${fechaInicio} al ${fechaFin}`
+      : `Mes: ${mesSeleccionado || 'Sin especificar'}`;
+    
+    const diasLaborales = reportePersonal.length > 0 ? reportePersonal[0].diasLaboralesPeriodo : 0;
+    const totalGeneral = reportePersonal.reduce((sum, item) => sum + item.totalPagoFinal, 0);
+
+    const contenidoHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Reporte de Pagos de Personal</title>
+        <style>
+          @media print {
+            @page {
+              margin: 1cm;
+              size: A4 landscape;
+            }
+            body {
+              font-family: Arial, sans-serif;
+              font-size: 12px;
+              line-height: 1.3;
+              color: #000;
+            }
+            .no-print {
+              display: none !important;
+            }
+          }
+          body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+          }
+          .header h1 {
+            margin: 0;
+            font-size: 20px;
+            color: #333;
+          }
+          .header p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #666;
+          }
+          .info-section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            font-size: 10px;
+          }
+          th, td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+          }
+          th {
+            background-color: #428bca;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+          }
+          .text-center { text-align: center; }
+          .text-right { text-align: right; }
+          .estado-activo { color: #28a745; font-weight: bold; }
+          .estado-inactivo { color: #dc3545; font-weight: bold; }
+          .totales {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+          }
+          .totales h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+          }
+          .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Reporte de Pagos de Personal</h1>
+          <p><strong>${periodoTexto}</strong></p>
+          <p>Días laborales en el período: <strong>${diasLaborales}</strong></p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Personal</th>
+              <th>Estado</th>
+              <th>Asistencias</th>
+              <th>Medio Días</th>
+              <th>S/. Asistencias</th>
+              <th>S/. Cocción</th>
+              <th>S/. Tareas Extra</th>
+              <th>S/. Descuentos</th>
+              <th>S/. Total Final</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${reportePersonal.map(item => `
+              <tr>
+                <td class="text-center">${item.id_personal}</td>
+                <td>${item.nombre_completo}</td>
+                <td class="text-center ${item.estado === 1 ? 'estado-activo' : 'estado-inactivo'}">
+                  ${item.estado === 1 ? 'Activo' : 'Inactivo'}
+                </td>
+                <td class="text-center">${item.asistencias}</td>
+                <td class="text-center">${item.mediosDias || 0}</td>
+                <td class="text-right">S/. ${item.totalAsistencias.toFixed(2)}</td>
+                <td class="text-right">S/. ${item.totalCoccion.toFixed(2)}</td>
+                <td class="text-right">S/. ${item.totalTareasExtras.toFixed(2)}</td>
+                <td class="text-right">S/. ${item.totalDescuentos.toFixed(2)}</td>
+                <td class="text-right"><strong>S/. ${item.totalPagoFinal.toFixed(2)}</strong></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="totales">
+          <h3>Resumen del Período</h3>
+          <p><strong>Total General Pagado:</strong> S/. ${totalGeneral.toFixed(2)}</p>
+          <p><strong>Total de Empleados:</strong> ${reportePersonal.length}</p>
+          <p><strong>Días Laborales:</strong> ${diasLaborales}</p>
+        </div>
+
+        <div class="footer">
+          <p>Generado el ${new Date().toLocaleDateString('es-PE')} a las ${new Date().toLocaleTimeString('es-PE')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    // Abrir nueva ventana para impresión
+    const ventanaImpresion = window.open('', '_blank');
+    if (ventanaImpresion) {
+      ventanaImpresion.document.write(contenidoHTML);
+      ventanaImpresion.document.close();
+      
+      // Esperar a que se cargue el contenido y luego imprimir
+      ventanaImpresion.onload = () => {
+        ventanaImpresion.print();
+        // Cerrar la ventana después de imprimir (opcional)
+        ventanaImpresion.onafterprint = () => {
+          ventanaImpresion.close();
+        };
+      };
+      
+      toast.success("Ventana de impresión abierta");
+    } else {
+      toast.error("No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén habilitados.");
     }
   };
 
@@ -518,6 +874,9 @@ export default function Page() {
 
       // Agregar costoPagoDiario al objeto para cumplir con la interfaz
       const costoPagoDiario = persona.pago_diario_normal || 0;
+      
+      // Calcular totalAsistencias usando asistencias y mediosDias
+      const totalAsistencias = ((asistenciasCount * costoPagoDiario) + (mediosDiasCount * costoPagoDiario * 0.5));
 
       return {
         id_personal: persona.id_personal,
@@ -532,6 +891,10 @@ export default function Page() {
         totalHumeada: totalHumeada,
         tareasExtras: tareasExtrasPersona,
         totalTareasExtras: totalTareasExtras,
+        totalDescuentos: 0, // Se calculará en procesarPagosParaReporte si hay datos de pagos
+        totalAdelantos: 0, // Se calculará en procesarPagosParaReporte si hay datos de pagos  
+        totalPagoFinal: 0, // Se calculará en procesarPagosParaReporte si hay datos de pagos
+        totalAsistencias: totalAsistencias, // Calculado aquí
         costoPagoDiario: costoPagoDiario // <-- propiedad agregada
       };
     });
@@ -710,6 +1073,10 @@ export default function Page() {
         totalHumeada: empleado.totalHumeada || 0,
         tareasExtras: empleado.tareasExtras || [],
         totalTareasExtras: empleado.totalTareasExtras || 0,
+        totalDescuentos: empleado.totalDescuentos || 0,
+        totalAdelantos: empleado.totalAdelantos || 0,
+        totalPagoFinal: empleado.totalPagoFinal || 0,
+        totalAsistencias: empleado.totalAsistencias || 0,
         costoPagoDiario: empleado.costoPagoDiario || 0
       };
       
@@ -733,28 +1100,93 @@ export default function Page() {
         <CardContent>
           {/* Filtros en una sola fila con flexbox responsivo */}
           <div className="flex flex-col md:flex-row items-start md:items-end gap-4 mb-6">
-            {/* Selector de semana laboral */}
-            <div className="w-full md:w-72">
-              <Label htmlFor="semana-select" className="block mb-2">Seleccione Semana Laboral</Label>
-              <Select value={semanaSeleccionada} onValueChange={handleSemanaChange}>
-                <SelectTrigger id="semana-select">
-                  <SelectValue placeholder="Seleccionar semana" />
+            {/* Selector de tipo de filtro */}
+            <div className="w-full md:w-48">
+              <Label htmlFor="tipo-filtro-select" className="block mb-2">Tipo de Filtro</Label>
+              <Select value={tipoFiltro} onValueChange={handleTipoFiltroChange}>
+                <SelectTrigger id="tipo-filtro-select">
+                  <SelectValue placeholder="Seleccionar tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {semanasLaborales.map((semana) => {
-                    // Usar la función formatDate para mostrar fechas en formato DD/MM/YYYY
-                    return (
-                      <SelectItem key={semana.id_semana_laboral} value={semana.id_semana_laboral.toString()}>
-                        Semana: {formatDate(semana.fecha_inicio)} - {formatDate(semana.fecha_fin)}
-                      </SelectItem>
-                    );
-                  })}
+                  <SelectItem value="semana">Por Semana</SelectItem>
+                  <SelectItem value="mes">Por Mes</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Botón generar reporte */}
-            <div className="w-full md:w-auto mt-4 md:mt-0">
+            {/* Filtro por semana (visible solo si se selecciona "semana") */}
+            {tipoFiltro === "semana" && (
+              <div className="w-full md:w-72">
+                <Label htmlFor="semana-select" className="block mb-2">Seleccione Semana Laboral</Label>
+                <Select value={semanaSeleccionada} onValueChange={handleSemanaChange}>
+                  <SelectTrigger id="semana-select">
+                    <SelectValue placeholder="Seleccionar semana" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {semanasLaborales.map((semana) => {
+                      // Usar la función formatDate para mostrar fechas en formato DD/MM/YYYY
+                      return (
+                        <SelectItem key={semana.id_semana_laboral} value={semana.id_semana_laboral.toString()}>
+                          Semana: {formatDate(semana.fecha_inicio)} - {formatDate(semana.fecha_fin)}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Filtro por mes (visible solo si se selecciona "mes") */}
+            {tipoFiltro === "mes" && (
+              <>
+                <div className="w-full md:w-48">
+                  <Label htmlFor="mes-select" className="block mb-2">Seleccione Mes</Label>
+                  <Select value={mesSeleccionado} onValueChange={handleMesChange}>
+                    <SelectTrigger id="mes-select">
+                      <SelectValue placeholder="Seleccionar mes" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {meses.map((mes) => (
+                        <SelectItem key={mes.value} value={mes.value}>
+                          {mes.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-full md:w-40">
+                  <Label htmlFor="anio-input" className="block mb-2">Año</Label>
+                  <Input
+                    id="anio-input"
+                    type="number"
+                    min="2000"
+                    max="2100"
+                    value={anioSeleccionado}
+                    onChange={(e) => handleAnioChange(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                {/* Mostrar el número de semanas encontradas para el mes */}
+                {semanasLaborales.length > 0 && (
+                  <div className="w-full md:w-auto">
+                    <span className="text-sm text-muted-foreground">
+                      {semanasLaborales.length} semana{semanasLaborales.length !== 1 ? 's' : ''} laboral{semanasLaborales.length !== 1 ? 'es' : ''} que se solapa{semanasLaborales.length !== 1 ? 'n' : ''} con este mes
+                    </span>
+                    {semanasLaborales.length > 4 && (
+                      <div className="mt-1 p-1.5 bg-yellow-50 border border-yellow-200 rounded-sm">
+                        <span className="text-xs text-yellow-800">
+                          <AlertTriangle className="h-3 w-3 inline-block mr-1" />
+                          Nota: El número de semanas es mayor al esperado porque algunas semanas pueden ser parciales o solaparse entre meses.
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Botones de acción */}
+            <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto mt-4 md:mt-0">
               <Button onClick={generarReporte} disabled={loading} className="w-full md:w-auto">
                 {loading ? (
                   <>
@@ -765,6 +1197,16 @@ export default function Page() {
                   'Generar Reporte'
                 )}
               </Button>
+              
+              <Button 
+                onClick={imprimirPDF} 
+                disabled={loading || reportePersonal.length === 0}
+                variant="outline"
+                className="w-full md:w-auto"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir PDF
+              </Button>
             </div>
           </div>
 
@@ -774,18 +1216,74 @@ export default function Page() {
               <p>{error}</p>
             </div>
           )}
+          
+          {/* Card informativo sobre días laborales */}
+          {/* {reportePersonal.length > 0 && reportePersonal[0].diasLaboralesPeriodo && (
+            <Card className="mb-6">
+              <CardContent className="p-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold">Información del periodo</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Periodo: {fechaInicio} al {fechaFin}
+                    </p>
+                  </div>
+                  <div className="bg-blue-50 p-2 rounded-md">
+                    <p className="text-sm font-medium text-blue-700">
+                      Total días laborales en el periodo: <span className="font-bold">{reportePersonal[0].diasLaboralesPeriodo}</span>
+                    </p>
+                    <p className="text-xs text-blue-600">
+                      La relación <span className="font-mono">X/Y</span> indica: <span className="font-semibold">asistencias registradas / días laborales totales</span>
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )} */}
+
+
+          {/* Card para el Total Pagado */}
+          {reportePersonal.length > 0 && (
+            <div className="mt-6">
+              <Card className="bg-gray-50 py-3">
+                <CardContent className="">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-bold">Total Pagado:</h3>
+                      <p className="text-sm text-gray-600">
+                        Semana: {formatDate(fechaInicio)} - {formatDate(fechaFin)}
+                      </p>
+                      <div className="flex gap-2 mt-1">
+                        <span className="inline-flex items-center bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                          Activos: {reportePersonal.filter(p => p.estado === 1).length}
+                        </span>
+                        <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                          Inactivos: {reportePersonal.filter(p => p.estado === 0).length}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-green-700">S/. {totalPagado.toFixed(2)}</p>
+                      <p className="text-sm text-gray-600">{reportePersonal.length} empleados en total</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Tabla de reporte */}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Cod.</TableHead>
                   <TableHead>Personal</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-center">
                     <div className="flex items-center justify-center gap-1">
                       <Check className="h-4 w-4 text-green-600" />
-                      Asistencias
+                      Asistencias / Días Laborales
                     </div>
                   </TableHead>
                   <TableHead className="text-center">
@@ -806,6 +1304,7 @@ export default function Page() {
                 {reportePersonal.length > 0 ? (
                   reportePersonal.map((persona) => (
                     <TableRow key={persona.id_personal}>
+                      <TableCell>{persona.id_personal}</TableCell>
                       <TableCell>{persona.nombre_completo}</TableCell>
                       <TableCell className="text-center">
                         {persona.estado === 1 ? (
@@ -818,7 +1317,25 @@ export default function Page() {
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-center">{persona.asistencias}</TableCell>
+                      <TableCell className="text-center">
+                        <span>
+                          {persona.asistencias}/{persona.diasLaboralesPeriodo || 0}
+                          {persona.diasLaboralesPeriodo && persona.asistencias > persona.diasLaboralesPeriodo && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="ml-1 text-red-500 text-xs">
+                                    <AlertTriangle className="h-3 w-3 inline-block" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>El número de asistencias excede los días laborales del periodo</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-center">{persona.mediosDias}</TableCell>
                       <TableCell className="text-center">
                         S/. {(()=>{
@@ -831,18 +1348,10 @@ export default function Page() {
                         S/. {persona.totalTareasExtras.toFixed(2)}
                       </TableCell>
                       <TableCell className="text-center">
-                        S/. {(pagosRealizados.find(p => p.id_personal === persona.id_personal && 
-                                p.id_semana_laboral.toString() === semanaSeleccionada)?.total_descuentos || "0").toString()}
+                        S/. {(persona.totalDescuentos || 0).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-center font-semibold">
-                        S/. {(()=>{
-                          // Obtener el total de descuentos
-                          const totalDescuentos = Number(pagosRealizados.find(p => p.id_personal === persona.id_personal && 
-                                p.id_semana_laboral.toString() === semanaSeleccionada)?.total_descuentos || 0);
-                          
-                          // Calcular el total final usando totalAsistencias directamente
-                          return (persona.totalAsistencias + persona.totalCoccion + persona.totalHumeada + persona.totalTareasExtras - totalDescuentos).toFixed(2);
-                        })()}
+                        S/. {(persona.totalPagoFinal || 0).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-center">
                         <Button
@@ -874,35 +1383,6 @@ export default function Page() {
             </Table>
           </div>
 
-          {/* Card para el Total Pagado */}
-          {reportePersonal.length > 0 && (
-            <div className="mt-6">
-              <Card className="bg-gray-50 py-3">
-                <CardContent className="">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="text-lg font-bold">Total Pagado:</h3>
-                      <p className="text-sm text-gray-600">
-                        Semana: {formatDate(fechaInicio)} - {formatDate(fechaFin)}
-                      </p>
-                      <div className="flex gap-2 mt-1">
-                        <span className="inline-flex items-center bg-green-100 text-green-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                          Activos: {reportePersonal.filter(p => p.estado === 1).length}
-                        </span>
-                        <span className="inline-flex items-center bg-gray-100 text-gray-800 text-xs font-medium px-2 py-0.5 rounded-full">
-                          Inactivos: {reportePersonal.filter(p => p.estado === 0).length}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-2xl font-bold text-green-700">S/. {totalPagado.toFixed(2)}</p>
-                      <p className="text-sm text-gray-600">{reportePersonal.length} empleados en total</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
           {/* Información de depuración en desarrollo */}
           {/* 
@@ -1032,25 +1512,38 @@ export default function Page() {
                   <p className="font-semibold mb-1 text-xs text-center">RESUMEN DE PAGOS</p>
                   <div className="grid grid-cols-2 text-xs gap-1">
                     {(() => {
-                      // Usar el costoPagoDiario del empleado seleccionado
-                      const pagoDiario = empleadoSeleccionado.costoPagoDiario || 0;
+                      // Para reportes mensuales, usar totalAsistencias; para semanales, calcularlo
+                      let pagoAsistencias = 0;
                       
-                      // Calcular el pago por asistencias correctamente
-                      const pagoAsistencias = (empleadoSeleccionado.asistencias * pagoDiario) + (empleadoSeleccionado.mediosDias * pagoDiario * 0.5);
+                      if (tipoFiltro === "mes" && empleadoSeleccionado.totalAsistencias !== undefined) {
+                        // Reporte mensual: usar total agregado de asistencias
+                        pagoAsistencias = empleadoSeleccionado.totalAsistencias;
+                      } else {
+                        // Reporte semanal: calcular usando la lógica anterior
+                        const pagoDiario = empleadoSeleccionado.costoPagoDiario || 0;
+                        pagoAsistencias = (empleadoSeleccionado.asistencias * pagoDiario) + (empleadoSeleccionado.mediosDias * pagoDiario * 0.5);
+                      }
                       
-                      // Obtener datos del pago realizado si existe
-                      const pagoRealizado = pagosRealizados.find(p => 
-                        p.id_personal === empleadoSeleccionado.id_personal && 
-                        p.id_semana_laboral.toString() === semanaSeleccionada
-                      );
+                      // Para reportes mensuales, usar los totales agregados; para semanales, usar lógica anterior
+                      let totalDescuentos = 0;
+                      let totalGeneral = 0;
                       
-                      // Obtener el total de descuentos (0 si no existe)
-                      const totalDescuentos = Number(pagoRealizado?.total_descuentos || 0);
-                      
-                      // Calcular el total general
-                      const totalGeneral = pagoAsistencias + empleadoSeleccionado.totalCoccion + 
-                                          empleadoSeleccionado.totalHumeada + empleadoSeleccionado.totalTareasExtras - 
-                                          totalDescuentos;
+                      if (tipoFiltro === "mes" && empleadoSeleccionado.totalDescuentos !== undefined) {
+                        // Reporte mensual: usar totales agregados
+                        totalDescuentos = empleadoSeleccionado.totalDescuentos;
+                        totalGeneral = empleadoSeleccionado.totalPagoFinal || 0;
+                      } else {
+                        // Reporte semanal: usar lógica anterior
+                        const pagoRealizado = pagosRealizados.find(p => 
+                          p.id_personal === empleadoSeleccionado.id_personal && 
+                          p.id_semana_laboral.toString() === semanaSeleccionada
+                        );
+                        
+                        totalDescuentos = Number(pagoRealizado?.total_descuentos || 0);
+                        totalGeneral = pagoAsistencias + empleadoSeleccionado.totalCoccion + 
+                                      empleadoSeleccionado.totalHumeada + empleadoSeleccionado.totalTareasExtras - 
+                                      totalDescuentos;
+                      }
 
                       return (
                         <>
