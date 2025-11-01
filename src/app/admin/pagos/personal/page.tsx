@@ -2744,6 +2744,301 @@ export default function PagoPersonalPage() {
     }
   }
 
+  // Función para imprimir la tabla de pagos en PDF usando la API nativa del navegador
+  const imprimirTablaPDF = () => {
+    if (resumenPagos.length === 0) {
+      toast.error("No hay datos para imprimir. Seleccione primero una semana con datos.");
+      return;
+    }
+
+    try {
+      // Obtener información de la semana seleccionada
+      const semanaInfo = semanasLaboral.find((s: any) => s.id_semana_laboral.toString() === semanaSeleccionada);
+      const fechaInicio = semanaInfo ? formatDate(semanaInfo.fecha_inicio) : '';
+      const fechaFin = semanaInfo ? formatDate(semanaInfo.fecha_fin) : '';
+
+      // Crear nombre de archivo con formato: Reporte_Pago_Semana_DD_MM_YYYY
+      // Usar formatDate que maneja correctamente las fechas UTC y convertir el formato
+      const fechaInicioParaArchivo = semanaInfo ? 
+        formatDate(semanaInfo.fecha_inicio).replace(/\//g, '_') : 
+        formatDate(new Date().toISOString()).replace(/\//g, '_');
+      const nombreArchivo = `Reporte_Pago_Semana_${fechaInicioParaArchivo}`;
+
+      // Calcular totales
+      const totalAsistencias = resumenPagos.reduce((sum, item) => sum + item.total_asistencia, 0);
+      const totalTareasExtras = resumenPagos.reduce((sum, item) => sum + item.total_tareas_extra, 0);
+      const totalCoccion = resumenPagos.reduce((sum, item) => sum + item.total_coccion, 0);
+      const totalAdelantos = resumenPagos.reduce((sum, item) => sum + item.total_adelantos, 0);
+      const totalFinal = resumenPagos.reduce((sum, item) => sum + item.total_final, 0);
+      const totalConDescuentos = resumenPagos.reduce((sum, item) => sum + (item.total_final - item.total_adelantos), 0);
+
+      // Crear contenido HTML para impresión
+      const contenidoHTML = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>${nombreArchivo}</title>
+          <style>
+            @media print {
+              @page {
+                margin: 1cm;
+                size: A4 landscape;
+              }
+              body {
+                font-family: Arial, sans-serif;
+                font-size: 10px;
+                line-height: 1.2;
+                color: #000;
+              }
+            }
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 15px;
+            }
+            .header {
+              text-align: center;
+              margin-bottom: 20px;
+              border-bottom: 2px solid #333;
+              padding-bottom: 10px;
+            }
+            .header h1 {
+              margin: 0;
+              font-size: 18px;
+              color: #333;
+            }
+            .header p {
+              margin: 3px 0;
+              font-size: 12px;
+              color: #666;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-bottom: 15px;
+              font-size: 9px;
+            }
+            th, td {
+              border: 1px solid #ddd;
+              padding: 4px;
+              text-align: left;
+            }
+            th {
+              background-color: #428bca;
+              color: white;
+              font-weight: bold;
+              text-align: center;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .totales {
+              background-color: #f8f9fa;
+              font-weight: bold;
+            }
+            .fila-con-adelantos {
+              background-color: #ffebee !important;
+              color: #d32f2f !important;
+            }
+            .fila-con-adelantos td {
+              background-color: #ffebee !important;
+              color: #d32f2f !important;
+              border-color: #ffcdd2 !important;
+            }
+            .footer {
+              margin-top: 15px;
+              text-align: center;
+              font-size: 8px;
+              color: #666;
+              border-top: 1px solid #ddd;
+              padding-top: 5px;
+            }
+            .total-general {
+              margin: 20px 0;
+              padding: 15px;
+              background-color: #e8f4fd;
+              border: 2px solid #1976d2;
+              border-radius: 8px;
+              text-align: center;
+              page-break-inside: avoid;
+            }
+            .total-general h2 {
+              margin: 0 0 10px 0;
+              font-size: 18px;
+              font-weight: bold;
+              color: #1976d2;
+              text-transform: uppercase;
+            }
+            .total-general .monto {
+              font-size: 24px;
+              font-weight: bold;
+              color: #1976d2;
+              margin: 0;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Tabla de Pagos Semanal</h1>
+            <p><strong>Semana del ${fechaInicio} al ${fechaFin}</strong></p>
+            <p>Total de empleados: ${resumenPagos.length}</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Personal</th>
+                <th>Días completos</th>
+                <th>Medios días</th>
+                <th>Pago diario</th>
+                <th>S/. Total Asistencia</th>
+                <th>S/. Total Tareas Extra</th>
+                <th>S/. Total Cocción</th>
+                <th>S/. Adelantos</th>
+                <th>S/. Total sin descontar</th>
+                <th>S/. Total con descuentos</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${resumenPagos.map(resumen => {
+                const personalObj = personal.find(p => p.id_personal === resumen.id_personal);
+                const tienePagoReducido = personalObj?.pago_diario_reducido && personalObj.pago_diario_reducido > 0;
+                const pagoAplicado = resumen.pago_aplicado || 'normal';
+                const totalConDescuentos = resumen.total_final - resumen.total_adelantos;
+                
+                // Determinar si la fila debe ser roja (tiene adelantos > 0)
+                const tieneAdelantos = resumen.total_adelantos > 0;
+                const claseFilaRoja = tieneAdelantos ? ' class="fila-con-adelantos"' : '';
+                
+                return `
+                <tr${claseFilaRoja}>
+                  <td class="text-center">${resumen.id_personal}</td>
+                  <td>${resumen.nombre_completo}</td>
+                  <td class="text-center">${resumen.dias_completos}</td>
+                  <td class="text-center">${resumen.medios_dias}</td>
+                  <td class="text-center">
+                    ${personalObj?.pago_diario_normal != null
+                      ? (typeof personalObj.pago_diario_normal === 'number'
+                        ? personalObj.pago_diario_normal.toFixed(2)
+                        : Number(personalObj.pago_diario_normal).toFixed(2))
+                      : '-'}
+                  </td>
+                  <td class="text-right">S/. ${resumen.total_asistencia.toFixed(2)}</td>
+                  <td class="text-right">S/. ${resumen.total_tareas_extra.toFixed(2)}</td>
+                  <td class="text-right">S/. ${resumen.total_coccion.toFixed(2)}</td>
+                  <td class="text-right">S/. ${resumen.total_adelantos.toFixed(2)}</td>
+                  <td class="text-right">S/. ${resumen.total_final.toFixed(2)}</td>
+                  <td class="text-right">S/. ${totalConDescuentos.toFixed(2)}</td>
+                </tr>
+                `;
+              }).join('')}
+              <tr class="totales">
+                <td colspan="9" class="text-center">TOTALES</td>
+                <td class="text-right">S/. ${totalFinal.toFixed(2)}</td>
+                <td class="text-right">S/. ${totalConDescuentos.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          ${Object.keys(turnosExternosPorNombre).length > 0 ? `
+          <!-- Sección de Personal Externo en Turnos de Cocción -->
+          <div style="page-break-inside: avoid; margin-top: 20px;">
+            <h3 style="font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center; background-color: #f0f0f0; padding: 5px;">
+              Personal Externo en Turnos de Cocción
+            </h3>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Total Turnos</th>
+                  <th>Detalle de Turnos</th>
+                  <th class="text-right">Total a Pagar</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${Object.entries(turnosExternosPorNombre).map(([idExterno, turnos]) => {
+                  const nombre = turnos[0]?.turno_completo?.personal_externo || `Personal Externo ${idExterno}`;
+                  const totalTurnos = turnos.length;
+                  const totalPagar = turnos.reduce((sum, turno) => sum + Number(turno.costo), 0);
+                  
+                  // Crear detalle de turnos
+                  const detalleTurnos = turnos
+                    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime())
+                    .map(turno => `${turno.fecha}: ${turno.cargo} (S/. ${Number(turno.costo).toFixed(2)})`)
+                    .join('<br>');
+                  
+                  return `
+                  <tr>
+                    <td style="font-weight: bold;">${nombre}</td>
+                    <td class="text-center">${totalTurnos}</td>
+                    <td style="font-size: 8px; max-width: 200px;">${detalleTurnos}</td>
+                    <td class="text-right" style="font-weight: bold;">S/. ${totalPagar.toFixed(2)}</td>
+                  </tr>
+                  `;
+                }).join('')}
+                
+                <!-- Fila de total del personal externo -->
+                <tr class="totales">
+                  <td colspan="3" class="text-center">TOTAL PERSONAL EXTERNO</td>
+                  <td class="text-right">S/. ${Object.values(turnosExternosPorNombre).reduce((total, turnos) => {
+                    return total + turnos.reduce((sum, turno) => sum + Number(turno.costo), 0);
+                  }, 0).toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <!-- Total General de la Semana -->
+          <div class="total-general">
+            <h2>Total General de la Semana</h2>
+            <p class="monto">S/. ${(() => {
+              // Calcular total de la tabla principal (sin descuentos)
+              const totalTablaPrincipal = resumenPagos.reduce((sum, item) => sum + item.total_final, 0);
+              
+              // Calcular total del personal externo
+              const totalPersonalExterno = Object.values(turnosExternosPorNombre).reduce((total, turnos) => {
+                return total + turnos.reduce((sum, turno) => sum + Number(turno.costo), 0);
+              }, 0);
+              
+              // Total general combinado
+              return (totalTablaPrincipal + totalPersonalExterno).toFixed(2);
+            })()}
+          </div>
+
+          <div class="footer">
+            <p>Generado el ${new Date().toLocaleDateString('es-PE')} a las ${new Date().toLocaleTimeString('es-PE')}</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Abrir nueva ventana para impresión
+      const ventanaImpresion = window.open('', '_blank');
+      if (ventanaImpresion) {
+        ventanaImpresion.document.write(contenidoHTML);
+        ventanaImpresion.document.close();
+        
+        // Esperar a que se cargue el contenido y luego imprimir
+        ventanaImpresion.onload = () => {
+          ventanaImpresion.print();
+          // Cerrar la ventana después de imprimir (opcional)
+          ventanaImpresion.onafterprint = () => {
+            ventanaImpresion.close();
+          };
+        };
+        
+        toast.success("Ventana de impresión abierta");
+      } else {
+        toast.error("No se pudo abrir la ventana de impresión. Verifique que los pop-ups estén habilitados.");
+      }
+    } catch (error) {
+      console.error("Error al imprimir tabla PDF:", error);
+      toast.error("Ocurrió un error al preparar la impresión");
+    }
+  };
+
   // Corregir el error en la tabla duplicada
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -2841,33 +3136,16 @@ export default function PagoPersonalPage() {
                 </div>
               </CardContent>
             </Card>
-          </div>
-        </div>
 
-        {/* Botones en una fila en pantallas grandes, organizados en móvil */}
-        <div className="flex flex-col gap-3">
-          {/* Botones Cerrar Semana e Imprimir Resumen */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {/* Botón de cerrar semana */}
-            <Button
-              variant="outline"
-              className={`w-full ${puedesCerrarSemana() ? 'bg-green-50 hover:bg-green-100 border-green-200' : 'bg-gray-100 text-gray-400'}`}
-              disabled={!puedesCerrarSemana()}
-              onClick={() => setShowCloseModal(true)}
-            >
-              <Check className={`mr-2 h-4 w-4 ${puedesCerrarSemana() ? 'text-green-600' : 'text-gray-400'}`} />
-              Cerrar Semana
-            </Button>
-
-            {/* Botón para imprimir resumen semanal */}
+            {/* Botón Imprimir Resumen separado */}
             {noPendientesPorPagar() ? (
               <Button
                 variant="outline"
-                className="w-full bg-purple-50 hover:bg-purple-100 border-purple-200"
+                size="sm"
+                className="bg-purple-50 hover:bg-purple-100 border-purple-200"
                 onClick={() => {
                   setLoadingImprimirResumen(true);
                   setImprimirResumenModalOpen(true);
-                  // Retraso para simular carga y asegurar que el estado se actualice
                   setTimeout(() => setLoadingImprimirResumen(false), 800);
                 }}
               >
@@ -2881,13 +3159,41 @@ export default function PagoPersonalPage() {
             ) : (
               <Button
                 variant="outline"
-                className="w-full bg-gray-100 text-gray-400"
+                size="sm"
+                className="bg-gray-100 text-gray-400"
                 disabled
               >
-                <Printer className="h-4 w-4 mr-2" />
-                Imprimir Resumen
+                <Printer className="h-4 w-4" />
               </Button>
             )}
+          </div>
+        </div>
+
+        {/* Botones en una fila en pantallas grandes, organizados en móvil */}
+        <div className="flex flex-col gap-3">
+          {/* Botones Cerrar Semana e Imprimir Resumen */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Botón de cerrar semana */}
+            <Button
+              variant="outline"
+              className={`w-full ${puedesCerrarSemana() ? 'bg-green-50 hover:bg-green-100 border-green-200' : 'bg-gray-100 text-gray-400'}`}
+              disabled={!puedesCerrarSemana()}
+              onClick={() => setShowCloseModal(true)}
+            >
+              <Check className={`mr-2 h-4 w-4 ${puedesCerrarSemana() ? 'text-green-600' : 'text-gray-400'}`} />
+              Cerrar Semana
+            </Button>
+
+            {/* Botón para imprimir PDF de la tabla */}
+            <Button
+              variant="outline"
+              className="w-full bg-blue-50 hover:bg-blue-100 border-blue-200"
+              onClick={imprimirTablaPDF}
+              disabled={resumenPagos.length === 0}
+            >
+              <Printer className="h-4 w-4 text-blue-600 mr-2" />
+              Imprimir PDF Tabla
+            </Button>
           </div>
         </div>
       </div>
@@ -2909,7 +3215,7 @@ export default function PagoPersonalPage() {
                   <TableHead rowSpan={2} className="align-bottom text-center">ID</TableHead>
                   <TableHead rowSpan={2} className="align-bottom">Personal</TableHead>
                   <TableHead colSpan={2} className="text-center border-b">Asistencia</TableHead>
-                  <TableHead colSpan={2} className="text-center border-b">P. actual</TableHead>
+                  <TableHead colSpan={2} className="text-center border-b"></TableHead>
                   <TableHead rowSpan={2} className="text-right align-bottom">S/. Total<br />Asistencia</TableHead>
                   <TableHead rowSpan={2} className="text-right align-bottom">S/. Total<br />Tareas Extra</TableHead>
                   <TableHead rowSpan={2} className="text-right align-bottom">S/. Total<br />Cocción</TableHead>
@@ -2925,10 +3231,7 @@ export default function PagoPersonalPage() {
                     <AlertCircle className="h-4 w-4 mx-auto text-yellow-600" />
                   </TableHead>
                   <TableHead className="text-center border-b">
-                    P. normal
-                  </TableHead>
-                  <TableHead className="text-center border-b">
-                    P. reducido
+                    S/. Pago diario
                   </TableHead>
                 </TableRow>
               </TableHeader>
@@ -2981,11 +3284,6 @@ export default function PagoPersonalPage() {
                           : 'text-gray-400'
                           }`}
                       >
-                        {tienePagoReducido && personalObj?.pago_diario_reducido != null
-                          ? (typeof personalObj.pago_diario_reducido === 'number'
-                            ? personalObj.pago_diario_reducido.toFixed(2)
-                            : Number(personalObj.pago_diario_reducido).toFixed(2))
-                          : '-'}
                       </TableCell>
                       <TableCell className="text-right">{resumen.total_asistencia.toFixed(2)}</TableCell>
                       <TableCell className="text-right">{resumen.total_tareas_extra.toFixed(2)}</TableCell>
@@ -4427,6 +4725,39 @@ export default function PagoPersonalPage() {
 
               {/* Línea divisoria */}
               <div className="my-4 border-t border-solid border-gray-500 print:my-3"></div>
+
+              {/* Sección Personal Externo - Solo mostrar si hay turnos externos */}
+              {Object.keys(turnosExternosPorNombre).length > 0 && (
+                <>
+                  <div className="p-1 print:p-0.5">
+                    <div className="text-center font-bold mb-1 subtitle print:text-[9pt]">PERSONAL EXTERNO COCCIÓN</div>
+                    <div className="space-y-1 print:space-y-0.5">
+                      {Object.entries(turnosExternosPorNombre).map(([idExterno, turnos]) => {
+                        const nombre = turnos[0]?.turno_completo?.personal_externo || `Personal Externo ${idExterno}`;
+                        const totalPagar = turnos.reduce((sum, turno) => sum + Number(turno.costo), 0);
+                        
+                        return (
+                          <div key={idExterno} className="flex justify-between text-xs print:text-[10pt]">
+                            <span className="font-semibold">{nombre} ({turnos.length} turnos):</span>
+                            <span className="print:text-[11pt]">S/. {totalPagar.toFixed(2)}</span>
+                          </div>
+                        );
+                      })}
+                      
+                      {/* Total del personal externo */}
+                      <div className="flex justify-between text-sm font-bold border-t border-gray-300 pt-1 mt-1 print:text-[11pt]">
+                        <span>Total Personal Externo:</span>
+                        <span>S/. {Object.values(turnosExternosPorNombre).reduce((total, turnos) => {
+                          return total + turnos.reduce((sum, turno) => sum + Number(turno.costo), 0);
+                        }, 0).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Línea divisoria */}
+                  <div className="my-3 border-t border-solid border-gray-500 print:my-2"></div>
+                </>
+              )}
 
               {/* Total pagado */}
               <div className="text-center my-2 print:my-3 px-4">
