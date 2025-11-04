@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { formatDateString, formatDateRange, toISODateString } from '@/lib/utils/dates'
 import { Separator } from "@/components/ui/separator"
-import { formatTime, formatTimeAMPM } from "@/utils/dateFormat"
+import { formatTime, formatTimeAMPM, formatTimeForInput, convertTo24Hour, convertTo12Hour, formatTimeForPrisma, isValidTimeFormat } from "@/utils/dateFormat"
 
 // Interfaces
 interface Horno {
@@ -148,6 +148,10 @@ export default function CoccionPage() {
   const [currentOperadores, setCurrentOperadores] = useState<Partial<CoccionOperador>[]>([])
   const [loadingOperadores, setLoadingOperadores] = useState(false)
   const [personal, setPersonal] = useState<Personal[]>([])
+
+  // Estados para manejo de horas en formato 12h
+  const [horaInicioDisplay, setHoraInicioDisplay] = useState('')
+  const [horaFinDisplay, setHoraFinDisplay] = useState('')
   const [loadingPersonal, setLoadingPersonal] = useState(true)
 
   // Agregar estado para el modal de visualización
@@ -166,13 +170,28 @@ export default function CoccionPage() {
 
     // Establecer fecha y hora actual
     const now = new Date();
+    const horaActual = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
     setCurrentCoccion(prev => ({
       ...prev,
       fecha_encendido: toISODateString(now),
-      hora_inicio: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      hora_inicio: horaActual,
       estado: "Programado"
     }));
+    setHoraInicioDisplay(convertTo12Hour(horaActual));
   }, [])
+
+  // Funciones para manejar horas en formato AM/PM
+  const handleHoraInicioChange = (timeValue: string) => {
+    // timeValue viene en formato HH:MM (24h) del input type="time"
+    setCurrentCoccion(prev => ({ ...prev, hora_inicio: timeValue }));
+    setHoraInicioDisplay(convertTo12Hour(timeValue));
+  };
+
+  const handleHoraFinChange = (timeValue: string) => {
+    // timeValue viene en formato HH:MM (24h) del input type="time"
+    setCurrentCoccion(prev => ({ ...prev, hora_fin: timeValue }));
+    setHoraFinDisplay(convertTo12Hour(timeValue));
+  };
 
   // Funciones para hornos
   const fetchHornos = async () => {
@@ -419,23 +438,58 @@ export default function CoccionPage() {
         toast.error("Los campos semana, horno y fecha de encendido son obligatorios");
         return;
       }
+
+      // Validar formato de fecha de encendido
+      if (!currentCoccion.fecha_encendido.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        toast.error("La fecha de encendido debe tener un formato válido");
+        return;
+      }
+
+      // Validar formato de hora de inicio si está presente
+      if (currentCoccion.hora_inicio && !isValidTimeFormat(currentCoccion.hora_inicio)) {
+        toast.error("La hora de inicio debe tener un formato válido (HH:MM)");
+        return;
+      }
+
+      // Validar formato de hora de fin si está presente
+      if (currentCoccion.hora_fin && !isValidTimeFormat(currentCoccion.hora_fin)) {
+        toast.error("La hora de fin debe tener un formato válido (HH:MM)");
+        return;
+      }
+
+      // Validar que si hay fecha de apagado, también haya hora de fin
+      if (currentCoccion.fecha_apagado && !currentCoccion.hora_fin) {
+        toast.error("Si especifica fecha de apagado, debe especificar la hora de fin");
+        return;
+      }
+
+      // Validar que la fecha de apagado no sea anterior a la de encendido
+      if (currentCoccion.fecha_apagado && currentCoccion.fecha_apagado < currentCoccion.fecha_encendido) {
+        toast.error("La fecha de apagado no puede ser anterior a la fecha de encendido");
+        return;
+      }
+
       // Preparar datos para enviar
       const requestData = {
         ...(currentCoccion.id_coccion ? { id_coccion: currentCoccion.id_coccion } : {}),
         semana_laboral_id_semana_laboral: Number(currentCoccion.semana_trabajo_id_semana_trabajo),
         fecha_encendido: currentCoccion.fecha_encendido,
-        hora_inicio: currentCoccion.hora_inicio ? new Date(`1970-01-01T${currentCoccion.hora_inicio}:00Z`) : null,
-        fecha_apagado: currentCoccion.fecha_apagado || null,
-        hora_fin: currentCoccion.hora_fin ? new Date(`1970-01-01T${currentCoccion.hora_fin}:00Z`) : null,
-        humedad_inicial: currentCoccion.humedad_inicial || null,
+        hora_inicio: formatTimeForPrisma(currentCoccion.hora_inicio),
+        fecha_apagado: currentCoccion.fecha_apagado && currentCoccion.fecha_apagado.trim() !== '' ? currentCoccion.fecha_apagado.trim() : null,
+        hora_fin: formatTimeForPrisma(currentCoccion.hora_fin),
+        humedad_inicial: currentCoccion.humedad_inicial && !isNaN(Number(currentCoccion.humedad_inicial)) ? Number(currentCoccion.humedad_inicial) : null,
         estado: currentCoccion.estado || "Programado",
         horno_id_horno: Number(currentCoccion.horno_id_horno),
-        humeada: currentCoccion.humeada || false,
-        quema: currentCoccion.quema || false,
+        humeada: Boolean(currentCoccion.humeada),
+        quema: Boolean(currentCoccion.quema),
         id_empresa: session?.user?.id_empresa
       };
 
-      console.log('Datos a enviar:', requestData);
+      console.log('Datos a enviar:', {
+        ...requestData,
+        hora_inicio: currentCoccion.hora_inicio ? `${currentCoccion.hora_inicio} -> ${requestData.hora_inicio}` : null,
+        hora_fin: currentCoccion.hora_fin ? `${currentCoccion.hora_fin} -> ${requestData.hora_fin}` : null
+      });
 
       const res = await fetch("/api/coccion", {
         method: currentCoccion.id_coccion ? "PUT" : "POST",
@@ -452,6 +506,8 @@ export default function CoccionPage() {
       setShowCoccionModal(false);
       setCurrentCoccion({});
       setCurrentOperadores([]);
+      setHoraInicioDisplay('');
+      setHoraFinDisplay('');
       fetchCocciones();
     } catch (error) {
       console.error('Error al guardar:', error);
@@ -556,11 +612,17 @@ export default function CoccionPage() {
           <div className="flex gap-4 mb-6">
             <Button
               onClick={() => {
+                const now = new Date();
+                const horaActual = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                
                 setCurrentCoccion({
                   fecha_encendido: toISODateString(new Date()),
+                  hora_inicio: horaActual,
                   estado: "Programado",
                 });
                 setCurrentOperadores([]);
+                setHoraInicioDisplay(convertTo12Hour(horaActual));
+                setHoraFinDisplay('');
                 setShowCoccionModal(true);
               }}
               className="cursor-pointer"
@@ -671,26 +733,77 @@ export default function CoccionPage() {
                             size="icon"
                             onClick={async () => {
                               try {
-                                // Ya no necesitamos cargar operadores, así que eliminamos esa parte
-                                // Simplemente cargamos la cocción
+                                // Cargamos los datos frescos de la API
                                 const res = await fetch(`/api/coccion?id_coccion=${coccion.id_coccion}`);
                                 if (!res.ok) throw new Error('Error al cargar datos de cocción');
 
                                 const coccionData = await res.json();
+                                
+                                // Usar los datos frescos de la API, no los del estado local
+                                const coccionActual = Array.isArray(coccionData) ? coccionData[0] : coccionData;
 
-                                // Formatear la fecha correctamente para el input date
-                                const fechaEncendido = coccion.fecha_encendido ?
-                                  coccion.fecha_encendido.split('T')[0] : '';
+                                // Formatear las fechas correctamente para los inputs
+                                const fechaEncendido = coccionActual.fecha_encendido ?
+                                  coccionActual.fecha_encendido.split('T')[0] : '';
 
-                                // Ya no establecemos operadores, solo la cocción
+                                const fechaApagado = coccionActual.fecha_apagado ?
+                                  coccionActual.fecha_apagado.split('T')[0] : '';
+
+                                // Normalizar las horas para que estén en formato HH:MM
+                                const normalizarHora = (hora: string | null | undefined) => {
+                                  if (!hora) return '';
+                                  
+                                  try {
+                                    // Si es un DateTime ISO, extraer solo la parte de tiempo
+                                    if (hora.includes('T') || hora.includes('Z')) {
+                                      const date = new Date(hora);
+                                      // Extraer horas y minutos directamente
+                                      const hours = date.getUTCHours().toString().padStart(2, '0');
+                                      const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+                                      return `${hours}:${minutes}`;
+                                    }
+                                    
+                                    // Si ya está en formato HH:MM o HH:MM:SS, mantenerlo o convertirlo
+                                    if (hora.includes(':')) {
+                                      const parts = hora.split(':');
+                                      return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+                                    }
+                                    
+                                    return hora;
+                                  } catch (error) {
+                                    console.error('Error normalizando hora:', error);
+                                    return '';
+                                  }
+                                };
+
+                                const horaInicioNormalizada = normalizarHora(coccionActual.hora_inicio);
+                                const horaFinNormalizada = normalizarHora(coccionActual.hora_fin);
+
+                                // Limpiar operadores y establecer la cocción actual
                                 setCurrentOperadores([]);
 
-                                // Establecer la cocción actual con la fecha formateada
+                                // Establecer la cocción con datos frescos de la API
                                 setCurrentCoccion({
-                                  ...coccion,
+                                  ...coccionActual,
                                   fecha_encendido: fechaEncendido,
-                                  semana_trabajo_id_semana_trabajo: coccion.semana_laboral_id_semana_laboral
+                                  fecha_apagado: fechaApagado,
+                                  hora_inicio: horaInicioNormalizada,
+                                  hora_fin: horaFinNormalizada,
+                                  semana_trabajo_id_semana_trabajo: coccionActual.semana_laboral_id_semana_laboral || coccionActual.semana_trabajo_id_semana_trabajo
                                 });
+
+                                // Establecer las horas para mostrar en formato AM/PM
+                                if (horaInicioNormalizada) {
+                                  setHoraInicioDisplay(convertTo12Hour(horaInicioNormalizada));
+                                } else {
+                                  setHoraInicioDisplay('');
+                                }
+
+                                if (horaFinNormalizada) {
+                                  setHoraFinDisplay(convertTo12Hour(horaFinNormalizada));
+                                } else {
+                                  setHoraFinDisplay('');
+                                }
 
                                 setShowCoccionModal(true);
                               } catch (error) {
@@ -728,7 +841,11 @@ export default function CoccionPage() {
         open={showCoccionModal}
         onOpenChange={(isOpen) => {
           setShowCoccionModal(isOpen);
-          if (!isOpen) setCurrentCoccion({}); // Limpiar el formulario al cerrar
+          if (!isOpen) {
+            setCurrentCoccion({}); // Limpiar el formulario al cerrar
+            setHoraInicioDisplay('');
+            setHoraFinDisplay('');
+          }
         }}
       >
         <DialogContent className="sm:max-w-[95%] md:max-w-[600px] p-4 sm:p-6 overflow-y-auto max-h-[90vh]">
@@ -807,12 +924,19 @@ export default function CoccionPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="hora_inicio" className="font-medium">Hora de Inicio</Label>
+                <Label htmlFor="hora_inicio" className="font-medium">
+                  Hora de Inicio
+                  {horaInicioDisplay && (
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      ({horaInicioDisplay})
+                    </span>
+                  )}
+                </Label>
                 <Input
                   id="hora_inicio"
                   type="time"
                   value={currentCoccion.hora_inicio || ""}
-                  onChange={(e) => setCurrentCoccion({ ...currentCoccion, hora_inicio: e.target.value })}
+                  onChange={(e) => handleHoraInicioChange(e.target.value)}
                 />
               </div>
             </div>
@@ -828,12 +952,19 @@ export default function CoccionPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="hora_fin" className="font-medium">Hora de Fin</Label>
+                <Label htmlFor="hora_fin" className="font-medium">
+                  Hora de Fin
+                  {horaFinDisplay && (
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      ({horaFinDisplay})
+                    </span>
+                  )}
+                </Label>
                 <Input
                   id="hora_fin"
                   type="time"
                   value={currentCoccion.hora_fin || ""}
-                  onChange={(e) => setCurrentCoccion({ ...currentCoccion, hora_fin: e.target.value })}
+                  onChange={(e) => handleHoraFinChange(e.target.value)}
                 />
               </div>
             </div>
