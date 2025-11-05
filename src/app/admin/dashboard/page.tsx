@@ -3,19 +3,23 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { z } from "zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Calendar } from "@/components/ui/calendar";
 import { Badge } from "@/components/ui/badge";
-import { Pencil, Trash2, Calendar as CalendarIcon, Loader2, X as XIcon, CalendarX, Flame } from "lucide-react";
+import { Pencil, Trash2, Calendar as CalendarIcon, Loader2, X as XIcon, CalendarX, Flame, Package, Truck, ShoppingCart } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils"
-
+import dynamic from 'next/dynamic';
 
 import { formatDate, formatTimeAMPM, formatDateForInput, formatDateWithDayName } from "@/utils/dateFormat";
 import { formatSoles } from "@/utils/currencyFormat";
@@ -76,6 +80,22 @@ interface VentaPendiente {
       nombre: string;
     };
   }>;
+}
+
+interface Proveedor {
+  id_proveedor: number;
+  nombre: string;
+  tipo_documento?: string;
+  nro_documento?: string;
+}
+
+interface IngresoMaterialForm {
+  material: string; // "Cascarilla" o "Arcilla"
+  id_proveedor?: number;
+  fecha_ingreso: Date;
+  cantidad: number;
+  precio_unitario?: number;
+  observaciones?: string;
 }
 
 // Componente para mostrar cocciones activas
@@ -223,17 +243,87 @@ function VentasPendientesBadge() {
 
   if (isLoading) {
     return (
-      <Badge variant="outline" className="bg-orange-50 text-orange-700 text-xs">
+      <Badge variant="outline" className="bg-orange-50 text-orange-700 text-xs ml-2">
         <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-        Cargando...
+        ...
       </Badge>
     );
   }
 
   return (
-    <Badge variant="outline" className="bg-orange-50 text-orange-700 text-xs">
-      {totalPendientes} Pendientes
+    <Badge variant="outline" className="bg-orange-50 text-orange-700 text-xs ml-2">
+      {totalPendientes}
     </Badge>
+  );
+}
+
+// Componente para mostrar desglose por tipo de ladrillo
+function DesgloseContratosporTipo() {
+  const [desglosePorTipo, setDesglosePorTipo] = useState<Record<string, number>>({});
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDesglosePorTipo();
+  }, []);
+
+  const fetchDesglosePorTipo = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/ventas?pendientes_entrega=true');
+      const data = await response.json();
+      
+      // Agrupar por tipo de producto y sumar cantidades
+      const desglose: Record<string, number> = {};
+      
+      data.forEach((venta: VentaPendiente) => {
+        venta.detalle_venta?.forEach((detalle) => {
+          const nombreProducto = detalle.producto.nombre;
+          if (desglose[nombreProducto]) {
+            desglose[nombreProducto] += detalle.cantidad;
+          } else {
+            desglose[nombreProducto] = detalle.cantidad;
+          }
+        });
+      });
+      
+      setDesglosePorTipo(desglose);
+    } catch (error) {
+      console.error('Error al cargar desglose por tipo:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center text-xs text-muted-foreground">
+        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+        Cargando...
+      </div>
+    );
+  }
+
+  const tiposProducto = Object.entries(desglosePorTipo);
+
+  if (tiposProducto.length === 0) {
+    return (
+      <div className="text-xs text-muted-foreground">
+        Sin desglose
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2 text-xs">
+      {tiposProducto.map(([tipo, cantidad]) => (
+        <div key={tipo} className="flex items-center gap-1">
+          <span className="text-muted-foreground">{tipo}:</span>
+          <Badge variant="secondary" className="text-[10px] px-1 py-0">
+            {cantidad.toLocaleString()}
+          </Badge>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -309,8 +399,8 @@ function VentasPendientesEntrega() {
   }
 
   return (
-    <div className="space-y-2">
-      <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+    <div className="space-y-1">
+      <div className="space-y-1 max-h-[250px] overflow-y-auto pr-1">
         {ventasPendientes.map((venta) => (
           <div key={venta.id_venta} className="rounded-md border p-2 bg-card/50 hover:bg-card/70 cursor-pointer">
             <div className="flex justify-between items-start mb-1">
@@ -319,23 +409,47 @@ function VentasPendientesEntrega() {
                   {venta.cliente?.nombres_apellidos || venta.cliente?.razon_social || "Cliente sin nombre"}
                 </span>
               </div>
-              <Badge 
-                variant="outline" 
-                className={
-                  venta.estado_entrega === "PENDIENTE" 
-                    ? "bg-yellow-50 text-yellow-700 text-[10px]"
-                    : "bg-blue-50 text-blue-700 text-[10px]"
-                }
-              >
-                {venta.estado_entrega}
-              </Badge>
+              <div className="flex gap-2 text-right">
+                <span className={`text-[10px] font-medium ${
+                  venta.estado_pago === "CANCELADO" 
+                    ? "text-green-700"
+                    : venta.estado_pago === "PARCIAL"
+                    ? "text-yellow-700"
+                    : "text-red-700"
+                }`}>
+                  Pago: {venta.estado_pago}
+                </span>
+                <span className={`text-[10px] font-medium ${
+                  venta.estado_entrega === "PENDIENTE" || venta.estado_entrega === "NO ENTREGADO"
+                    ? "text-blue-700"
+                    : venta.estado_entrega === "PARCIAL"
+                    ? "text-yellow-700"
+                    : "text-green-700"
+                }`}>
+                  Entrega: {venta.estado_entrega}
+                </span>
+              </div>
             </div>
+            
+            {/* Detalle de productos */}
+            <div className="text-[9px] text-gray-600 mb-1">
+              {venta.detalle_venta?.slice(0, 2).map((detalle, index) => (
+                <span key={detalle.id_detalle_venta}>
+                  {detalle.cantidad} × {detalle.producto.nombre}
+                  {index < Math.min(venta.detalle_venta.length, 2) - 1 && ", "}
+                </span>
+              ))}
+              {venta.detalle_venta?.length > 2 && (
+                <span className="text-gray-500"> +{venta.detalle_venta.length - 2} más</span>
+              )}
+            </div>
+            
             <div className="text-[10px] mt-1">
               <div className="flex justify-between">
                 <div className="flex items-center gap-1">
                   <span>Fecha: {formatDate(venta.fecha_venta)}</span>
                   <Badge variant="outline" className="h-4 px-1 bg-gray-50 text-gray-700 text-[8px]">
-                    {calcularTiempoTranscurrido(venta.fecha_venta)}
+                    Tiempo transcurrido: {calcularTiempoTranscurrido(venta.fecha_venta)}
                   </Badge>
                 </div>
                 <span className="font-semibold">{formatSoles(venta.total)}</span>
@@ -369,6 +483,19 @@ export default function Page() {
   // Estados para manejo de cierre de semana
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [semanaToClose, setSemanaToClose] = useState<number | null>(null);
+
+  // Estados para modal de ingreso de material
+  const [showIngresoMaterialModal, setShowIngresoMaterialModal] = useState(false);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [isSubmittingIngreso, setIsSubmittingIngreso] = useState(false);
+  const [ingresoForm, setIngresoForm] = useState<IngresoMaterialForm>({
+    material: '',
+    id_proveedor: undefined,
+    fecha_ingreso: new Date(),
+    cantidad: 0,
+    precio_unitario: undefined,
+    observaciones: '',
+  });
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -406,6 +533,69 @@ export default function Page() {
       setSemanasLaborales([]); // Asegurarse de tener un array vacío en caso de error
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Funciones para el modal de ingreso de material
+  const fetchProveedores = async () => {
+    try {
+      const response = await fetch('/api/proveedor');
+      if (!response.ok) throw new Error('Error al cargar proveedores');
+      const data = await response.json();
+      setProveedores(data.proveedores || []);
+    } catch (error) {
+      console.error('Error al cargar proveedores:', error);
+      toast.error('Error al cargar proveedores');
+    }
+  };
+
+  const handleOpenIngresoMaterial = () => {
+    setShowIngresoMaterialModal(true);
+    fetchProveedores();
+  };
+
+  const handleSubmitIngresoMaterial = async () => {
+    try {
+      if (!ingresoForm.material || ingresoForm.cantidad <= 0) {
+        toast.error('Material y cantidad son obligatorios');
+        return;
+      }
+
+      setIsSubmittingIngreso(true);
+
+      const response = await fetch('/api/ingreso-material', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          material: ingresoForm.material,
+          id_proveedor: ingresoForm.id_proveedor || null,
+          fecha_ingreso: ingresoForm.fecha_ingreso.toISOString().split('T')[0],
+          cantidad: ingresoForm.cantidad,
+          precio_unitario: ingresoForm.precio_unitario || null,
+          observaciones: ingresoForm.observaciones || null,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al registrar ingreso');
+      }
+
+      toast.success('Ingreso de material registrado exitosamente');
+      setShowIngresoMaterialModal(false);
+      setIngresoForm({
+        material: '',
+        id_proveedor: undefined,
+        fecha_ingreso: new Date(),
+        cantidad: 0,
+        precio_unitario: undefined,
+        observaciones: '',
+      });
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error(error instanceof Error ? error.message : 'Error al registrar ingreso');
+    } finally {
+      setIsSubmittingIngreso(false);
     }
   };
 
@@ -721,9 +911,9 @@ export default function Page() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Nuevo card para cocciones en proceso */}
-          <div className="rounded-lg border bg-card p-4 shadow-sm">
+          <div className="rounded-lg border bg-card p-4 shadow-sm lg:col-span-2">
             <div className="flex flex-col gap-3">
               <div className="flex justify-between items-center border-b pb-2">
                 <h3 className="text-sm font-semibold">Cocciones Activas</h3>
@@ -734,22 +924,50 @@ export default function Page() {
           </div>
           
           {/* Nuevo card para ventas pendientes de entrega */}
-          <div className="rounded-lg border bg-card p-4 shadow-sm">
+          <div className="rounded-lg border bg-card p-4 shadow-sm lg:col-span-3">
             <div className="flex flex-col gap-3">
               <div className="flex justify-between items-center border-b pb-2">
-                <h3 className="text-sm font-semibold">Contratos Pendientes</h3>
-                <VentasPendientesBadge />
+                <div className="flex items-center">
+                  <h3 className="text-sm font-semibold">Contratos Pendientes</h3>
+                  <VentasPendientesBadge />
+                </div>
+                <DesgloseContratosporTipo />
               </div>
               <VentasPendientesEntrega />
             </div>
           </div>
           
-          <div className="aspect-video rounded-lg bg-muted/50" />
         </div>
         
         <div className="flex-1 rounded-lg bg-muted/50 p-4 md:p-6 md:min-h-[350px]">
-          <h2 className="text-lg md:text-xl font-semibold mb-2 md:mb-4">Resumen</h2>
-          <p className="text-sm text-muted-foreground">Aquí se mostrará un resumen de su actividad reciente.</p>
+          <h2 className="text-lg md:text-xl font-semibold mb-4">Accesos Directos</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {/* Ingreso Material */}
+            <button
+              onClick={handleOpenIngresoMaterial}
+              className="flex flex-col items-center justify-center p-4 bg-white rounded-lg border-2 border-dashed border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 group"
+            >
+              <div className="p-3 bg-blue-100 rounded-full group-hover:bg-blue-200 transition-colors">
+                <Package className="w-6 h-6 text-blue-600" />
+              </div>
+              <span className="text-sm font-medium text-gray-700 mt-2 text-center">Ingreso Material</span>
+            </button>
+
+            {/* Placeholder para futuros accesos directos */}
+            <div className="flex flex-col items-center justify-center p-4 bg-white rounded-lg border-2 border-dashed border-gray-200 opacity-50">
+              <div className="p-3 bg-gray-100 rounded-full">
+                <Truck className="w-6 h-6 text-gray-400" />
+              </div>
+              <span className="text-sm font-medium text-gray-400 mt-2 text-center">Próximamente</span>
+            </div>
+
+            <div className="flex flex-col items-center justify-center p-4 bg-white rounded-lg border-2 border-dashed border-gray-200 opacity-50">
+              <div className="p-3 bg-gray-100 rounded-full">
+                <ShoppingCart className="w-6 h-6 text-gray-400" />
+              </div>
+              <span className="text-sm font-medium text-gray-400 mt-2 text-center">Próximamente</span>
+            </div>
+          </div>
         </div>
       </div>
       <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
@@ -972,6 +1190,186 @@ export default function Page() {
               Confirmar cierre
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Ingreso de Material */}
+      <Dialog open={showIngresoMaterialModal} onOpenChange={setShowIngresoMaterialModal}>
+        <DialogContent className="">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-blue-600" />
+              Registrar Ingreso de Material
+            </DialogTitle>
+            <DialogDescription>
+              Complete la información del material que está ingresando.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            {/* Material - Radio Buttons */}
+            <div className="space-y-3 md:col-span-2">
+              <Label className="text-sm font-medium">Tipo de Material *</Label>
+              <RadioGroup
+                value={ingresoForm.material}
+                onValueChange={(value) =>
+                  setIngresoForm({ ...ingresoForm, material: value })
+                }
+                className="flex"
+              >
+                <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <RadioGroupItem value="Cascarilla" id="cascarilla" />
+                  <Label htmlFor="cascarilla" className="flex-1 cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🌾</span>
+                      <div>
+                        <div className="font-medium">Cascarilla</div>
+                        <div className="text-sm text-gray-500">Material para combustión</div>
+                      </div>
+                    </div>
+                  </Label>
+                </div>
+                
+                <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                  <RadioGroupItem value="Arcilla" id="arcilla" />
+                  <Label htmlFor="arcilla" className="flex-1 cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🏺</span>
+                      <div>
+                        <div className="font-medium">Arcilla</div>
+                        <div className="text-sm text-gray-500">Materia para fabricación</div>
+                      </div>
+                    </div>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Proveedor */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Proveedor (Opcional)</Label>
+              <Select
+                value={ingresoForm.id_proveedor?.toString() || "sin_proveedor"}
+                onValueChange={(value) =>
+                  setIngresoForm({ 
+                    ...ingresoForm, 
+                    id_proveedor: value === "sin_proveedor" ? undefined : parseInt(value)
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar proveedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sin_proveedor">Sin proveedor</SelectItem>
+                  {proveedores.map((proveedor) => (
+                    <SelectItem key={proveedor.id_proveedor} value={proveedor.id_proveedor.toString()}>
+                      {proveedor.nombre}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Fecha de ingreso */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Fecha de Ingreso *</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {ingresoForm.fecha_ingreso ? 
+                      format(ingresoForm.fecha_ingreso, "dd/MM/yyyy", { locale: es }) : 
+                      "Seleccionar fecha"
+                    }
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={ingresoForm.fecha_ingreso}
+                    onSelect={(date) => 
+                      date && setIngresoForm({ ...ingresoForm, fecha_ingreso: date })
+                    }
+                    initialFocus
+                    locale={es}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Cantidad */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Cantidad *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={ingresoForm.cantidad || ''}
+                onChange={(e) =>
+                  setIngresoForm({ ...ingresoForm, cantidad: parseFloat(e.target.value) || 0 })
+                }
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Precio unitario */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Precio Unitario (Opcional)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={ingresoForm.precio_unitario || ''}
+                onChange={(e) =>
+                  setIngresoForm({ 
+                    ...ingresoForm, 
+                    precio_unitario: e.target.value ? parseFloat(e.target.value) : undefined 
+                  })
+                }
+                placeholder="0.00"
+              />
+            </div>
+
+            {/* Observaciones */}
+            <div className="space-y-2 md:col-span-2">
+              <Label className="text-sm font-medium">Observaciones</Label>
+              <Textarea
+                value={ingresoForm.observaciones || ''}
+                onChange={(e) =>
+                  setIngresoForm({ ...ingresoForm, observaciones: e.target.value })
+                }
+                placeholder="Notas adicionales sobre el ingreso..."
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setShowIngresoMaterialModal(false)}
+              disabled={isSubmittingIngreso}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSubmitIngresoMaterial}
+              disabled={isSubmittingIngreso}
+            >
+              {isSubmittingIngreso ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Registrando...
+                </>
+              ) : (
+                'Registrar Ingreso'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
