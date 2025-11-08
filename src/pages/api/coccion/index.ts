@@ -1,18 +1,57 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { CoccionService } from "@/lib/services/CoccionService";
 import { PrismaClient } from "@prisma/client";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "../auth/[...nextauth]";
 
 const prisma = new PrismaClient();
 
 const coccionService = new CoccionService();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  const session = await getServerSession(req, res, authOptions);
+  if (!session) {
+    return res.status(401).json({ message: "No autorizado: sesión no encontrada" });
+  }
+
+  const id_empresa = Number(session.user?.id_empresa);
+  if (!id_empresa) {
+    return res.status(400).json({ message: "ID de empresa inválido o no encontrado en la sesión" });
+  }
+
   const { method, query } = req;
 
   switch (method) {
     case 'GET':
       try {
-        const { id_coccion, include_relations, include_personal, include_complete, id_semana_laboral } = query;
+        const { id_coccion, include_relations, include_personal, include_complete, id_semana_laboral, fechaInicio, fechaFin } = query;
+
+        // Si se solicita filtrar por rango de fechas
+        if (fechaInicio && fechaFin) {
+          const inicio = new Date(fechaInicio as string);
+          const fin = new Date(fechaFin as string);
+          // Ajustar fecha fin para incluir todo el día
+          fin.setHours(23, 59, 59, 999);
+          
+          const coccionesPorFecha = await prisma.coccion.findMany({
+            where: {
+              fecha_encendido: {
+                gte: inicio,
+                lte: fin,
+              },
+              id_empresa: id_empresa
+            },
+            include: {
+              horno: true,
+              semana_laboral: true
+            },
+            orderBy: {
+              id_coccion: 'desc'
+            }
+          });
+          
+          return res.status(200).json(coccionesPorFecha);
+        }
 
         // Si se solicita filtrar por semana laboral
         if (id_semana_laboral) {
@@ -81,7 +120,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Listar todas las cocciones (mantener igual)
         const cocciones = await prisma.coccion.findMany({
           where: {
-            id_empresa: req.query.id_empresa as unknown as number
+            id_empresa: id_empresa
           },
           include: {
             horno: true,

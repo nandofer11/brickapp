@@ -60,7 +60,12 @@ const data = {
         {
           title: "Clientes",
           url: "/admin/gestion/clientes",
-        },        
+        },  
+        {
+          title: "Proveedores",
+          url: "/admin/gestion/proveedores",
+        },    
+        
       ],
     },
     {
@@ -101,9 +106,13 @@ const data = {
       icon: DollarSign,
       items: [
         {
-          title: "Reporte Asistencia",
-          url: "/admin/reportes/asistencia",
+          title: "Pagos Personal",
+          url: "/admin/reportes/pagos/personal",
         },
+        {
+          title: "Producción cocción",
+          url: "/admin/reportes/produccion"
+        }
       ],
     },
      {

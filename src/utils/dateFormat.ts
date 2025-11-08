@@ -199,3 +199,165 @@ export const formatTimeAMPM = (timeString: string | Date | null): string => {
     return '';
   }
 };
+
+/**
+ * Convierte una hora en formato HH:MM (24 horas) a formato de input de tiempo con AM/PM
+ * Esta función es útil para rellenar inputs de tiempo con formato de 12 horas
+ * 
+ * @param timeString - Hora en formato HH:MM (24 horas)
+ * @returns String en formato HH:MM para input de tiempo, o string vacío si no es válida
+ */
+export const formatTimeForInput = (timeString: string | null): string => {
+  if (!timeString) return '';
+  
+  try {
+    // Si es una hora en formato HH:MM, crearla como Date
+    const [hours, minutes] = timeString.split(':');
+    if (!hours || !minutes) return '';
+    
+    const date = new Date();
+    date.setHours(parseInt(hours, 10));
+    date.setMinutes(parseInt(minutes, 10));
+    date.setSeconds(0);
+    
+    // Formatear para input de tiempo (HH:MM en 24 horas)
+    return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+  } catch (error) {
+    console.error('Error formateando hora para input:', error);
+    return '';
+  }
+};
+
+/**
+ * Convierte una hora en formato 12 horas (HH:MM AM/PM) a formato 24 horas (HH:MM)
+ * 
+ * @param time12h - Hora en formato 12 horas (ej: "8:30 AM")
+ * @returns String en formato HH:MM (24 horas)
+ */
+export const convertTo24Hour = (time12h: string): string => {
+  if (!time12h) return '';
+  
+  try {
+    const [time, modifier] = time12h.split(' ');
+    let [hours, minutes] = time.split(':');
+    
+    if (hours === '12') {
+      hours = '00';
+    }
+    
+    if (modifier === 'PM') {
+      hours = (parseInt(hours, 10) + 12).toString();
+    }
+    
+    return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+  } catch (error) {
+    console.error('Error convirtiendo hora a formato 24h:', error);
+    return '';
+  }
+};
+
+/**
+ * Convierte una hora en formato 24 horas (HH:MM) a formato 12 horas (HH:MM AM/PM)
+ * 
+ * @param time24h - Hora en formato 24 horas (ej: "20:30")
+ * @returns String en formato HH:MM AM/PM
+ */
+export const convertTo12Hour = (time24h: string): string => {
+  if (!time24h) return '';
+  
+  try {
+    // Manejar diferentes formatos que pueden venir de la BD
+    let timeStr = time24h;
+    
+    // Si viene con segundos, removerlos (ej: "14:30:00" -> "14:30")
+    if (timeStr.includes(':') && timeStr.split(':').length === 3) {
+      const parts = timeStr.split(':');
+      timeStr = `${parts[0]}:${parts[1]}`;
+    }
+    
+    // Si viene como Date string, extraer solo la parte de tiempo
+    if (timeStr.includes('T')) {
+      const dateObj = new Date(timeStr);
+      timeStr = dateObj.toLocaleTimeString('en-GB', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      });
+    }
+    
+    const [hours, minutes] = timeStr.split(':');
+    if (!hours || !minutes) return '';
+    
+    const hour24 = parseInt(hours, 10);
+    
+    if (isNaN(hour24) || hour24 < 0 || hour24 > 23) return '';
+    
+    const ampm = hour24 >= 12 ? 'PM' : 'AM';
+    const hour12 = hour24 % 12 || 12;
+    
+    return `${hour12}:${minutes} ${ampm}`;
+  } catch (error) {
+    console.error('Error convirtiendo hora a formato 12h:', error);
+    return '';
+  }
+};
+
+/**
+ * Convierte una hora en formato HH:MM a DateTime para Prisma
+ * Esta función es específica para campos TIME en MySQL usando Prisma
+ * 
+ * @param timeValue - Hora en formato HH:MM o Date string
+ * @returns Date object compatible con Prisma para campos TIME, o null si no es válida
+ */
+export const formatTimeForPrisma = (timeValue: string | null | undefined): Date | null => {
+  if (!timeValue || timeValue.trim() === '') return null;
+  
+  try {
+    let cleanTime = timeValue.trim();
+    
+    // Si viene como Date string, extraer solo HH:MM
+    if (timeValue.includes('T') || timeValue.includes('Z')) {
+      const date = new Date(timeValue);
+      cleanTime = date.toLocaleTimeString('en-GB', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        hour12: false 
+      });
+    }
+    
+    // Validar formato HH:MM
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(cleanTime)) {
+      console.warn(`Formato de hora inválido: ${timeValue}`);
+      return null;
+    }
+    
+    // Crear un DateTime con fecha base y la hora especificada
+    // Usamos 1970-01-01 como fecha base para campos TIME en MySQL
+    const [hours, minutes] = cleanTime.split(':');
+    const dateTime = new Date('1970-01-01T00:00:00.000Z');
+    dateTime.setUTCHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+    
+    return dateTime;
+  } catch (error) {
+    console.error('Error formateando hora para Prisma:', error);
+    return null;
+  }
+};
+
+/**
+ * Valida si una hora está en formato correcto HH:MM
+ * 
+ * @param timeValue - Hora a validar
+ * @returns boolean - true si la hora es válida
+ */
+export const isValidTimeFormat = (timeValue: string | null | undefined): boolean => {
+  if (!timeValue || timeValue.trim() === '') return false;
+  
+  try {
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    return timeRegex.test(timeValue.trim());
+  } catch (error) {
+    return false;
+  }
+};

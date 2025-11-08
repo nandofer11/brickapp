@@ -438,13 +438,13 @@ export default function ProductosPage() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="precio">Precio Unitario (S/.) *</Label>
+                                <Label htmlFor="precio">Precio Base (S/.) *</Label>
                                 <Input
                                     id="precio"
                                     type="number"
                                     step="0.01"
                                     min="0.01"
-                                    placeholder="Ej: 25.50"
+                                    placeholder="Ej: 0.85"
                                     value={currentProducto.precio_unitario || ""}
                                     onChange={(e) => {
                                         const value = e.target.value;

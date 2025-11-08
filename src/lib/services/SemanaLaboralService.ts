@@ -5,8 +5,8 @@ const semanaLaboralRepository = new SemanaLaboralRepository();
 
 export class SemanaLaboralService {
   
-  async findAllByIdEmpresa(id_empresa: number) {
-    return await semanaLaboralRepository.findAllByIdEmpresa(id_empresa);
+  async findAllByIdEmpresa(id_empresa: number, limit?: number) {
+    return await semanaLaboralRepository.findAllByIdEmpresa(id_empresa, limit);
   }
 
    async findByEmpresaAndEstado(id_empresa: number, estado: number) {

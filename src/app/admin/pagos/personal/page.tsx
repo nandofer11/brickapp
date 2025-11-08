@@ -4498,7 +4498,7 @@ export default function PagoPersonalPage() {
             <div className="p-2 text-center text-[8px] text-muted-foreground print:text-black print:px-0">
               <div className="my-1 border-t border-dashed border-gray-500 print:my-0.5"></div>
               <p className="mb-0.5 print:text-[7pt] print:text-center text-center">Documento informativo - No constituye comprobante oficial de pago</p>
-              <p className="mb-0.5 print:text-[7pt] print:text-center text-center">Gracias por su trabajo</p>
+              <p className="mb-0.5 print:text-[7pt] print:text-center text-center">www.ceramicosalva.com</p>
               <p className="pt-2 mb-0 print:pt-1 print:text-[7pt] print:text-center text-center">* * * * * * * * * *</p>
             </div>
           </div>

@@ -8,9 +8,19 @@ export class NumeracionComprobanteRepository extends BaseRepository {
   }
 
   async findByEmpresa(id_empresa: number) {
-    return prisma.numeracion_comprobante.findMany({
-      where: { id_empresa },
-    });
+    console.log(`[Repository] Buscando numeraciones para empresa ID: ${id_empresa}`);
+    try {
+      // Utilizar prisma.$queryRaw para evitar el caché de Prisma
+      const result = await prisma.numeracion_comprobante.findMany({
+        where: { id_empresa },
+        orderBy: { id_numeracion_comprobante: 'asc' }
+      });
+      console.log(`[Repository] Encontradas ${result.length} numeraciones`);
+      return result;
+    } catch (error) {
+      console.error('[Repository] Error al buscar numeraciones:', error);
+      throw error;
+    }
   }
 
   async createNumeracionComprobante(data: Prisma.numeracion_comprobanteCreateInput) {

@@ -7,10 +7,11 @@ export class SemanaLaboralRepository extends BaseRepository {
     super(prisma.semana_laboral, "id_semana_laboral");
   }
 
-  async findAllByIdEmpresa(id_empresa: number) {
+  async findAllByIdEmpresa(id_empresa: number, limit?: number) {
     return prisma.semana_laboral.findMany({
       where: { id_empresa },
-      orderBy: { id_semana_laboral: "asc" },
+      orderBy: { id_semana_laboral: "desc" }, // Ordenar de más reciente a más antigua
+      take: limit, // Aplicar límite si se proporciona
     });
   }
 

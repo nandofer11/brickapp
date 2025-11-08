@@ -68,46 +68,29 @@ model cargo_coccion {
 }
 
 model coccion {
-  id_coccion                       Int                @id @default(autoincrement())
+  id_coccion                       Int             @id @default(autoincrement())
   semana_laboral_id_semana_laboral Int?
-  fecha_encendido                  DateTime           @db.Date
-  hora_inicio                      DateTime?          @db.Time(0)
-  fecha_apagado                    DateTime?          @db.Date
-  hora_fin                         DateTime?          @db.Time(0)
+  fecha_encendido                  DateTime        @db.Date
+  hora_inicio                      DateTime?       @db.Time(0)
+  fecha_apagado                    DateTime?       @db.Date
+  hora_fin                         DateTime?       @db.Time(0)
   humedad_inicial                  Int?
-  estado                           String?            @db.VarChar(45)
+  estado                           String?         @db.VarChar(45)
   horno_id_horno                   Int
-  humeada                          Boolean?           @default(false)
-  quema                            Boolean?           @default(false)
-  hora_inicio_quema                DateTime?          @db.Time(0)
-  created_at                       DateTime           @default(now()) @db.DateTime(0)
-  updated_at                       DateTime           @default(now()) @db.DateTime(0)
+  humeada                          Boolean?        @default(false)
+  quema                            Boolean?        @default(false)
+  hora_inicio_quema                DateTime?       @db.Time(0)
+  created_at                       DateTime        @default(now()) @db.DateTime(0)
+  updated_at                       DateTime        @default(now()) @db.DateTime(0)
   id_empresa                       Int
-  empresa                          empresa            @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_coccion_empresa")
-  horno                            horno              @relation(fields: [horno_id_horno], references: [id_horno], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_horno1")
-  semana_laboral                   semana_laboral?    @relation(fields: [semana_laboral_id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, onUpdate: NoAction, map: "fk_semana_trabajo_id_semana_trabajo")
+  empresa                          empresa         @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_coccion_empresa")
+  horno                            horno           @relation(fields: [horno_id_horno], references: [id_horno], onDelete: NoAction, onUpdate: NoAction, map: "fk_coccion_horno1")
+  semana_laboral                   semana_laboral? @relation(fields: [semana_laboral_id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, onUpdate: NoAction, map: "fk_semana_trabajo_id_semana_trabajo")
   coccion_turno                    coccion_turno[]
-  consumo_material                 consumo_material[]
 
   @@index([horno_id_horno], map: "fk_coccion_horno1_idx")
   @@index([semana_laboral_id_semana_laboral], map: "fk_semana_trabajo_id_semana_trabajo_idx")
   @@index([id_empresa], map: "FK_coccion_empresa_idx")
-}
-
-model consumo_material {
-  id_consumo_material  Int       @id @default(autoincrement())
-  timestamp            DateTime? @db.Timestamp(0)
-  material_id_material Int
-  personal_id_personal Int
-  coccion_id_coccion   Int
-  cantidad_consumida   Int?
-  coccion              coccion   @relation(fields: [coccion_id_coccion], references: [id_coccion], onDelete: Cascade, map: "fk_consumo_material_coccion1")
-  material             material  @relation(fields: [material_id_material], references: [id_material], onDelete: NoAction, onUpdate: NoAction, map: "fk_consumo_material_material1")
-  personal             personal  @relation(fields: [personal_id_personal], references: [id_personal], onDelete: NoAction, onUpdate: NoAction, map: "fk_consumo_material_personal1")
-
-  @@index([coccion_id_coccion], map: "fk_consumo_material_coccion1_idx")
-  @@index([material_id_material], map: "fk_consumo_material_material1_idx")
-  @@index([personal_id_personal], map: "fk_consumo_material_personal1_idx")
 }
 
 model empresa {
@@ -128,6 +111,7 @@ model empresa {
   cliente                cliente[]
   coccion                coccion[]
   horno                  horno[]
+  ingreso_material       ingreso_material[]
   numeracion_comprobante numeracion_comprobante[]
   personal               personal[]
   producto               producto[]
@@ -153,17 +137,6 @@ model horno {
   @@index([id_empresa], map: "FK_horno_empresa_idx")
 }
 
-model material {
-  id_material             Int                       @id @default(autoincrement())
-  nombre                  String                    @db.VarChar(45)
-  unidad_medida           String                    @db.VarChar(45)
-  descripcion             String?                   @db.VarChar(100)
-  created_at              DateTime                  @default(now()) @db.DateTime(0)
-  updated_at              DateTime                  @default(now()) @db.DateTime(0)
-  consumo_material        consumo_material[]
-  detalle_compra_material detalle_compra_material[]
-}
-
 model personal {
   id_personal          Int                    @id @default(autoincrement())
   dni                  String                 @db.VarChar(8)
@@ -182,7 +155,6 @@ model personal {
   updated_at           DateTime               @default(now()) @db.DateTime(0)
   adelanto_pago        adelanto_pago[]
   asistencia           asistencia[]
-  consumo_material     consumo_material[]
   descuento_personal   descuento_personal[]
   pago_personal_semana pago_personal_semana[]
   empresa              empresa?               @relation(fields: [id_empresa], references: [id_empresa], map: "personal_ibfk_1")
@@ -192,17 +164,17 @@ model personal {
 }
 
 model proveedor {
-  id_proveedor    Int               @id @default(autoincrement())
-  tipo_documento  String            @db.VarChar(45)
-  nro_documento   String            @unique(map: "nro_documento_UNIQUE") @db.VarChar(11)
-  nombre          String            @db.VarChar(45)
-  ciudad          String            @db.VarChar(45)
-  telefono        String?           @db.VarChar(45)
-  celular         String?           @db.VarChar(9)
-  email           String?           @db.VarChar(45)
-  created_at      DateTime          @default(now()) @db.DateTime(0)
-  updated_at      DateTime          @default(now()) @db.DateTime(0)
-  compra_material compra_material[]
+  id_proveedor     Int                @id @default(autoincrement())
+  tipo_documento   String?            @db.VarChar(45)
+  nro_documento    String?            @unique(map: "nro_documento_UNIQUE") @db.VarChar(11)
+  nombre           String             @db.VarChar(45)
+  ciudad           String?            @db.VarChar(45)
+  telefono         String?            @db.VarChar(45)
+  celular          String?            @db.VarChar(9)
+  email            String?            @db.VarChar(45)
+  created_at       DateTime           @default(now()) @db.DateTime(0)
+  updated_at       DateTime           @default(now()) @db.DateTime(0)
+  ingreso_material ingreso_material[]
 }
 
 model rol {
@@ -231,20 +203,21 @@ model tarjeta_bancaria {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model usuario {
-  id_usuario      Int         @id @default(autoincrement())
-  nombre_completo String      @db.VarChar(255)
-  usuario         String      @unique(map: "usuario_UNIQUE") @db.VarChar(255)
-  contrasena      String      @db.VarChar(255)
-  email           String?     @db.VarChar(255)
-  celular         String?     @db.VarChar(255)
-  id_rol          Int
-  id_empresa      Int
-  created_at      DateTime    @default(now()) @db.DateTime(0)
-  updated_at      DateTime    @default(now()) @db.DateTime(0)
-  auditoria       auditoria[]
-  rol             rol         @relation(fields: [id_rol], references: [id_rol], onDelete: NoAction, map: "usuario_ibfk_63")
-  empresa         empresa     @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "usuario_ibfk_64")
-  venta           venta[]
+  id_usuario       Int                @id @default(autoincrement())
+  nombre_completo  String             @db.VarChar(255)
+  usuario          String             @unique(map: "usuario_UNIQUE") @db.VarChar(255)
+  contrasena       String             @db.VarChar(255)
+  email            String?            @db.VarChar(255)
+  celular          String?            @db.VarChar(255)
+  id_rol           Int
+  id_empresa       Int
+  created_at       DateTime           @default(now()) @db.DateTime(0)
+  updated_at       DateTime           @default(now()) @db.DateTime(0)
+  auditoria        auditoria[]
+  ingreso_material ingreso_material[]
+  rol              rol                @relation(fields: [id_rol], references: [id_rol], onDelete: NoAction, map: "usuario_ibfk_63")
+  empresa          empresa            @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, map: "usuario_ibfk_64")
+  venta            venta[]
 
   @@index([id_rol], map: "id_rol")
   @@index([id_empresa], map: "id_empresa")
@@ -252,8 +225,10 @@ model usuario {
 
 model permiso {
   id_permiso  Int           @id @default(autoincrement())
+  codigo      String        @unique(map: "codigo") @db.VarChar(100)
   nombre      String        @unique(map: "nombre_UNIQUE") @db.VarChar(45)
   descripcion String?       @db.VarChar(250)
+  categoria   String        @default("General") @db.VarChar(50)
   created_at  DateTime      @default(now()) @db.DateTime(0)
   updated_at  DateTime      @default(now()) @db.DateTime(0)
   rol_permiso rol_permiso[]
@@ -314,22 +289,6 @@ model cliente {
   @@index([id_empresa], map: "FK_cliente_empresa_idx")
 }
 
-model compra_material {
-  id_compra_material      Int                       @id @default(autoincrement())
-  id_proveedor            Int
-  fecha_compra            DateTime                  @db.Date
-  total                   Decimal                   @db.Decimal(10, 2)
-  estado_pago             String                    @db.VarChar(45)
-  observacion             String?                   @db.Text
-  created_at              DateTime                  @default(now()) @db.DateTime(0)
-  updated_at              DateTime                  @default(now()) @db.DateTime(0)
-  proveedor               proveedor                 @relation(fields: [id_proveedor], references: [id_proveedor], onDelete: NoAction, onUpdate: NoAction, map: "fk_compra_proveedor1")
-  detalle_compra_material detalle_compra_material[]
-  pago_compra_material    pago_compra_material[]
-
-  @@index([id_proveedor], map: "fk_compra_proveedor1_idx")
-}
-
 model comprobante_venta {
   id_comprobante_venta Int       @id @default(autoincrement())
   id_venta             Int
@@ -343,21 +302,6 @@ model comprobante_venta {
   venta                venta     @relation(fields: [id_venta], references: [id_venta], onDelete: NoAction, onUpdate: NoAction, map: "FK_venta_comprobante_venta")
 
   @@index([id_venta], map: "FK_venta_comprobante_venta_idx")
-}
-
-model detalle_compra_material {
-  id_detalle_compra  Int             @id @default(autoincrement())
-  id_compra_material Int
-  id_material        Int
-  cantidad           Int
-  precio_unitario    Decimal         @db.Decimal(5, 2)
-  subtotal           Decimal         @db.Decimal(10, 2)
-  observacion        String?         @db.VarChar(150)
-  material           material        @relation(fields: [id_material], references: [id_material], onDelete: NoAction, onUpdate: NoAction, map: "fk_proveedor_detalle_compra_material")
-  compra_material    compra_material @relation(fields: [id_compra_material], references: [id_compra_material], onDelete: Cascade, map: "fk_proveedor_detalle_compra_material_compra_material")
-
-  @@index([id_compra_material], map: "fk_proveedor_detalle_compra_material_compra_material_idx")
-  @@index([id_material], map: "fk_proveedor_detalle_compra_material_material_idx")
 }
 
 model detalle_venta {
@@ -394,19 +338,6 @@ model numeracion_comprobante {
   empresa                   empresa @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_numeracion_comprobante")
 
   @@index([id_empresa], map: "FK_empresa_numeracion_comprobante_idx")
-}
-
-model pago_compra_material {
-  id_pago_compra_material Int             @id @default(autoincrement())
-  id_compra_material      Int
-  fecha_pago              DateTime        @db.Date
-  monto_pagado            Decimal         @db.Decimal(10, 2)
-  metodo_pago             String          @db.VarChar(20)
-  observacion             String?         @db.VarChar(150)
-  created_at              DateTime        @default(now()) @db.DateTime(0)
-  compra_material         compra_material @relation(fields: [id_compra_material], references: [id_compra_material], onDelete: Cascade, map: "FK_pago_compra_material")
-
-  @@index([id_compra_material], map: "FK_pago_compra_material_idx")
 }
 
 model producto {
@@ -462,26 +393,28 @@ model servicio_venta {
 }
 
 model venta {
-  id_venta          Int                 @id @default(autoincrement())
-  id_cliente        Int
-  id_usuario        Int
-  id_empresa        Int
-  fecha_venta       DateTime            @db.Date
-  tipo_venta        String              @db.VarChar(45)
-  forma_pago        String              @db.VarChar(45)
-  estado_pago       String              @db.VarChar(45)
-  estado_entrega    String              @db.VarChar(45)
-  total             Decimal             @db.Decimal(10, 2)
-  adelanto          Decimal?            @default(0.00) @db.Decimal(10, 2)
-  saldo_pendiente   Decimal?            @default(0.00) @db.Decimal(10, 2)
-  observaciones     String?             @db.Text
-  comprobante_venta comprobante_venta[]
-  detalle_venta     detalle_venta[]
-  entrega_venta     entrega_venta[]
-  servicio_venta    servicio_venta[]
-  cliente           cliente             @relation(fields: [id_cliente], references: [id_cliente], onDelete: NoAction, onUpdate: NoAction, map: "FK_cliente_venta")
-  empresa           empresa             @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_venta")
-  usuario           usuario             @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "FK_usuario_venta")
+  id_venta               Int                 @id @default(autoincrement())
+  id_cliente             Int
+  id_usuario             Int
+  id_empresa             Int
+  fecha_venta            DateTime            @db.Date
+  fecha_estimada_entrega DateTime?           @db.Date
+  tipo_venta             String              @db.VarChar(45)
+  forma_pago             String              @db.VarChar(45)
+  estado_pago            String              @db.VarChar(45)
+  estado_entrega         String              @db.VarChar(45)
+  total                  Decimal             @db.Decimal(10, 2)
+  adelanto               Decimal?            @default(0.00) @db.Decimal(10, 2)
+  saldo_pendiente        Decimal?            @default(0.00) @db.Decimal(10, 2)
+  observaciones          String?             @db.Text
+  estado_venta           venta_estado_venta  @default(ACTIVA)
+  comprobante_venta      comprobante_venta[]
+  detalle_venta          detalle_venta[]
+  entrega_venta          entrega_venta[]
+  servicio_venta         servicio_venta[]
+  cliente                cliente             @relation(fields: [id_cliente], references: [id_cliente], onDelete: NoAction, onUpdate: NoAction, map: "FK_cliente_venta")
+  empresa                empresa             @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_empresa_venta")
+  usuario                usuario             @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "FK_usuario_venta")
 
   @@index([id_cliente], map: "FK_cliente_idx")
   @@index([id_empresa], map: "FK_empresa_venta_idx")
@@ -524,7 +457,7 @@ model descuento_personal {
 
 model pago_personal_semana {
   id_pago_personal_semana Int            @id @default(autoincrement())
-  id_personal             Int
+  id_personal             Int?
   id_semana_laboral       Int
   dias_completos          Int
   costo_pago_diario       Decimal?       @db.Decimal(6, 2)
@@ -540,7 +473,9 @@ model pago_personal_semana {
   forma_pago              String         @default("EFECTIVO") @db.VarChar(45)
   created_at              DateTime       @default(now()) @db.DateTime(0)
   updated_at              DateTime       @default(now()) @db.DateTime(0)
-  personal                personal       @relation(fields: [id_personal], references: [id_personal], onDelete: NoAction, onUpdate: NoAction, map: "FK_pago_personal_semana_personal")
+  es_personal_externo     Boolean        @default(false)
+  nombre_personal_externo String?        @db.VarChar(100)
+  personal                personal?      @relation(fields: [id_personal], references: [id_personal], onDelete: NoAction, onUpdate: NoAction, map: "FK_pago_personal_semana_personal")
   semana_laboral          semana_laboral @relation(fields: [id_semana_laboral], references: [id_semana_laboral], onDelete: NoAction, onUpdate: NoAction, map: "FK_pago_personal_semana_semana_laboral")
 
   @@index([id_personal], map: "FK_pago_personal_semana_personal_idx")
@@ -608,8 +543,47 @@ model adelanto_pago_detalle {
   @@index([id_semana_laboral], map: "FK_adelanto_pago_detalle_semana_laboral_idx")
 }
 
+model ingreso_material {
+  id_ingreso_material Int                            @id @default(autoincrement())
+  tipo_material       ingreso_material_tipo_material
+  id_proveedor        Int?
+  id_usuario          Int
+  id_empresa          Int
+  fecha_ingreso       DateTime                       @db.Date
+  cantidad            Decimal                        @db.Decimal(10, 2)
+  precio_unitario     Decimal?                       @db.Decimal(10, 2)
+  total               Decimal?                       @db.Decimal(10, 2)
+  estado_pago         ingreso_material_estado_pago?  @default(PENDIENTE)
+  observaciones       String?                        @db.Text
+  created_at          DateTime?                      @default(now()) @db.DateTime(0)
+  updated_at          DateTime?                      @default(now()) @db.DateTime(0)
+  empresa             empresa                        @relation(fields: [id_empresa], references: [id_empresa], onDelete: NoAction, onUpdate: NoAction, map: "FK_ingreso_material_empresa")
+  proveedor           proveedor?                     @relation(fields: [id_proveedor], references: [id_proveedor], onDelete: NoAction, onUpdate: NoAction, map: "FK_ingreso_material_proveedor")
+  usuario             usuario                        @relation(fields: [id_usuario], references: [id_usuario], onDelete: NoAction, onUpdate: NoAction, map: "FK_ingreso_material_usuario")
+
+  @@index([id_empresa], map: "FK_ingreso_material_empresa")
+  @@index([id_proveedor], map: "FK_ingreso_material_proveedor")
+  @@index([id_usuario], map: "FK_ingreso_material_usuario")
+}
+
 enum asistencia_estado {
   A
   I
   M
+}
+
+enum venta_estado_venta {
+  ACTIVA
+  CERRADA
+  ANULADA
+}
+
+enum ingreso_material_estado_pago {
+  PENDIENTE
+  CANCELADO
+}
+
+enum ingreso_material_tipo_material {
+  CASCARILLA
+  ARCILLA
 }

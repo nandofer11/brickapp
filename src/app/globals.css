@@ -168,3 +168,39 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Estilos para impresión térmica */
+@media print {
+  .thermal-table thead tr,
+  .thermal-table tbody tr {
+    border: none !important;
+  }
+  
+  .thermal-table th,
+  .thermal-table td {
+    padding: 0 2px !important;
+  }
+  
+  /* Anchos de columnas para tablas */
+  .col-fecha {
+    width: 25%;
+    text-align: left;
+  }
+  
+  .col-cargo {
+    width: 50%;
+    text-align: left;
+  }
+  
+  .col-monto {
+    width: 25%;
+    text-align: right;
+  }
+  
+  /* Eliminar espacios entre párrafos en impresión */
+  .header-no-space p {
+    margin: 0 !important;
+    padding: 0 !important;
+    line-height: 1.2 !important;
+  }
+}

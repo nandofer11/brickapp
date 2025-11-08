@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from "next";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../auth/[...nextauth]";
 import AsistenciaService from "@/lib/services/AsistenciaService";
+import { prisma } from "@/lib/prisma";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const session = await getServerSession(req, res, authOptions);
@@ -28,6 +29,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const idSemana = req.query.id_semana ? parseInt(req.query.id_semana as string, 10) : null;
         const idPersonal = req.query.id_personal ? parseInt(req.query.id_personal as string, 10) : null;
         const fecha = req.query.fecha as string | undefined;
+        const fechaInicio = req.query.fechaInicio as string | undefined;
+        const fechaFin = req.query.fechaFin as string | undefined;
+
+        // Filtro por rango de fechas
+        if (fechaInicio && fechaFin) {
+          const inicio = new Date(fechaInicio);
+          const fin = new Date(fechaFin);
+          // Ajustar fecha fin para incluir todo el día
+          fin.setHours(23, 59, 59, 999);
+          
+          const asistenciasPorRango = await prisma.asistencia.findMany({
+            where: {
+              fecha: {
+                gte: inicio,
+                lte: fin,
+              },
+              personal: {
+                id_empresa,
+              },
+            },
+            include: {
+              personal: true,
+              semana_laboral: true,
+            },
+            orderBy: {
+              fecha: "asc",
+            },
+          });
+          return res.status(200).json(asistenciasPorRango);
+        }
 
         // Filtro por fecha y semana
         if (idSemana && fecha) {

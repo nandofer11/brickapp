@@ -900,11 +900,11 @@ export default function VentaPage() {
         {/* Panel Izquierdo: Formulario de Venta */}
         <div className="lg:col-span-2">
           <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-gray-50 mb-16 lg:mb-0 p-0">
-            <CardHeader className="py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-t-lg">
+            <CardHeader className="py-2 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-t-lg">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                 <div>
                   <CardTitle className="text-xl font-bold">Nueva Venta</CardTitle>
-                  <p className="text-blue-100 text-sm">
+                  <p className="text-gray-100 text-sm">
                     Completa para registrar venta directa o contrato.
                   </p>
                 </div>
@@ -932,9 +932,9 @@ export default function VentaPage() {
               {/* FILA 1: CONFIGURACIÓN Y CLIENTE */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* SECCIÓN 1: TIPO DE VENTA Y COMPROBANTE */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <h3 className="text-sm font-semibold text-blue-800 mb-2 flex items-center">
-                    <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                    <div className="w-2 h-2 bg-gray-600 rounded-full mr-2"></div>
                     Configuración de Venta
                   </h3>
                   
@@ -951,7 +951,7 @@ export default function VentaPage() {
                           }
                         }}
                       >
-                        <SelectTrigger className="bg-white border-blue-200 focus:border-blue-400">
+                        <SelectTrigger className="bg-white border-gray-200 focus:border-gray-400">
                           <SelectValue placeholder="Seleccionar tipo" />
                         </SelectTrigger>
                         <SelectContent>
@@ -969,9 +969,9 @@ export default function VentaPage() {
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
-                              className="w-full justify-start bg-white border-blue-200 focus:border-blue-400"
+                              className="w-full justify-start bg-white border-gray-200 focus:border-gray-400"
                             >
-                              <CalendarIcon className="mr-2 h-4 w-4 text-blue-600" />
+                              <CalendarIcon className="mr-2 h-4 w-4 text-gray-600" />
                               {fechaEstimadaEntrega ? format(fechaEstimadaEntrega, "dd/MM/yyyy", { locale: es }) : "Seleccionar fecha"}
                             </Button>
                           </PopoverTrigger>
@@ -990,7 +990,7 @@ export default function VentaPage() {
                     )}
 
                     {/* Comprobante */}
-                    <div className="mt-2 pt-2 border-t border-blue-200">
+                    <div className="mt-2 pt-2 border-t border-gray-200">
                       <Label className="text-sm font-medium text-gray-700 mb-1 block">Comprobante</Label>
                       <div className="grid grid-cols-3 gap-2">
                         <Select value={comprobanteSeleccionado?.id_numeracion_comprobante.toString() || ""} onValueChange={(value) => {
@@ -1000,7 +1000,7 @@ export default function VentaPage() {
                             seleccionarComprobante(comprobante);
                           }
                         }}>
-                          <SelectTrigger className="bg-white border-blue-200">
+                          <SelectTrigger className="bg-white border-gray-200">
                             <SelectValue placeholder="Tipo" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1022,16 +1022,16 @@ export default function VentaPage() {
                 </div>
 
                 {/* SECCIÓN 2: CLIENTE */}
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <h3 className="text-sm font-semibold text-green-800 mb-2 flex items-center">
-                    <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                    <div className="w-2 h-2 bg-gray-600 rounded-full mr-2"></div>
                     Información del Cliente
                   </h3>
                   
                   <div className="space-y-3">
                     <div className="flex gap-2">
                       <Input
-                        className="bg-white border-green-200 flex-1"
+                        className="bg-white border-gray-200 flex-1"
                         disabled
                         placeholder="No hay cliente seleccionado"
                         value={clienteSeleccionado ? 
@@ -1042,7 +1042,7 @@ export default function VentaPage() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => setShowClienteModal(true)}
-                        className="bg-green-600 text-white hover:bg-green-700 border-green-600"
+                        className="bg-gray-600 text-white hover:bg-gray-700 border-gray-600"
                       >
                         <UserSearch className="h-4 w-4 mr-1" />
                         Buscar
@@ -1051,7 +1051,7 @@ export default function VentaPage() {
                     
                     {/* Información adicional del cliente si está seleccionado */}
                     {clienteSeleccionado && (
-                      <div className="text-xs text-gray-600 bg-white p-2 rounded border border-green-200">
+                      <div className="text-xs text-gray-600 bg-white p-2 rounded border border-gray-200">
                         <div className="grid grid-cols-1 gap-1">
                           <div><strong>Tipo:</strong> {clienteSeleccionado.tipo_cliente}</div>
                           {clienteSeleccionado.direccion && (
@@ -1068,20 +1068,20 @@ export default function VentaPage() {
               </div>
 
               {/* SECCIÓN 3: PRODUCTOS */}
-              <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">
-                <h3 className="text-sm font-semibold text-orange-800 mb-2 flex items-center">
-                  <div className="w-2 h-2 bg-orange-600 rounded-full mr-2"></div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                  <div className="w-2 h-2 bg-gray-600 rounded-full mr-2"></div>
                   Selección de Productos
                 </h3>
                 
                 <Tabs value={categoriaSeleccionada} onValueChange={setCategoriaSeleccionada} className="w-full">
                   <ScrollArea className="w-full max-w-full pb-2">
-                    <TabsList className="w-max justify-start inline-flex bg-orange-100 border border-orange-200">
+                    <TabsList className="w-max justify-start inline-flex bg-gray-100 border border-gray-200">
                       {categorias.map((cat) => (
                         <TabsTrigger 
                           key={cat.id_categoria} 
                           value={cat.id_categoria.toString()}
-                          className="text-xs font-medium data-[state=active]:bg-orange-600 data-[state=active]:text-white"
+                          className="text-xs font-medium data-[state=active]:bg-gray-600 data-[state=active]:text-white"
                         >
                           {cat.nombre}
                         </TabsTrigger>
@@ -1099,13 +1099,13 @@ export default function VentaPage() {
                               variant="outline"
                               className={`h-16 flex flex-col py-1 px-2 text-xs transition-all duration-200 ${
                                 productosSeleccionados.some(ps => ps.id_producto === p.id_producto) 
-                                ? "bg-orange-100 border-orange-400 shadow-md" 
-                                : "bg-white border-orange-200 hover:bg-orange-50 hover:border-orange-300"
+                                ? "bg-gray-100 border-gray-400 shadow-md" 
+                                : "bg-white border-gray-200 hover:bg-gray-50 hover:border-gray-300"
                               }`}
                               onClick={() => setModalProducto(p)}
                             >
                               <span className="font-bold line-clamp-2 text-center mb-1">{p.nombre}</span>
-                              <span className="text-orange-700 font-semibold">S/ {Number(p.precio_unitario).toFixed(2)}</span>
+                              <span className="text-gray-700 font-semibold">S/ {Number(p.precio_unitario).toFixed(2)}</span>
                             </Button>
                           ))}
                       </div>
@@ -1115,9 +1115,9 @@ export default function VentaPage() {
               </div>
 
               {/* SECCIÓN 4: SERVICIOS ADICIONALES */}
-              <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                <h3 className="text-sm font-semibold text-purple-800 mb-2 flex items-center">
-                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                  <div className="w-2 h-2 bg-gray-600 rounded-full mr-2"></div>
                   Servicios Adicionales
                 </h3>
                 
@@ -1138,7 +1138,7 @@ export default function VentaPage() {
                           } : {})
                         }));
                       }}
-                      className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                      className="data-[state=checked]:bg-gray-600 data-[state=checked]:border-gray-600"
                     />
                     <Label htmlFor="flete" className="text-sm font-medium">🚚 Servicio de Flete</Label>
                   </div>
@@ -1156,7 +1156,7 @@ export default function VentaPage() {
                           } : {})
                         }));
                       }}
-                      className="data-[state=checked]:bg-purple-600 data-[state=checked]:border-purple-600"
+                      className="data-[state=checked]:bg-gray-600 data-[state=checked]:border-gray-600"
                     />
                     <Label htmlFor="descarga" className="text-sm font-medium">📦 Servicio de Descarga</Label>
                   </div>
@@ -1164,7 +1164,7 @@ export default function VentaPage() {
                 
                 {/* Campos condicionados */}
                 {(activarFlete || activarDescarga) && (
-                  <div className="space-y-2 p-2 bg-white rounded-lg border border-purple-200">
+                  <div className="space-y-2 p-2 bg-white rounded-lg border border-gray-200">
                     {activarFlete && (
                       <>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1172,7 +1172,7 @@ export default function VentaPage() {
                             <Label className="text-xs text-gray-600 mb-1 block">Celular de contacto</Label>
                             <Input
                               placeholder="Ej: 987654321"
-                              className="bg-white border-purple-200"
+                              className="bg-white border-gray-200"
                               value={clienteSeleccionado?.celular || ''}
                               onChange={(e) => {
                                 const value = e.target.value.replace(/\D/g, '').substring(0, 9);
@@ -1189,7 +1189,7 @@ export default function VentaPage() {
                             <Label className="text-xs text-gray-600 mb-1 block">Costo del flete (S/)</Label>
                             <Input
                               placeholder="0.00"
-                              className="bg-white border-purple-200"
+                              className="bg-white border-gray-200"
                               type="number"
                               value={servicio?.coste_flete || ''}
                               onChange={(e) =>
@@ -1202,7 +1202,7 @@ export default function VentaPage() {
                           <Label className="text-xs text-gray-600 mb-1 block">Dirección de entrega</Label>
                           <Input
                             placeholder="Ingrese la dirección completa"
-                            className="bg-white border-purple-200"
+                            className="bg-white border-gray-200"
                             value={servicio?.direccion_entrega || ''}
                             onChange={(e) =>
                               setServicio(prev => ({ ...prev!, direccion_entrega: e.target.value }))
@@ -1217,7 +1217,7 @@ export default function VentaPage() {
                         <Label className="text-xs text-gray-600 mb-1 block">Costo de descarga (S/)</Label>
                         <Input
                           placeholder="0.00"
-                          className="bg-white border-purple-200"
+                          className="bg-white border-gray-200"
                           type="number"
                           value={servicio?.coste_descarga || ''}
                           onChange={(e) =>
@@ -1231,18 +1231,18 @@ export default function VentaPage() {
               </div>
 
               {/* SECCIÓN 5: INFORMACIÓN DE PAGO */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <h3 className="text-sm font-semibold text-yellow-800 mb-2 flex items-center">
-                  <div className="w-2 h-2 bg-yellow-600 rounded-full mr-2"></div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+                  <div className="w-2 h-2 bg-gray-600 rounded-full mr-2"></div>
                   Información de Pago y Entrega
                 </h3>
                 
                 {/* Grid de información de pago - Todo en una fila */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-3 p-2 bg-white rounded-lg border border-yellow-200">
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 mb-3 p-2 bg-white rounded-lg border border-gray-200">
                   <div className="space-y-1">
                     <Label className="text-xs font-medium text-gray-700">Forma de Pago</Label>
                     <Select value={formaPago} onValueChange={(value: 'EFECTIVO' | 'TRANSFERENCIA' | 'YAPE') => setFormaPago(value)}>
-                      <SelectTrigger className="bg-white border-yellow-200 text-xs h-8">
+                      <SelectTrigger className="bg-white border-gray-200 text-xs h-8">
                         <SelectValue placeholder="Seleccionar" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1271,7 +1271,7 @@ export default function VentaPage() {
                         }
                       }}
                     >
-                      <SelectTrigger className="bg-white border-yellow-200 text-xs h-8">
+                      <SelectTrigger className="bg-white border-gray-200 text-xs h-8">
                         <SelectValue placeholder="Estado" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1289,7 +1289,7 @@ export default function VentaPage() {
                       value={estadoEntrega} 
                       onValueChange={(value: 'NO ENTREGADO' | 'PARCIAL' | 'ENTREGADO') => setEstadoEntrega(value)}
                     >
-                      <SelectTrigger className="bg-white border-yellow-200 text-xs h-8">
+                      <SelectTrigger className="bg-white border-gray-200 text-xs h-8">
                         <SelectValue placeholder="Estado" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1311,7 +1311,7 @@ export default function VentaPage() {
                         const saldo = parseFloat(String(total)) - value;
                         setSaldoPendiente(saldo >= 0 ? saldo : 0);
                       }} 
-                      className="bg-white border-yellow-200 text-xs h-8"
+                      className="bg-white border-gray-200 text-xs h-8"
                       disabled={estadoPago === 'CANCELADO' || estadoPago === 'PENDIENTE'}
                     />
                   </div>
@@ -1322,7 +1322,7 @@ export default function VentaPage() {
                       type="number" 
                       value={estadoPago === 'CANCELADO' ? 0 : (estadoPago === 'PENDIENTE' ? total : saldoPendiente)} 
                       readOnly 
-                      className="bg-gray-50 border-yellow-200 text-xs h-8"
+                      className="bg-gray-50 border-gray-200 text-xs h-8"
                     />
                   </div>
                 </div>
@@ -1335,12 +1335,12 @@ export default function VentaPage() {
                       variant="outline" 
                       size="sm" 
                       onClick={() => setShowObservacionesModal(true)}
-                      className="text-xs h-6 border-yellow-300 hover:bg-yellow-100"
+                      className="text-xs h-6 border-gray-300 hover:bg-gray-100"
                     >
                       ✏️ Editar
                     </Button>
                   </div>
-                  <div className="p-2 bg-white rounded-lg border border-yellow-200 min-h-[50px] text-sm text-gray-600">
+                  <div className="p-2 bg-white rounded-lg border border-gray-200 min-h-[50px] text-sm text-gray-600">
                     {observaciones || "Sin observaciones adicionales"}
                   </div>
                 </div>
@@ -1544,14 +1544,14 @@ export default function VentaPage() {
                 >
                   <div className={`flex items-center space-x-2 p-2 border rounded-lg transition-all ${
                     tipoPrecio === "base" 
-                      ? "border-blue-500 bg-blue-50 shadow-sm" 
+                      ? "border-gray-500 bg-gray-50 shadow-sm" 
                       : "border-gray-200 bg-gray-50 opacity-60"
                   }`}>
                     <RadioGroupItem value="base" id="precio-base" />
                     <Label htmlFor="precio-base" className="flex-1 cursor-pointer">
                       <div className="flex justify-between items-center">
                         <span className="text-xs md:text-sm">Precio Base</span>
-                        <span className="text-xs md:text-sm font-semibold text-green-600">
+                        <span className="text-xs md:text-sm font-semibold text-gray-600">
                           S/ {Number(modalProducto.precio_unitario).toFixed(2)}
                         </span>
                       </div>
@@ -1560,7 +1560,7 @@ export default function VentaPage() {
                   
                   <div className={`flex items-center space-x-2 p-2 border rounded-lg transition-all ${
                     tipoPrecio === "modificado" 
-                      ? "border-orange-500 bg-orange-50 shadow-sm" 
+                      ? "border-gray-500 bg-gray-50 shadow-sm" 
                       : "border-gray-200 bg-gray-50 opacity-60"
                   }`}>
                     <RadioGroupItem value="modificado" id="precio-modificado" />
@@ -1589,7 +1589,7 @@ export default function VentaPage() {
                         {Number(precioModificado) > Number(modalProducto.precio_unitario) ? (
                           <span className="text-amber-600 ml-1">(Aumento)</span>
                         ) : (
-                          <span className="text-green-600 ml-1">(Descuento)</span>
+                          <span className="text-gray-600 ml-1">(Descuento)</span>
                         )}
                       </div>
                     )}
@@ -1644,7 +1644,7 @@ export default function VentaPage() {
                   </div>
                   <div className="flex justify-between font-semibold border-t pt-1 mt-1">
                     <span>Subtotal:</span>
-                    <span className="text-blue-600">
+                    <span className="text-gray-600">
                       S/ {(
                         (unidad === "unidad" ? cantidad : cantidad * 1000) * 
                         (tipoPrecio === "base" 

@@ -50,7 +50,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         };
 
         // Procesar la imagen si se envió una nueva
-        if (logo && logo.startsWith('data:image/')) {
+        if (logo === "default_logo") {
+          // Usar el logo predeterminado
+          update.logo = "/images/logos/logo_color.png";
+        } else if (logo && logo.startsWith('data:image/')) {
           try {
             // Extraer información de la imagen en base64
             const matches = logo.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);

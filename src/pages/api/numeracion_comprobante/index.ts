@@ -19,7 +19,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const data = await NumeracionComprobanteService.findById(id);
           return res.status(200).json(data);
         } else {
+          console.log(`Obteniendo numeración de comprobantes para empresa ID: ${id_empresa}`);
           const data = await NumeracionComprobanteService.findByEmpresa(id_empresa);
+          console.log('Numeración de comprobantes obtenida:', JSON.stringify(data, null, 2));
           return res.status(200).json(data);
         }
 

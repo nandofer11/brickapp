@@ -94,7 +94,7 @@ function GestionUsuarios() {
   useEffect(() => {
     if (user?.id_empresa) {
       fetchUsuarios();
-      // fetchRoles();
+      fetchRoles();
     }
   }, [user]);
 
@@ -160,24 +160,22 @@ function GestionUsuarios() {
     // }
   };
 
-  // const fetchRoles = async () => {
-  //   if (!user?.id_empresa) return;
+  const fetchRoles = async () => {
+    if (!user?.id_empresa) return;
 
-  //   try {
-  //     const response = await fetch(`/api/rol?id_empresa=${user.id_empresa}`, {
-  //       headers: {
-  //         Authorization: `Bearer ${user.token}`, // Agregar token al encabezado
-  //       },
-  //     });
-  //     if (response.ok) {
-  //       const data = await response.json();
-  //       setRoles(data);
-  //     }
-  //   } catch (error) {
-  //     console.error("Error al cargar roles:", error);
-  //     toast.error("Error al cargar roles");
-  //   }
-  // };
+    try {
+      const response = await fetch(`/api/rol?id_empresa=${user.id_empresa}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRoles(data);
+      } else {
+        toast.error("No se pudieron cargar los roles");
+      }
+    } catch (error) {
+      console.error("Error al cargar roles:", error);
+      toast.error("Error al cargar roles");
+    }
+  };
 
   const fetchEmpresas = async () => {
     try {

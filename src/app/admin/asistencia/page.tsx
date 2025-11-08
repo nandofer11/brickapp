@@ -852,6 +852,9 @@ export default function AsistenciaPage() {
 
   const selectedWeek = semanas.find((s) => s.id_semana_laboral === selectedSemana)
   const daysOfWeek = selectedWeek ? getDaysOfWeek(selectedWeek.fecha_inicio, selectedWeek.fecha_fin) : []
+  // Fecha máxima seleccionable en el modal de asistencia: fin de la semana seleccionada (si existe).
+  // Evita usar la fecha "hoy" como máximo, que impedía seleccionar días futuros dentro de la semana.
+  const maxDateForAsistenciaInput = selectedWeek ? new Date(selectedWeek.fecha_fin).toISOString().split('T')[0] : undefined
 
   // Modificamos la función handleEditAsistencia
    const handleEditAsistencia = async (fecha: string) => {
@@ -1641,7 +1644,7 @@ export default function AsistenciaPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead colSpan={daysOfWeek.length + 4} className="text-center bg-muted">
+                  <TableHead colSpan={daysOfWeek.length + 5} className="text-center bg-muted">
                     {selectedWeek
                       ? `Semana del ${formatDate(selectedWeek.fecha_inicio)} al ${formatDate(selectedWeek.fecha_fin)}`
                       : "Seleccione una semana"}
@@ -1649,6 +1652,7 @@ export default function AsistenciaPage() {
                 </TableRow>
 
                 <TableRow>
+                  <TableHead className="bg-muted/50 w-12 text-center">#</TableHead>
                   <TableHead className="bg-muted/50">Empleado</TableHead>
 
                   {Array.isArray(daysOfWeek) && daysOfWeek.map((dia) => {
@@ -1701,7 +1705,7 @@ export default function AsistenciaPage() {
               </TableHeader>
 
               <TableBody>
-                {personal.map((p) => {
+                {personal.map((p, index) => {
                   let totalAsistencias = 0;
                   let totalFaltas = 0;
                   let totalMediosDias = 0;
@@ -1728,6 +1732,9 @@ export default function AsistenciaPage() {
 
                   return (
                     <TableRow key={p.id_personal}>
+                      <TableCell className="text-center font-medium text-muted-foreground w-12">
+                        {index + 1}.
+                      </TableCell>
                       <TableCell className="font-medium">{p.nombre_completo}</TableCell>
                       {asistenciaCeldas}
                       <TableCell className="text-center font-bold bg-green-200">
@@ -1801,7 +1808,9 @@ export default function AsistenciaPage() {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  max={new Date(new Date().setHours(0, 0, 0, 0)).toISOString().split("T")[0]}
+                  // Permitimos seleccionar hasta el fin de la semana seleccionada (si hay una semana seleccionada).
+                  // Antes se limitaba a la fecha de hoy, impidiendo elegir días futuros (ej. siguiente día del mes).
+                  max={maxDateForAsistenciaInput}
                   disabled={modoEdicion}
                   className="w-full text-sm h-9"
                 />

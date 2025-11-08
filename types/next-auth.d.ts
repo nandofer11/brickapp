@@ -6,11 +6,17 @@ declare module "next-auth" {
     name?: string | null;
     email?: string | null;
     usuario?: string;
-    id_empresa?: string;
-    id_rol?: string;
+    id_empresa?: number;
+    id_rol?: number;
     rol?: string;
-    razon_social?: string;
-    permisos?: any[];
+    nombre_completo?: string;
+    permisos?: string[];
+    empresa?: {
+      id_empresa?: number;
+      razon_social?: string;
+      ruc?: string;
+      direccion?: string;
+    };
   }
 
   interface Session {
