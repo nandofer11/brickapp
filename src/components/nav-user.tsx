@@ -42,7 +42,7 @@ export function NavUser({
   }
 }) {
   const { data: session } = useSession();
-  const nombre_completo = session?.user?.nombre_completo;
+  const nombre_completo = session?.user?.name;
   const cargo = session?.user?.rol;
   const { isMobile } = useSidebar();
   const router = useRouter();
@@ -58,7 +58,6 @@ export function NavUser({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
-              size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
