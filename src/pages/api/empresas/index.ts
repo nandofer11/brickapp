@@ -204,7 +204,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 data: {
                   nombre_completo,
                   usuario,
-                  contraseña: hashedPassword,
+                  contrasena: hashedPassword,
                   id_empresa: empresa.id_empresa,
                   id_rol: rolId
                 }
