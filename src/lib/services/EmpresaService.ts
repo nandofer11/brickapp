@@ -128,7 +128,7 @@ class EmpresaService {
       const usuarioNuevo = {
         nombre_completo: usuarioData.nombre_completo,
         usuario: usuarioData.usuario,
-        contraseña: contraseñaEncriptada,
+        contrasena: contraseñaEncriptada,
         id_empresa: Number(empresa.id_empresa),
         id_rol: Number(rolAdmin.id_rol),
         email: usuarioData.email || null
@@ -136,7 +136,7 @@ class EmpresaService {
       
       console.log("Datos finales para crear usuario:", {
         ...usuarioNuevo,
-        contraseña: "***ENCRIPTADA***"
+        contrasena: "***ENCRIPTADA***"
       });
       
       const usuario = await prisma.usuario.create({
