@@ -5,7 +5,7 @@ import { signIn, getSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "react-toastify";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,35 +13,15 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function LoginPage() {
-  const [usuario, setUsuario] = useState("");
+   const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const router = useRouter();
   const searchParams = useSearchParams();
-
-  // Obtener la URL de callback si existe
   const callbackUrl = searchParams?.get("callbackUrl") || "/admin/dashboard";
-
-  useEffect(() => {
-    document.title = "Iniciar Sesión";
-
-    // Verificar si ya hay un token en las cookies
-    const token = document.cookie.split("; ").find((row) => row.startsWith("next-auth.session-token="));
-    if (token) {
-      toast.info("Ya has iniciado sesión");
-      router.push("/admin/dashboard");
-    } else {
-      // Verificar si hay una sesión activa
-      getSession().then((session) => {
-        if (session) {
-          toast.info("Ya has iniciado sesión");
-          router.push("/admin/dashboard");
-        }
-      });
-    }
-  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +62,7 @@ export default function LoginPage() {
     }
   };
 
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted p-4">
       <div className="w-full max-w-sm space-y-6">
@@ -110,14 +91,28 @@ export default function LoginPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="contrasena">Contraseña</Label>
-                <Input
-                  id="contrasena"
-                  type="password"
-                  value={contrasena}
-                  onChange={(e) => setContrasena(e.target.value)}
-                  required
-                  placeholder="Ingresa tu contraseña"
-                />
+                <div className="relative">
+                  <Input
+                    id="contrasena"
+                    type={showPassword ? "text" : "password"}
+                    value={contrasena}
+                    onChange={(e) => setContrasena(e.target.value)}
+                    required
+                    placeholder="Ingresa tu contraseña"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-500 hover:text-gray-700" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-500 hover:text-gray-700" />
+                    )}
+                  </button>
+                </div>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? (
@@ -148,4 +143,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

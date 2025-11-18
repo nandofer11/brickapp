@@ -187,7 +187,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   };
   
   // Para depuración - ver la ruta actual
-  console.log("Ruta actual:", pathname);
+  // console.log("Ruta actual:", pathname);
 
   // Marcar los elementos activos basados en la ruta actual
   const navMainWithActive = data.navMain.map(item => {

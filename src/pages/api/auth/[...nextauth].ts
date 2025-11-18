@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { compare } from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
+  secret: process.env.NEXTAUTH_SECRET,
   providers: [
     CredentialsProvider({
       id: 'credentials',
@@ -39,7 +40,7 @@ export const authOptions: NextAuthOptions = {
                 id_empresa: user.empresa?.id_empresa,
                 razon_social: user.empresa?.razon_social,
                 ruc: user.empresa?.ruc,
-                direccion: user.empresa?.direccion,
+                direccion: user.empresa?.direccion || undefined,
               }
             };
 
@@ -60,15 +61,13 @@ export const authOptions: NextAuthOptions = {
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 días
+    updateAge: 24 * 60 * 60, // 24 horas
+  },
+  jwt: {
+    maxAge: 30 * 24 * 60 * 60, // 30 días
   },
   callbacks: {
-    async session({ session, token }) {
-      if (token) {
-        session.user = token.user as any;
-      }
-      return session;
-    },
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         // Incluir roles, permisos, razón social y nombre completo en el token
         const dbUser = await prisma.usuario.findUnique({
@@ -90,26 +89,53 @@ export const authOptions: NextAuthOptions = {
           id_empresa: dbUser?.id_empresa,
           id_rol: dbUser?.id_rol,
           nombre_completo: dbUser?.nombre_completo,
+          usuario: (user as any).usuario,
           rol: dbUser?.rol?.nombre || "Sin rol",
           permisos: dbUser?.rol?.rol_permiso.map((rp) => rp.permiso.nombre) || [],
           empresa: {
             id_empresa: dbUser?.empresa?.id_empresa,
             razon_social: dbUser?.empresa?.razon_social,
             ruc: dbUser?.empresa?.ruc,
-            direccion: dbUser?.empresa?.direccion
+            direccion: dbUser?.empresa?.direccion || undefined
           }
         };
-
       }
       return token;
-    }
+    },
+    async session({ session, token }) {
+      // Asegurarse de que el usuario esté disponible en la sesión
+      if (token?.user) {
+        const userData = token.user as any;
+        session.user = {
+          ...userData,
+          name: userData.nombre_completo,
+          email: `${userData.usuario}@example.com`,
+        } as any;
+      }
+      return session;
+    },
   },
   events: {
-    async signIn({ user }) {
-      console.log("Usuario conectado:", user);
+    async signIn({ user, account, profile }) {
+      console.log("Usuario conectado exitosamente:", {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        // usuario: user.usuario,
+        rol: user.rol,
+        // empresa: user.empresa?.razon_social
+      });
     },
-    async signOut({ token }) {
+    async signOut({ token, session }) {
       console.log("Usuario desconectado");
+
+      // Limpiar cualquier caché o estado persistente
+      if (typeof window !== 'undefined') {
+        // Limpiar localStorage
+        localStorage.clear();
+        // Limpiar sessionStorage  
+        sessionStorage.clear();
+      }
     }
   },
   debug: process.env.NODE_ENV === 'development'

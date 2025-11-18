@@ -1,12 +1,8 @@
 "use client"
 
 import {
-  BadgeCheck,
-  Bell,
   ChevronsUpDown,
-  CreditCard,
   LogOut,
-  Sparkles,
 } from "lucide-react"
 
 import {
@@ -17,10 +13,8 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -30,7 +24,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { useSession, signOut } from "next-auth/react"
-import { useRouter } from "next/navigation"
 
 export function NavUser({
   user,
@@ -45,11 +38,17 @@ export function NavUser({
   const nombre_completo = session?.user?.name;
   const cargo = session?.user?.rol;
   const { isMobile } = useSidebar();
-  const router = useRouter();
 
   const handleLogout = async () => {
-    await signOut({ redirect: false });
-    router.push("/auth");
+    try {
+      await signOut({
+        callbackUrl: "/auth"
+      });
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+      // Fallback en caso de error
+      window.location.href = "/auth";
+    }
   };
 
   return (
