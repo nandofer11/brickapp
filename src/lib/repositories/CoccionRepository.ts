@@ -94,9 +94,8 @@ export class CoccionRepository extends BaseRepository {
                     }
                 },
                 semana_laboral: true,
-                coccion_personal: {
+                coccion_turno: {
                     include: {
-                        personal: true,
                         cargo_coccion: true
                     }
                 }
@@ -146,7 +145,7 @@ export class CoccionRepository extends BaseRepository {
 
         return await prisma.$transaction(async (prisma) => {
             // Eliminar operadores existentes
-            await prisma.coccion_personal.deleteMany({
+            await prisma.coccion_turno.deleteMany({
                 where: { coccion_id_coccion: id_coccion }
             });
 
@@ -157,9 +156,8 @@ export class CoccionRepository extends BaseRepository {
                 include: {
                     horno: true,
                     semana_laboral: true,
-                    coccion_personal: {
+                    coccion_turno: {
                         include: {
-                            personal: true,
                             cargo_coccion: true
                         }
                     }
@@ -168,7 +166,7 @@ export class CoccionRepository extends BaseRepository {
 
             // Crear nuevos operadores
             if (operadoresData?.length) {
-                await prisma.coccion_personal.createMany({
+                await prisma.coccion_turno.createMany({
                     data: operadoresData.map(op => ({
                         ...op,
                         coccion_id_coccion: id_coccion
@@ -182,9 +180,8 @@ export class CoccionRepository extends BaseRepository {
                 include: {
                     horno: true,
                     semana_laboral: true,
-                    coccion_personal: {
+                    coccion_turno: {
                         include: {
-                            personal: true,
                             cargo_coccion: true
                         }
                     }
