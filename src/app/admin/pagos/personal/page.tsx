@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { toast } from "react-toastify";
-import { PlusCircle, Loader2, DollarSign, ClipboardList, Edit, Trash2, AlertTriangle, Eye, CreditCard, Check, AlertCircle, Printer } from "lucide-react";
+import { PlusCircle, Loader2, DollarSign, ClipboardList, Edit, Trash2, AlertTriangle, Eye, CreditCard, Check, AlertCircle, Printer, FileText } from "lucide-react";
 import { useAuthContext } from "@/context/AuthContext";
 
 // Estilos inline para impresión térmica
@@ -25,6 +25,21 @@ const thermalPrintStyles = `
     text-align: center !important;
   }
   
+  /* Recibo térmico específico */
+  .thermal-receipt {
+    width: 80mm !important;
+    font-size: 8pt !important;
+    margin: 0 !important;
+    padding: 2mm !important;
+  }
+  
+  .thermal-signatures {
+    width: 80mm !important;
+    font-size: 8pt !important;
+    margin: 0 !important;
+    padding: 2mm !important;
+  }
+  
   /* Hacer todas las líneas continuas, delgadas y bien visibles */
   .border-t, .border-b, .border-dashed, .border-gray-500, .border-gray-300, .border-gray-100 {
     border-color: #555 !important;
@@ -42,21 +57,20 @@ const thermalPrintStyles = `
     width: 100% !important;
     visibility: visible !important;
   }
-  }
   
   /* Ajustes para tablas de impresión térmica */
   .thermal-table {
     width: 100% !important;
     border-collapse: collapse !important;
     table-layout: fixed !important;
-    margin-bottom: 1mm !important; /* Reducido de 2mm a 1mm */
+    margin-bottom: 1mm !important;
   }
   
   .thermal-table th,
   .thermal-table td {
-    padding: 0.5px 2px !important; /* Reducido de 1px a 0.5px */
+    padding: 1px 2px !important;
     text-align: left !important;
-    font-size: 9pt !important;
+    font-size: 8pt !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -74,13 +88,17 @@ const thermalPrintStyles = `
   
   .thermal-table th {
     font-weight: bold !important;
-    padding-bottom: 1px !important; /* Reducido de 2px a 1px */
+    padding-bottom: 1px !important;
   }
   
-  /* Ancho fijo para columnas */
-  .col-fecha { width: 30% !important; text-align: left !important; }
-  .col-cargo { width: 40% !important; text-align: left !important; }
-  .col-monto { width: 30% !important; text-align: right !important; }
+  /* Ancho fijo para columnas de firmas */
+  .thermal-table th:nth-child(1) { width: 15% !important; }
+  .thermal-table th:nth-child(2) { width: 55% !important; }
+  .thermal-table th:nth-child(3) { width: 30% !important; text-align: center !important; }
+  
+  .thermal-table td:nth-child(1) { width: 15% !important; text-align: left !important; }
+  .thermal-table td:nth-child(2) { width: 55% !important; text-align: left !important; }
+  .thermal-table td:nth-child(3) { width: 30% !important; text-align: center !important; }
   
   /* Alineaciones */
   .t-right { text-align: right !important; }
@@ -98,6 +116,53 @@ const thermalPrintStyles = `
   /* Separadores de secciones principales */
   .border-t-2.border-dashed.border-black,
   .border-t.border-dashed.border-gray-500 {
+    border-top: 1px solid #555 !important;
+    margin: 3mm 0 !important;
+  }
+}
+
+/* Estilos para vista previa en pantalla - simular impresora térmica */
+.thermal-receipt {
+  font-family: 'Courier New', monospace;
+  max-width: 300px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.thermal-signatures {
+  font-family: 'Courier New', monospace;
+  max-width: 300px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.thermal-receipt img,
+.thermal-signatures img {
+  max-width: 40px !important;
+  height: auto !important;
+}
+
+.thermal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.thermal-table th {
+  font-weight: bold;
+  padding: 2px;
+  border-bottom: 1px solid #ccc;
+}
+
+.thermal-table td {
+  padding: 3px 2px;
+  border-bottom: 1px dotted #ccc;
+  vertical-align: top;
+}
     border-top: 0.7px solid #333 !important;
     margin-top: 3mm !important;
     margin-bottom: 2mm !important;
@@ -450,6 +515,11 @@ export default function PagoPersonalPage() {
   const [imprimirResumenModalOpen, setImprimirResumenModalOpen] = useState(false);
   const [loadingImprimirResumen, setLoadingImprimirResumen] = useState(false);
   const impresionResumenRef = useRef<HTMLDivElement>(null);
+
+  // Estados para el modal de impresión de pagos
+  const [imprimirPagosModalOpen, setImprimirPagosModalOpen] = useState(false);
+  const reciboDetalladoRef = useRef<HTMLDivElement>(null);
+  const reciboFirmasRef = useRef<HTMLDivElement>(null);
 
   // Función para verificar si una imagen existe
   const checkImageExists = async (url: string): Promise<boolean> => {
@@ -840,7 +910,7 @@ export default function PagoPersonalPage() {
       // };
       console.log("URL de logo para impresión:", validLogoUrl);
 
-      // Crear estilos específicos para impresora térmica
+      // estilos específicos para impresora térmica
       const printStyles = `
         <style>
           /* Configuraciones básicas para impresora térmica */
@@ -3039,6 +3109,231 @@ export default function PagoPersonalPage() {
     }
   };
 
+  // Función para imprimir el recibo detallado de pagos
+  const imprimirReciboDetallado = () => {
+    if (!reciboDetalladoRef.current) {
+      toast.error("No se puede imprimir el recibo detallado");
+      return;
+    }
+
+    try {
+      toast.info("Preparando recibo detallado para impresión...");
+
+      const validLogoUrl = logoLoaded && logoUrl ? logoUrl : null;
+      
+      const printStyles = `
+        <style>
+          @page {
+            size: 80mm 297mm;
+            margin: 4mm;
+          }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 9pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
+            width: 72mm;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 6px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 4px;
+          }
+          .logo {
+            max-height: 24px;
+            margin-bottom: 4px;
+          }
+          .title {
+            font-size: 12pt;
+            font-weight: bold;
+            margin: 4px 0;
+          }
+          .subtitle {
+            font-size: 10pt;
+            margin-bottom: 2px;
+          }
+          .personal-item {
+            margin: 4px 0;
+            padding: 0;
+            page-break-inside: avoid;
+          }
+          .personal-numero {
+            font-weight: bold;
+            font-size: 9pt;
+            display: inline;
+          }
+          .personal-info {
+            width: 100%;
+          }
+          .personal-nombre {
+            font-size: 9pt;
+            font-weight: bold;
+            margin-bottom: 2px;
+          }
+          .personal-detalles {
+            font-size: 8pt;
+            color: #333;
+            line-height: 1.1;
+            margin-left: 8px;
+          }
+          .personal-total {
+            font-size: 10pt;
+            font-weight: bold;
+            text-align: right;
+            margin-top: 2px;
+          }
+          .footer {
+            margin-top: 6px;
+            text-align: center;
+            font-size: 8pt;
+            border-top: 1px solid #333;
+            padding-top: 4px;
+          }
+          .total-final {
+            font-size: 11pt;
+            font-weight: bold;
+          }
+          .separator {
+            border-bottom: 1px dotted #999;
+            margin: 2px 0;
+          }
+        </style>
+      `;
+
+      const printWindow = window.open('', '', 'height=800,width=600');
+      if (!printWindow) {
+        toast.error("Por favor, permita ventanas emergentes para imprimir");
+        return;
+      }
+
+      printWindow.document.write('<html><head><title>Recibo Detallado de Pagos</title>');
+      printWindow.document.write(printStyles);
+      printWindow.document.write('</head><body>');
+      printWindow.document.write(reciboDetalladoRef.current.innerHTML);
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.focus();
+
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+
+    } catch (error) {
+      console.error("Error al imprimir recibo detallado:", error);
+      toast.error("Error al preparar la impresión del recibo detallado");
+    }
+  };
+
+  // Función para imprimir el recibo de firmas
+  const imprimirReciboFirmas = () => {
+    if (!reciboFirmasRef.current) {
+      toast.error("No se puede imprimir el recibo de firmas");
+      return;
+    }
+
+    try {
+      toast.info("Preparando recibo de firmas para impresión...");
+
+      const validLogoUrl = logoLoaded && logoUrl ? logoUrl : null;
+      
+      const printStyles = `
+        <style>
+          @page {
+            size: 80mm 297mm;
+            margin: 4mm;
+          }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 9pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
+            width: 72mm;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+          }
+          .logo {
+            max-height: 50px;
+            margin-bottom: 10px;
+          }
+          .title {
+            font-size: 18pt;
+            font-weight: bold;
+            margin: 10px 0;
+          }
+          .subtitle {
+            font-size: 14pt;
+            margin-bottom: 5px;
+          }
+          .firma-item {
+            margin: 20px 0;
+            padding: 15px 0;
+            border-bottom: 1px dotted #999;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .firma-numero {
+            font-weight: bold;
+            font-size: 14pt;
+            margin-right: 15px;
+            min-width: 30px;
+          }
+          .firma-nombre {
+            font-size: 14pt;
+            flex: 1;
+            margin-right: 20px;
+          }
+          .firma-linea {
+            border-bottom: 2px solid #333;
+            width: 200px;
+            height: 20px;
+            text-align: center;
+            font-size: 10pt;
+            color: #666;
+          }
+          .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 11pt;
+            border-top: 1px solid #666;
+            padding-top: 15px;
+          }
+        </style>
+      `;
+
+      const printWindow = window.open('', '', 'height=800,width=600');
+      if (!printWindow) {
+        toast.error("Por favor, permita ventanas emergentes para imprimir");
+        return;
+      }
+
+      printWindow.document.write('<html><head><title>Recibo de Firmas</title>');
+      printWindow.document.write(printStyles);
+      printWindow.document.write('</head><body>');
+      printWindow.document.write(reciboFirmasRef.current.innerHTML);
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.focus();
+
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+
+    } catch (error) {
+      console.error("Error al imprimir recibo de firmas:", error);
+      toast.error("Error al preparar la impresión del recibo de firmas");
+    }
+  };
+
   // Corregir el error en la tabla duplicada
   return (
     <div className="flex flex-1 flex-col gap-6 p-6">
@@ -3169,32 +3464,40 @@ export default function PagoPersonalPage() {
           </div>
         </div>
 
-        {/* Botones en una fila en pantallas grandes, organizados en móvil */}
-        <div className="flex flex-col gap-3">
-          {/* Botones Cerrar Semana e Imprimir Resumen */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Botón de cerrar semana */}
-            <Button
-              variant="outline"
-              className={`w-full ${puedesCerrarSemana() ? 'bg-green-50 hover:bg-green-100 border-green-200' : 'bg-gray-100 text-gray-400'}`}
-              disabled={!puedesCerrarSemana()}
-              onClick={() => setShowCloseModal(true)}
-            >
-              <Check className={`mr-2 h-4 w-4 ${puedesCerrarSemana() ? 'text-green-600' : 'text-gray-400'}`} />
-              Cerrar Semana
-            </Button>
-
-            {/* Botón para imprimir PDF de la tabla */}
-            <Button
-              variant="outline"
-              className="w-full bg-blue-50 hover:bg-blue-100 border-blue-200"
-              onClick={imprimirTablaPDF}
-              disabled={resumenPagos.length === 0}
-            >
-              <Printer className="h-4 w-4 text-blue-600 mr-2" />
-              Imprimir PDF Tabla
-            </Button>
-          </div>
+        {/* Botones en una sola fila usando flex */}
+        <div className="flex flex-col md:flex-row gap-3">
+          {/* Botón Cerrar Semana */}
+          <Button
+            variant="outline"
+            className={`flex-1 ${puedesCerrarSemana() ? 'bg-green-50 hover:bg-green-100 border-green-200' : 'bg-gray-100 text-gray-400'}`}
+            disabled={!puedesCerrarSemana()}
+            onClick={() => setShowCloseModal(true)}
+          >
+            <Check className={`mr-2 h-4 w-4 ${puedesCerrarSemana() ? 'text-green-600' : 'text-gray-400'}`} />
+            Cerrar Semana
+          </Button>
+          
+          {/* Botón para imprimir PDF de la tabla */}
+          <Button
+            variant="outline"
+            className="flex-1 bg-blue-50 hover:bg-blue-100 border-blue-200"
+            onClick={imprimirTablaPDF}
+            disabled={resumenPagos.length === 0}
+          >
+            <Printer className="h-4 w-4 text-blue-600 mr-2" />
+            Imprimir PDF Tabla
+          </Button>
+          
+          {/* Botón para imprimir pagos */}
+          <Button
+            variant="outline"
+            className="flex-1 bg-green-50 hover:bg-green-100 border-green-200"
+            onClick={() => setImprimirPagosModalOpen(true)}
+            disabled={resumenPagos.length === 0}
+          >
+            <FileText className="h-4 w-4 text-green-600 mr-2" />
+            Imprimir Pagos
+          </Button>
         </div>
       </div>
 
@@ -3610,9 +3913,9 @@ export default function PagoPersonalPage() {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-base">
               ¿Está seguro que desea cerrar esta semana laboral?
-              <p className="mt-2 font-medium text-orange-600">
+              <span className="block mt-2 font-medium text-orange-600">
                 Esta acción no se puede deshacer y ya no podrá registrar nuevos pagos para esta semana.
-              </p>
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex gap-2 mt-4">
@@ -4864,6 +5167,212 @@ export default function PagoPersonalPage() {
               )}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Impresión de Pagos */}
+      <Dialog
+        open={imprimirPagosModalOpen}
+        onOpenChange={setImprimirPagosModalOpen}
+      >
+        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto p-2">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-sm">Recibos de Pago</DialogTitle>
+          </DialogHeader>
+
+          {/* Contenido del Recibo Detallado para Vista Previa Térmica */}
+          <div ref={reciboDetalladoRef} style={{ 
+            fontFamily: 'Courier New, monospace', 
+            fontSize: '10px',
+            width: '280px', 
+            backgroundColor: 'white', 
+            padding: '0px',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            lineHeight: '1.2',
+            pageBreakInside: 'avoid'
+          }}>
+            {/* Encabezado compacto */}
+            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+              {logoLoaded && logoUrl && (
+                <img src={logoUrl} alt="Logo" style={{ height: '20px', margin: '0 auto 2px' }} />
+              )}
+              <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
+                {empresa?.razon_social || "Empresa"}
+              </div>
+              <div style={{ fontSize: '9px', margin: '1px 0' }}>PAGOS PERSONAL</div>
+              <div style={{ fontSize: '8px' }}>
+                {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_inicio && semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_fin 
+                  ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}` 
+                  : 'Sin fecha'}
+              </div>
+              <div style={{ borderTop: '1px dashed #666', margin: '2px 0' }}></div>
+            </div>
+
+            {/* Lista compacta de personal */}
+            <div>
+              {resumenPagos.map((resumen, index) => (
+                <div key={resumen.id_personal} style={{ marginBottom: '4px', fontSize: '9px', pageBreakInside: 'avoid' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '1px' }}>
+                    {index + 1}. {resumen.nombre_completo}
+                  </div>
+                  <div style={{ marginLeft: '6px', lineHeight: '1.0' }}>
+                    <div>D:{resumen.dias_completos} MD:{resumen.medios_dias}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Asist:</span><span>S/{resumen.total_asistencia.toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Cocc:</span><span>S/{resumen.total_coccion.toFixed(2)}</span>
+                    </div>
+                    {resumen.total_tareas_extra > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Extra:</span><span>S/{resumen.total_tareas_extra.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {resumen.total_adelantos > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Adel:</span><span>-S/{resumen.total_adelantos.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      fontWeight: 'bold',
+                      borderTop: '1px dotted #999',
+                      paddingTop: '1px',
+                      marginTop: '1px'
+                    }}>
+                      <span>TOTAL:</span>
+                      <span>S/{(resumen.total_final - resumen.total_adelantos).toFixed(2)}</span>
+                    </div>
+                  </div>
+                  <div style={{ borderBottom: '1px dotted #ccc', margin: '2px 0' }}></div>
+                </div>
+              ))}
+            </div>
+
+            {/* Total final */}
+            <div style={{ 
+              marginTop: '4px', 
+              paddingTop: '2px', 
+              borderTop: '1px solid #333',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
+                TOTAL: S/{resumenPagos.reduce((sum, r) => sum + (r.total_final - r.total_adelantos), 0).toFixed(2)}
+              </div>
+              {/* <div style={{ fontSize: '8px', marginTop: '1px' }}>
+                Personal: {resumenPagos.length} | {new Date().toLocaleDateString()}
+              </div> */}
+            </div>
+          </div>
+
+          {/* Contenido del Recibo de Firmas (Oculto, solo para imprimir) - Optimizado para térmica 80mm */}
+          <div ref={reciboFirmasRef} style={{ 
+            display: 'none',
+            fontFamily: 'Courier New, monospace',
+            fontSize: '10px',
+            width: '280px',
+            backgroundColor: 'white',
+            padding: '0px',
+            lineHeight: '1.2',
+            pageBreakInside: 'avoid'
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+              {logoLoaded && logoUrl && (
+                <img src={logoUrl} alt="Logo" style={{ height: '20px', margin: '0 auto 2px' }} />
+              )}
+              <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
+                {empresa?.razon_social || "Empresa"}
+              </div>
+              <div style={{ fontSize: '9px', margin: '1px 0' }}>CONTROL DE PAGOS - FIRMAS</div>
+              <div style={{ fontSize: '8px' }}>
+                {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_inicio && semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_fin 
+                  ? `${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}` 
+                  : 'Sin fecha'}
+              </div>
+              <div style={{ borderTop: '1px dashed #666', margin: '2px 0' }}></div>
+            </div>
+
+            {/* Lista compacta para firmas */}
+            <div>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between',
+                fontWeight: 'bold',
+                borderBottom: '1px solid #333',
+                paddingBottom: '2px',
+                marginBottom: '4px',
+                fontSize: '9px'
+              }}>
+                <span style={{ width: '20px' }}>N°</span>
+                <span style={{ flex: '1', textAlign: 'left' }}>PERSONAL</span>
+                <span style={{ width: '60px', textAlign: 'center' }}>FIRMA</span>
+              </div>
+              
+              {resumenPagos.map((resumen, index) => (
+                <div key={resumen.id_personal} style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  borderBottom: '1px dotted #999',
+                  padding: '12px 0', // Aumentado de 6px a 12px para mayor espacio de firma
+                  fontSize: '9px',
+                  pageBreakInside: 'avoid'
+                }}>
+                  <span style={{ width: '20px', fontWeight: 'bold' }}>{index + 1}</span>
+                  <span style={{ flex: '1', textAlign: 'left', paddingRight: '4px' }}>
+                    {resumen.nombre_completo}
+                  </span>
+                  {/* <span style={{ width: '60px', textAlign: 'center', borderBottom: '1px solid #333' }}>
+                    &nbsp;
+                  </span> */}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ 
+              marginTop: '8px', 
+              paddingTop: '4px', 
+              borderTop: '1px solid #333',
+              textAlign: 'center'
+            }}>
+              {/* <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
+                Total personal: {resumenPagos.length}
+              </div>
+              <div style={{ fontSize: '8px', marginTop: '4px' }}>
+                Firmar al recibir el pago
+              </div>
+              <div style={{ fontSize: '8px', marginTop: '6px' }}>
+                <span>Responsable: </span>
+                <span style={{ borderBottom: '1px solid #333', display: 'inline-block', width: '100px' }}>
+                  &nbsp;
+                </span>
+              </div> */}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setImprimirPagosModalOpen(false)}
+            >
+              Cerrar
+            </Button>
+            <Button
+              variant="outline"
+              onClick={imprimirReciboDetallado}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Imprimir Detallado
+            </Button>
+            <Button
+              onClick={imprimirReciboFirmas}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Imprimir Listado
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
