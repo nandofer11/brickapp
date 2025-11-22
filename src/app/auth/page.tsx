@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 function LoginForm() {
-   const [usuario, setUsuario] = useState("");
+  const [usuario, setUsuario] = useState("");
   const [contrasena, setContrasena] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -42,17 +42,8 @@ function LoginForm() {
         setError(result.error);
         toast.error(result.error || "Error al iniciar sesión");
       } else if (result?.ok) {
-        // Verificar si la sesión se creó correctamente
-        const session = await getSession();
-        console.log("✅ Usuario autenticado:", session?.user);
-
-        if (session) {
-          toast.success("Inicio de sesión exitoso 🎉");
-          router.push(callbackUrl);
-        } else {
-          console.error("La sesión no se creó correctamente");
-          toast.error("Error al iniciar sesión: la sesión no se creó correctamente");
-        }
+        toast.success("Inicio de sesión exitoso 🎉");
+        router.push(callbackUrl);
       }
     } catch (err) {
       console.error("Error durante el inicio de sesión:", err);

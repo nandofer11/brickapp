@@ -19,12 +19,13 @@ import { useForm } from "react-hook-form";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { cn } from "@/lib/utils"
-import dynamic from 'next/dynamic';
 
 import { formatDate, formatTimeAMPM, formatDateForInput, formatDateWithDayName } from "@/utils/dateFormat";
 import { formatSoles } from "@/utils/currencyFormat";
 
 import { toast } from "react-toastify";
+
+import { getServerSession } from "next-auth";
 
 interface SemanaLaboral {
   id_semana_laboral: number;
@@ -1195,49 +1196,49 @@ export default function Page() {
 
       {/* Modal de Ingreso de Material */}
       <Dialog open={showIngresoMaterialModal} onOpenChange={setShowIngresoMaterialModal}>
-        <DialogContent className="">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-blue-600" />
-              Registrar Ingreso de Material
+        <DialogContent className="w-[95vw] max-w-md mx-auto my-0 max-h-[90vh] overflow-y-auto fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-4">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <Package className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <span>Registrar Ingreso de Material</span>
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm text-gray-600">
               Complete la información del material que está ingresando.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+          <div className="space-y-4 py-2">
             {/* Material - Radio Buttons */}
-            <div className="space-y-3 md:col-span-2">
+            <div className="space-y-3">
               <Label className="text-sm font-medium">Tipo de Material *</Label>
               <RadioGroup
                 value={ingresoForm.material}
                 onValueChange={(value) =>
                   setIngresoForm({ ...ingresoForm, material: value })
                 }
-                className="flex"
+                className="space-y-2"
               >
                 <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                  <RadioGroupItem value="Cascarilla" id="cascarilla" />
+                  <RadioGroupItem value="Cascarilla" id="cascarilla" className="flex-shrink-0" />
                   <Label htmlFor="cascarilla" className="flex-1 cursor-pointer">
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl">🌾</span>
-                      <div>
-                        <div className="font-medium">Cascarilla</div>
-                        <div className="text-sm text-gray-500">Material para combustión</div>
+                      <span className="text-xl flex-shrink-0">🌾</span>
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm">Cascarilla</div>
+                        <div className="text-xs text-gray-500">Material para combustión</div>
                       </div>
                     </div>
                   </Label>
                 </div>
                 
                 <div className="flex items-center space-x-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-                  <RadioGroupItem value="Arcilla" id="arcilla" />
+                  <RadioGroupItem value="Arcilla" id="arcilla" className="flex-shrink-0" />
                   <Label htmlFor="arcilla" className="flex-1 cursor-pointer">
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl">🏺</span>
-                      <div>
-                        <div className="font-medium">Arcilla</div>
-                        <div className="text-sm text-gray-500">Materia para fabricación</div>
+                      <span className="text-xl flex-shrink-0">🏺</span>
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm">Arcilla</div>
+                        <div className="text-xs text-gray-500">Materia para fabricación</div>
                       </div>
                     </div>
                   </Label>
@@ -1247,6 +1248,7 @@ export default function Page() {
 
             {/* Proveedor */}
             <div className="space-y-2">
+              <Label className="text-sm font-medium">Proveedor (Opcional)</Label>
               <Label className="text-sm font-medium">Proveedor (Opcional)</Label>
               <Select
                 value={ingresoForm.id_proveedor?.toString() || "sin_proveedor"}
@@ -1278,16 +1280,18 @@ export default function Page() {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full justify-start text-left font-normal"
+                    className="w-full justify-start text-left font-normal h-10"
                   >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {ingresoForm.fecha_ingreso ? 
-                      format(ingresoForm.fecha_ingreso, "dd/MM/yyyy", { locale: es }) : 
-                      "Seleccionar fecha"
-                    }
+                    <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">
+                      {ingresoForm.fecha_ingreso ? 
+                        format(ingresoForm.fecha_ingreso, "dd/MM/yyyy", { locale: es }) : 
+                        "Seleccionar fecha"
+                      }
+                    </span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent className="w-auto p-0" align="center">
                   <Calendar
                     mode="single"
                     selected={ingresoForm.fecha_ingreso}
@@ -1313,6 +1317,8 @@ export default function Page() {
                   setIngresoForm({ ...ingresoForm, cantidad: parseFloat(e.target.value) || 0 })
                 }
                 placeholder="0.00"
+                className="h-10"
+                inputMode="decimal"
               />
             </div>
 
@@ -1331,11 +1337,13 @@ export default function Page() {
                   })
                 }
                 placeholder="0.00"
+                className="h-10"
+                inputMode="decimal"
               />
             </div>
 
             {/* Observaciones */}
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2">
               <Label className="text-sm font-medium">Observaciones</Label>
               <Textarea
                 value={ingresoForm.observaciones || ''}
@@ -1344,21 +1352,24 @@ export default function Page() {
                 }
                 placeholder="Notas adicionales sobre el ingreso..."
                 rows={3}
+                className="min-h-[80px] resize-none"
               />
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-4">
             <Button 
               variant="outline" 
               onClick={() => setShowIngresoMaterialModal(false)}
               disabled={isSubmittingIngreso}
+              className="w-full sm:w-auto order-2 sm:order-1"
             >
               Cancelar
             </Button>
             <Button 
               onClick={handleSubmitIngresoMaterial}
               disabled={isSubmittingIngreso}
+              className="w-full sm:w-auto order-1 sm:order-2"
             >
               {isSubmittingIngreso ? (
                 <>
