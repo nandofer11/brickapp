@@ -521,6 +521,29 @@ export default function PagoPersonalPage() {
   const reciboDetalladoRef = useRef<HTMLDivElement>(null);
   const reciboFirmasRef = useRef<HTMLDivElement>(null);
 
+  const [personalSeleccionadoParaImprimir, setPersonalSeleccionadoParaImprimir] = useState<number[]>([]);
+
+    // Función para inicializar el personal seleccionado cuando se abre el modal
+  const handleOpenImprimirPagosModal = () => {
+    // Inicializar con todos los IDs del personal seleccionados por defecto
+    const todosLosIdsPersonal = (Array.isArray(pagosRealizados) ? pagosRealizados : [])
+      .filter(pago => pago.id_semana_laboral.toString() === semanaSeleccionada)
+      .map(pago => pago.id_personal || 0)
+      .filter(id => id > 0);
+    
+    setPersonalSeleccionadoParaImprimir(todosLosIdsPersonal);
+    setImprimirPagosModalOpen(true);
+  };
+
+  // Función para alternar la selección de un personal específico
+  const togglePersonalParaImprimir = (idPersonal: number) => {
+    setPersonalSeleccionadoParaImprimir(prev => 
+      prev.includes(idPersonal)
+        ? prev.filter(id => id !== idPersonal)
+        : [...prev, idPersonal]
+    );
+  };
+
   // Función para verificar si una imagen existe
   const checkImageExists = async (url: string): Promise<boolean> => {
     if (!url) return false;
@@ -756,158 +779,7 @@ export default function PagoPersonalPage() {
       // Esto asegura que usamos la URL validada previamente
       const validLogoUrl = logoLoaded && logoUrl ? logoUrl : null;
 
-      // Función para imprimir el resumen semanal
-      // const imprimirResumenSemanal = () => {
-      //   if (!impresionResumenRef.current) {
-      //     toast.error("No se puede imprimir el resumen");
-      //     return;
-      //   }
-
-      //   try {
-      //     toast.info("Preparando resumen semanal para impresión...");
-
-      //     // Contenido HTML del ticket de resumen
-      //     let contenido = impresionResumenRef.current.innerHTML;
-
-      //     // Estilos para la ventana de impresión
-      //     const printStyles = `
-      //   <style>
-      //     @page {
-      //       size: 80mm auto;
-      //       margin: 8mm;
-      //     }
-      //     body {
-      //       font-family: Arial, Helvetica, sans-serif;
-      //       font-size: 10pt;
-      //       width: 80mm;
-      //       margin: 8mm auto;
-      //       padding: 5mm;
-      //       text-align: center;
-      //     }
-      //     .header {
-      //       text-align: center;
-      //       margin-bottom: 6mm;
-      //     }
-      //     .header img {
-      //       max-height: 12mm;
-      //       margin-bottom: 3mm;
-      //     }
-      //     .title {
-      //       font-size: 14pt;
-      //       font-weight: bold;
-      //       margin: 4mm 0;
-      //       text-align: center;
-      //     }
-      //     .subtitle {
-      //       font-size: 12pt;
-      //       font-weight: bold;
-      //       margin-bottom: 4mm;
-      //       text-align: center;
-      //     }
-      //     .simple-line {
-      //       border-top: 1px solid #555;
-      //       margin: 4mm 0;
-      //       height: 0;
-      //     }
-      //     .resumen-item {
-      //       display: flex;
-      //       justify-content: space-between;
-      //       margin: 3mm 0;
-      //       text-align: left;
-      //     }
-      //     .total {
-      //       font-size: 18pt;
-      //       font-weight: bold;
-      //       text-align: center;
-      //       margin: 6mm 0;
-      //     }
-      //     .total-label {
-      //       font-size: 14pt;
-      //       font-weight: bold;
-      //       text-align: center;
-      //       margin-bottom: 3mm;
-      //     }
-      //     .footer {
-      //       text-align: center;
-      //       font-size: 8pt;
-      //       margin-top: 6mm;
-      //     }
-      //     -webkit-print-color-adjust: exact;
-      //     print-color-adjust: exact;
-      //   </style>
-      // `;
-
-      //     // Añadir los estilos térmicos al final
-      //     const stylesTag = `
-      //   <style>
-      //       ${thermalPrintStyles}
-      //   </style>
-      // `;
-
-      //     // Abrir ventana de impresión
-      //     const printWindow = window.open('', '', 'height=600,width=800');
-
-      //     if (!printWindow) {
-      //       toast.error("Por favor, permita ventanas emergentes para imprimir");
-      //       return;
-      //     }
-
-      //     printWindow.document.write('<html><head><title>Resumen de Semana Laboral</title>');
-      //     printWindow.document.write(printStyles);
-      //     printWindow.document.write(stylesTag);
-      //     printWindow.document.write('</head><body>');
-
-      //     // Mejorar el contenido HTML para impresión
-      //     let enhancedContent = contenido;
-
-      //     // Reemplazar líneas divisorias por estilos CSS
-      //     enhancedContent = enhancedContent.replace(/<div class="my-1 border-t border-solid border-gray-500 print:my-1"><\/div>/g,
-      //       '<div style="border-top: 1px solid #555; margin: 5mm 0; height: 0; width: 100%;"></div>');
-
-      //     // Reemplazar líneas divisorias más grandes
-      //     enhancedContent = enhancedContent.replace(/<div class="my-4 border-t border-solid border-gray-500 print:my-3"><\/div>/g,
-      //       '<div style="border-top: 1px solid #555; margin: 6mm 0; height: 0; width: 100%;"></div>');
-
-      //     // Mejorar el formato de los totales
-      //     // enhancedContent = enhancedContent.replace(/TOTAL SIN DESCUENTO:/g,
-      //     //   '<span style="font-size: 12pt; font-weight: bold; display: block; text-align: center; margin: 5mm 0 2mm 0;">TOTAL SIN DESCUENTO</span>');
-
-      //     enhancedContent = enhancedContent.replace(/TOTAL FINAL PAGADO:/g,
-      //       '<span style="font-size: 16pt; font-weight: bold; display: block; text-align: center; margin: 5mm 0 2mm 0;">TOTAL FINAL PAGADO</span>');
-
-      //     // Centrar y resaltar los valores de los totales
-      //     enhancedContent = enhancedContent.replace(/(<span[^>]*>)(S\/\s*[\d,.]+)(<\/span>)/g,
-      //       (match, p1, p2, p3) => {
-      //         if (match.includes('text-xl font-bold') || match.includes('font-bold text-xl')) {
-      //           return `<div style="font-size: 18pt; font-weight: bold; text-align: center; margin: 3mm 0 6mm 0;">${p2}</div>`;
-      //         }
-      //         return match;
-      //       });
-
-      //     // Centrar todos los encabezados
-      //     enhancedContent = enhancedContent.replace(/<h2[^>]*>(.*?)<\/h2>/g,
-      //       '<h2 style="text-align: center; font-size: 14pt; font-weight: bold; margin: 4mm 0;">$1</h2>');
-
-      //     enhancedContent = enhancedContent.replace(/<h3[^>]*>(.*?)<\/h3>/g,
-      //       '<h3 style="text-align: center; font-size: 12pt; font-weight: bold; margin: 3mm 0;">$1</h3>');
-
-      //     printWindow.document.write(enhancedContent);
-      //     printWindow.document.write('</body></html>');
-      //     printWindow.document.close();
-
-      //     // Imprimir después de que los recursos se hayan cargado
-      //     printWindow.onload = function () {
-      //       setTimeout(() => {
-      //         printWindow.focus();
-      //         printWindow.print();
-      //         printWindow.close();
-      //       }, 250);
-      //     };
-      //   } catch (error) {
-      //     console.error("Error al imprimir resumen semanal:", error);
-      //     toast.error("Ocurrió un error al preparar la impresión");
-      //   }
-      // };
+   
       console.log("URL de logo para impresión:", validLogoUrl);
 
       // estilos específicos para impresora térmica
@@ -3492,7 +3364,7 @@ export default function PagoPersonalPage() {
           <Button
             variant="outline"
             className="flex-1 bg-green-50 hover:bg-green-100 border-green-200"
-            onClick={() => setImprimirPagosModalOpen(true)}
+            onClick={handleOpenImprimirPagosModal}
             disabled={resumenPagos.length === 0}
           >
             <FileText className="h-4 w-4 text-green-600 mr-2" />
@@ -5170,114 +5042,230 @@ export default function PagoPersonalPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Impresión de Pagos */}
+           {/* Modal de Impresión de Pagos */}
       <Dialog
         open={imprimirPagosModalOpen}
         onOpenChange={setImprimirPagosModalOpen}
       >
-        <DialogContent className="max-w-sm max-h-[90vh] overflow-y-auto p-2">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto p-2">
           <DialogHeader className="pb-2">
-            <DialogTitle className="text-sm">Recibos de Pago</DialogTitle>
+            <DialogTitle className="text-sm">Recibos de Pagos</DialogTitle>
           </DialogHeader>
 
-          {/* Contenido del Recibo Detallado para Vista Previa Térmica */}
-          <div ref={reciboDetalladoRef} style={{ 
-            fontFamily: 'Courier New, monospace', 
-            fontSize: '10px',
-            width: '280px', 
-            backgroundColor: 'white', 
-            padding: '0px',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-            lineHeight: '1.2',
-            pageBreakInside: 'avoid'
-          }}>
-            {/* Encabezado compacto */}
-            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
-              {logoLoaded && logoUrl && (
-                <img src={logoUrl} alt="Logo" style={{ height: '20px', margin: '0 auto 2px' }} />
-              )}
-              <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
-                {empresa?.razon_social || "Empresa"}
-              </div>
-              <div style={{ fontSize: '9px', margin: '1px 0' }}>PAGOS PERSONAL</div>
-              <div style={{ fontSize: '8px' }}>
+          {/* Sección de selección de personal - SOLO visible en pantalla */}
+          <div className="print:hidden mb-4 p-2 border border-gray-200 rounded-md bg-gray-50 max-h-96 overflow-y-auto">
+            {/* Información de la semana laboral */}
+            <div className="mb-3 text-center">
+              <div className="text-sm font-semibold text-gray-700">
                 {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_inicio && semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_fin 
                   ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}` 
                   : 'Sin fecha'}
               </div>
-              <div style={{ borderTop: '1px dashed #666', margin: '2px 0' }}></div>
             </div>
 
-            {/* Lista compacta de personal */}
-            <div>
-              {resumenPagos.map((resumen, index) => (
-                <div key={resumen.id_personal} style={{ marginBottom: '4px', fontSize: '9px', pageBreakInside: 'avoid' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '1px' }}>
-                    {index + 1}. {resumen.nombre_completo}
-                  </div>
-                  <div style={{ marginLeft: '6px', lineHeight: '1.0' }}>
-                    <div>D:{resumen.dias_completos} MD:{resumen.medios_dias}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Asist:</span><span>S/{resumen.total_asistencia.toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Cocc:</span><span>S/{resumen.total_coccion.toFixed(2)}</span>
-                    </div>
-                    {resumen.total_tareas_extra > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Extra:</span><span>S/{resumen.total_tareas_extra.toFixed(2)}</span>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-semibold">Seleccionar Personal:</span>
+              <span className="text-xs text-gray-600">
+                {personalSeleccionadoParaImprimir.length} de {(Array.isArray(pagosRealizados) ? pagosRealizados : [])
+                  .filter(pago => pago.id_semana_laboral.toString() === semanaSeleccionada).length} seleccionados
+              </span>
+            </div>
+            
+            <div className="space-y-1">
+              {(Array.isArray(pagosRealizados) ? pagosRealizados : [])
+                .filter(pago => pago.id_semana_laboral.toString() === semanaSeleccionada)
+                .sort((a, b) => (a.id_personal || 0) - (b.id_personal || 0))
+                .map((pago, index) => {
+                  const personalObj = personal.find(p => p.id_personal === pago.id_personal);
+                  const nombreCompleto = pago.es_personal_externo 
+                    ? `${pago.nombre_personal_externo} (Externo)` 
+                    : (personalObj?.nombre_completo || `Personal ID: ${pago.id_personal}`);
+                  
+                  const isSelected = personalSeleccionadoParaImprimir.includes(pago.id_personal || 0);
+                  
+                  // Calcular totales sin descuento y con descuento
+                  const totalSinDescuento = Number(pago.total_asistencia_pago || 0) + 
+                                           Number(pago.total_tareas_extra || 0) + 
+                                           Number(pago.total_coccion || 0);
+                  const totalConDescuento = Number(pago.total_pago_final || 0);
+                  
+                  return (
+                    <div key={pago.id_pago_personal_semana} className="flex items-center gap-2 p-1.5 rounded border border-gray-200 hover:bg-white">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => togglePersonalParaImprimir(pago.id_personal || 0)}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">{index + 1}. {nombreCompleto}</div>
+                        <div className="text-xs text-gray-500 flex justify-between">
+                          <span>Sin Dscto: S/{totalSinDescuento.toFixed(2)}</span>
+                          <span>Con Dscto: S/{totalConDescuento.toFixed(2)}</span>
+                        </div>
                       </div>
-                    )}
-                    {resumen.total_adelantos > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Adel:</span><span>-S/{resumen.total_adelantos.toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      fontWeight: 'bold',
-                      borderTop: '1px dotted #999',
-                      paddingTop: '1px',
-                      marginTop: '1px'
-                    }}>
-                      <span>TOTAL:</span>
-                      <span>S/{(resumen.total_final - resumen.total_adelantos).toFixed(2)}</span>
                     </div>
-                  </div>
-                  <div style={{ borderBottom: '1px dotted #ccc', margin: '2px 0' }}></div>
-                </div>
-              ))}
+                  );
+                })}
             </div>
 
-            {/* Total final */}
-            <div style={{ 
-              marginTop: '4px', 
-              paddingTop: '2px', 
-              borderTop: '1px solid #333',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
-                TOTAL: S/{resumenPagos.reduce((sum, r) => sum + (r.total_final - r.total_adelantos), 0).toFixed(2)}
-              </div>
-              {/* <div style={{ fontSize: '8px', marginTop: '1px' }}>
-                Personal: {resumenPagos.length} | {new Date().toLocaleDateString()}
-              </div> */}
+            {/* Información del pie */}
+            <div className="mt-3 text-center text-xs text-gray-600">
+              Recibo de pagos - {getCurrentDateTime()}
             </div>
           </div>
 
-          {/* Contenido del Recibo de Firmas (Oculto, solo para imprimir) - Optimizado para térmica 80mm */}
-          <div ref={reciboFirmasRef} style={{ 
+          {/* Contenido del Recibo Detallado (Solo para imprimir) */}
+          <div ref={reciboDetalladoRef} style={{ 
             display: 'none',
-            fontFamily: 'Courier New, monospace',
+            fontFamily: 'Arial, sans-serif',
             fontSize: '10px',
-            width: '280px',
+            width: '300px',
             backgroundColor: 'white',
-            padding: '0px',
+            padding: '4mm',
             lineHeight: '1.2',
             pageBreakInside: 'avoid'
           }}>
+            {/* Encabezado */}
+            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+              {logoLoaded && logoUrl && (
+                <img src={logoUrl} alt="Logo" style={{ height: '20px', margin: '0 auto 2px' }} />
+              )}
+              <div style={{ fontWeight: 'bold', fontSize: '11px', fontFamily: 'Arial, sans-serif' }}>
+                {empresa?.razon_social || "Empresa"}
+              </div>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', margin: '2px 0', fontFamily: 'Arial, sans-serif' }}>DETALLE DE PAGOS</div>
+              <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'Arial, sans-serif' }}>
+                {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_inicio && semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_fin 
+                  ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}` 
+                  : 'Sin fecha'}
+              </div>
+              <div style={{ borderTop: '1px solid #666', margin: '4px 0' }}></div>
+            </div>
+            
+            {/* Encabezados de columnas */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between',
+              fontWeight: 'bold',
+              borderBottom: '1px solid #333',
+              paddingBottom: '2px',
+              marginBottom: '4px',
+              fontSize: '9px',
+              fontFamily: 'Arial, sans-serif'
+            }}>
+              <span style={{ width: '50%' }}>Personal</span>
+              <span style={{ width: '25%', textAlign: 'center' }}>S/ SIN DSCTO</span>
+              <span style={{ width: '25%', textAlign: 'center' }}>S/ CON DSCTO</span>
+            </div>
+            
+            {/* Lista de personal seleccionado */}
+            <div>
+              {(Array.isArray(pagosRealizados) ? pagosRealizados : [])
+                .filter(pago => 
+                  pago.id_semana_laboral.toString() === semanaSeleccionada &&
+                  personalSeleccionadoParaImprimir.includes(pago.id_personal || 0)
+                )
+                .sort((a, b) => (a.id_personal || 0) - (b.id_personal || 0))
+                .map((pago, index) => {
+                  const personalObj = personal.find(p => p.id_personal === pago.id_personal);
+                  const nombreCompleto = pago.es_personal_externo 
+                    ? `${pago.nombre_personal_externo} (Externo)` 
+                    : (personalObj?.nombre_completo || `Personal ID: ${pago.id_personal}`);
+                  
+                  const totalSinDescuento = Number(pago.total_asistencia_pago || 0) + 
+                                           Number(pago.total_tareas_extra || 0) + 
+                                           Number(pago.total_coccion || 0);
+                  const totalConDescuento = Number(pago.total_pago_final || 0);
+                  
+                  return (
+                    <div key={pago.id_pago_personal_semana} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      borderBottom: '1px solid #999',
+                      padding: '4px 0',
+                      fontSize: '9px',
+                      fontFamily: 'Arial, sans-serif'
+                    }}>
+                      <div style={{ width: '50%', fontWeight: 'bold' }}>
+                        {index + 1}. {nombreCompleto}
+                      </div>
+                      <div style={{ width: '25%', textAlign: 'center' }}>
+                        S/{totalSinDescuento.toFixed(2)}
+                      </div>
+                      <div style={{ width: '25%', textAlign: 'center', fontWeight: 'bold' }}>
+                        S/{totalConDescuento.toFixed(2)}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            
+            {/* Totales */}
+            <div style={{ 
+              marginTop: '8px', 
+              paddingTop: '4px', 
+              borderTop: '1px solid #333',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              fontFamily: 'Arial, sans-serif'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ width: '50%' }}>TOTALES:</span>
+                <span style={{ width: '25%', textAlign: 'center' }}>
+                  S/{(Array.isArray(pagosRealizados) ? pagosRealizados : [])
+                    .filter(pago => 
+                      pago.id_semana_laboral.toString() === semanaSeleccionada &&
+                      personalSeleccionadoParaImprimir.includes(pago.id_personal || 0)
+                    )
+                    .sort((a, b) => (a.id_personal || 0) - (b.id_personal || 0))
+                    .reduce((sum, pago) => {
+                      const totalSinDescuento = Number(pago.total_asistencia_pago || 0) + 
+                                               Number(pago.total_tareas_extra || 0) + 
+                                               Number(pago.total_coccion || 0);
+                      return sum + totalSinDescuento;
+                    }, 0).toFixed(2)}
+                </span>
+                <span style={{ width: '25%', textAlign: 'center' }}>
+                  S/{(Array.isArray(pagosRealizados) ? pagosRealizados : [])
+                    .filter(pago => 
+                      pago.id_semana_laboral.toString() === semanaSeleccionada &&
+                      personalSeleccionadoParaImprimir.includes(pago.id_personal || 0)
+                    )
+                    .sort((a, b) => (a.id_personal || 0) - (b.id_personal || 0))
+                    .reduce((sum, pago) => sum + Number(pago.total_pago_final || 0), 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
+            
+            {/* Footer */}
+            <div style={{ 
+              marginTop: '8px', 
+              paddingTop: '4px', 
+              borderTop: '1px solid #333',
+              textAlign: 'center',
+              fontSize: '8px',
+              fontFamily: 'Arial, sans-serif'
+            }}>
+              {/* <div>Personal: {personalSeleccionadoParaImprimir.length} | {new Date().toLocaleDateString()}</div> */}
+              <div style={{ marginTop: '2px' }}>Recibo de pagos - {getCurrentDateTime()}</div>
+              <div>www.ceramicosalva.com</div>
+              <div style={{ borderTop: '1px solid #666', marginTop: '4px', paddingTop: '2px' }}>_________________________</div>
+            </div>
+          </div>
+
+          {/* Contenido del Recibo de Firmas (Solo para imprimir) */}
+          <div ref={reciboFirmasRef} style={{
+            display: 'none',
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '10px',
+            width: '300px',
+            backgroundColor: 'white',
+            padding: '4mm',
+            lineHeight: '1.2',
+            pageBreakInside: 'avoid'
+          }}>
+            {/* Encabezado del recibo de firmas */}
             <div style={{ textAlign: 'center', marginBottom: '6px' }}>
               {logoLoaded && logoUrl && (
                 <img src={logoUrl} alt="Logo" style={{ height: '20px', margin: '0 auto 2px' }} />
@@ -5285,7 +5273,7 @@ export default function PagoPersonalPage() {
               <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
                 {empresa?.razon_social || "Empresa"}
               </div>
-              <div style={{ fontSize: '9px', margin: '1px 0' }}>CONTROL DE PAGOS - FIRMAS</div>
+              <div style={{ fontSize: '9px', margin: '1px 0' }}>CONTROL DE PAGOS</div>
               <div style={{ fontSize: '8px' }}>
                 {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_inicio && semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_fin 
                   ? `${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}` 
@@ -5294,7 +5282,7 @@ export default function PagoPersonalPage() {
               <div style={{ borderTop: '1px dashed #666', margin: '2px 0' }}></div>
             </div>
 
-            {/* Lista compacta para firmas */}
+            {/* Lista para firmas - Solo personal seleccionado */}
             <div>
               <div style={{ 
                 display: 'flex', 
@@ -5305,30 +5293,43 @@ export default function PagoPersonalPage() {
                 marginBottom: '4px',
                 fontSize: '9px'
               }}>
-                <span style={{ width: '20px' }}>N°</span>
-                <span style={{ flex: '1', textAlign: 'left' }}>PERSONAL</span>
-                <span style={{ width: '60px', textAlign: 'center' }}>FIRMA</span>
+                <span style={{ width: '15%' }}>N°</span>
+                <span style={{ width: '55%', textAlign: 'left' }}>PERSONAL</span>
+                <span style={{ width: '30%', textAlign: 'center' }}>FIRMA</span>
               </div>
               
-              {resumenPagos.map((resumen, index) => (
-                <div key={resumen.id_personal} style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  borderBottom: '1px dotted #999',
-                  padding: '12px 0', // Aumentado de 6px a 12px para mayor espacio de firma
-                  fontSize: '9px',
-                  pageBreakInside: 'avoid'
-                }}>
-                  <span style={{ width: '20px', fontWeight: 'bold' }}>{index + 1}</span>
-                  <span style={{ flex: '1', textAlign: 'left', paddingRight: '4px' }}>
-                    {resumen.nombre_completo}
-                  </span>
-                  {/* <span style={{ width: '60px', textAlign: 'center', borderBottom: '1px solid #333' }}>
-                    &nbsp;
-                  </span> */}
-                </div>
-              ))}
+              {(Array.isArray(pagosRealizados) ? pagosRealizados : [])
+                .filter(pago => 
+                  pago.id_semana_laboral.toString() === semanaSeleccionada &&
+                  personalSeleccionadoParaImprimir.includes(pago.id_personal || 0)
+                )
+                .sort((a, b) => (a.id_personal || 0) - (b.id_personal || 0))
+                .map((pago, index) => {
+                  const personalObj = personal.find(p => p.id_personal === pago.id_personal);
+                  const nombreCompleto = pago.es_personal_externo 
+                    ? `${pago.nombre_personal_externo} (Ext.)` 
+                    : (personalObj?.nombre_completo || `Personal ID: ${pago.id_personal}`);
+                  
+                  return (
+                    <div key={pago.id_pago_personal_semana} style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderBottom: '1px dotted #999',
+                      padding: '12px 0', // Aumentado espaciado entre personal para que puedan firmar
+                      fontSize: '9px',
+                      pageBreakInside: 'avoid'
+                    }}>
+                      <span style={{ width: '15%', fontWeight: 'bold' }}>{index + 1}</span>
+                      <span style={{ width: '55%', textAlign: 'left' }}>
+                        {nombreCompleto}
+                      </span>
+                      <span style={{ width: '30%', textAlign: 'center', borderBottom: '1px solid #333' }}>
+                        &nbsp;
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
 
             <div style={{ 
@@ -5337,18 +5338,15 @@ export default function PagoPersonalPage() {
               borderTop: '1px solid #333',
               textAlign: 'center'
             }}>
-              {/* <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
-                Total personal: {resumenPagos.length}
-              </div>
-              <div style={{ fontSize: '8px', marginTop: '4px' }}>
-                Firmar al recibir el pago
+              <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
+                Total personal: {personalSeleccionadoParaImprimir.length}
               </div>
               <div style={{ fontSize: '8px', marginTop: '6px' }}>
                 <span>Responsable: </span>
                 <span style={{ borderBottom: '1px solid #333', display: 'inline-block', width: '100px' }}>
                   &nbsp;
                 </span>
-              </div> */}
+              </div>
             </div>
           </div>
 
@@ -5362,12 +5360,14 @@ export default function PagoPersonalPage() {
             <Button
               variant="outline"
               onClick={imprimirReciboDetallado}
+              disabled={personalSeleccionadoParaImprimir.length === 0}
             >
               <FileText className="h-4 w-4 mr-2" />
               Imprimir Detallado
             </Button>
             <Button
               onClick={imprimirReciboFirmas}
+              disabled={personalSeleccionadoParaImprimir.length === 0}
             >
               <FileText className="h-4 w-4 mr-2" />
               Imprimir Listado
