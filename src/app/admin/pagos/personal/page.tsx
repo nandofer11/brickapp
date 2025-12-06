@@ -5270,16 +5270,16 @@ export default function PagoPersonalPage() {
               {logoLoaded && logoUrl && (
                 <img src={logoUrl} alt="Logo" style={{ height: '20px', margin: '0 auto 2px' }} />
               )}
-              <div style={{ fontWeight: 'bold', fontSize: '11px' }}>
+              <div style={{ fontWeight: 'bold', fontSize: '11px', fontFamily: 'Arial, sans-serif' }}>
                 {empresa?.razon_social || "Empresa"}
               </div>
-              <div style={{ fontSize: '9px', margin: '1px 0' }}>CONTROL DE PAGOS</div>
-              <div style={{ fontSize: '8px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', margin: '2px 0', fontFamily: 'Arial, sans-serif' }}>CONTROL DE PAGOS</div>
+              <div style={{ fontSize: '10px', fontWeight: 'bold', fontFamily: 'Arial, sans-serif', marginBottom: '12px' }}>
                 {semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_inicio && semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)?.fecha_fin 
-                  ? `${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}` 
+                  ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}` 
                   : 'Sin fecha'}
               </div>
-              <div style={{ borderTop: '1px dashed #666', margin: '2px 0' }}></div>
+              <div style={{ borderTop: '1px solid #666', margin: '2px 0' }}></div>
             </div>
 
             {/* Lista para firmas - Solo personal seleccionado */}
@@ -5291,7 +5291,8 @@ export default function PagoPersonalPage() {
                 borderBottom: '1px solid #333',
                 paddingBottom: '2px',
                 marginBottom: '4px',
-                fontSize: '9px'
+                fontSize: '9px',
+                fontFamily: 'Arial, sans-serif'
               }}>
                 <span style={{ width: '15%' }}>N°</span>
                 <span style={{ width: '55%', textAlign: 'left' }}>PERSONAL</span>
@@ -5315,16 +5316,17 @@ export default function PagoPersonalPage() {
                       display: 'flex', 
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      borderBottom: '1px dotted #999',
-                      padding: '12px 0', // Aumentado espaciado entre personal para que puedan firmar
+                      borderBottom: '1px solid #999',
+                      padding: '24px 0', // Incrementado espaciado entre personal para que puedan firmar
                       fontSize: '9px',
-                      pageBreakInside: 'avoid'
+                      pageBreakInside: 'avoid',
+                      fontFamily: 'Arial, sans-serif'
                     }}>
                       <span style={{ width: '15%', fontWeight: 'bold' }}>{index + 1}</span>
                       <span style={{ width: '55%', textAlign: 'left' }}>
                         {nombreCompleto}
                       </span>
-                      <span style={{ width: '30%', textAlign: 'center', borderBottom: '1px solid #333' }}>
+                      <span style={{ width: '30%', textAlign: 'center' }}>
                         &nbsp;
                       </span>
                     </div>
@@ -5335,17 +5337,12 @@ export default function PagoPersonalPage() {
             <div style={{ 
               marginTop: '8px', 
               paddingTop: '4px', 
-              borderTop: '1px solid #333',
-              textAlign: 'center'
+              // borderTop: '1px solid #333',
+              textAlign: 'center',
+              fontFamily: 'Arial, sans-serif'
             }}>
-              <div style={{ fontSize: '9px', fontWeight: 'bold' }}>
-                Total personal: {personalSeleccionadoParaImprimir.length}
-              </div>
-              <div style={{ fontSize: '8px', marginTop: '6px' }}>
-                <span>Responsable: </span>
-                <span style={{ borderBottom: '1px solid #333', display: 'inline-block', width: '100px' }}>
-                  &nbsp;
-                </span>
+              <div style={{ fontSize: '9px' }}>
+                www.ceramicosalva.com
               </div>
             </div>
           </div>
