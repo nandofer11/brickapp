@@ -211,7 +211,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { formatDate } from "@/utils/dateFormat";
+import { formatDate, getCurrentDateForLima } from "@/utils/dateFormat";
 
 import {
   Card,
@@ -5111,7 +5111,7 @@ export default function PagoPersonalPage() {
 
             {/* Información del pie */}
             <div className="mt-3 text-center text-xs text-gray-600">
-              Recibo de pagos - {getCurrentDateTime()}
+              Recibo de pagos: {getCurrentDateForLima()}
             </div>
           </div>
 
@@ -5127,7 +5127,7 @@ export default function PagoPersonalPage() {
             pageBreakInside: 'avoid'
           }}>
             {/* Encabezado */}
-            <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '24px'}}>
               {logoLoaded && logoUrl && (
                 <img src={logoUrl} alt="Logo" style={{ height: '20px', margin: '0 auto 2px' }} />
               )}
@@ -5140,7 +5140,7 @@ export default function PagoPersonalPage() {
                   ? `Semana: ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_inicio)} - ${formatDate(semanasLaboral.find(s => s.id_semana_laboral.toString() === semanaSeleccionada)!.fecha_fin)}` 
                   : 'Sin fecha'}
               </div>
-              <div style={{ borderTop: '1px solid #666', margin: '4px 0' }}></div>
+              {/* <div style={{ borderTop: '1px solid #000', margin: '4px 0' }}></div> */}
             </div>
             
             {/* Encabezados de columnas */}
@@ -5148,7 +5148,9 @@ export default function PagoPersonalPage() {
               display: 'flex', 
               justifyContent: 'space-between',
               fontWeight: 'bold',
-              borderBottom: '1px solid #333',
+              borderTop: '1px solid #000',
+              borderBottom: '1px solid #000',
+              paddingTop: '2px',
               paddingBottom: '2px',
               marginBottom: '4px',
               fontSize: '9px',
@@ -5184,7 +5186,7 @@ export default function PagoPersonalPage() {
                       justifyContent: 'space-between',
                       borderBottom: '1px solid #999',
                       padding: '4px 0',
-                      fontSize: '9px',
+                      fontSize: '10px',
                       fontFamily: 'Arial, sans-serif'
                     }}>
                       <div style={{ width: '50%', fontWeight: 'bold' }}>
@@ -5205,7 +5207,7 @@ export default function PagoPersonalPage() {
             <div style={{ 
               marginTop: '8px', 
               paddingTop: '4px', 
-              borderTop: '1px solid #333',
+              borderTop: '1px solid #000',
               fontSize: '11px',
               fontWeight: 'bold',
               fontFamily: 'Arial, sans-serif'
@@ -5242,13 +5244,13 @@ export default function PagoPersonalPage() {
             <div style={{ 
               marginTop: '8px', 
               paddingTop: '4px', 
-              borderTop: '1px solid #333',
+              borderTop: '1px solid #000',
               textAlign: 'center',
-              fontSize: '8px',
+              fontSize: '12px',
               fontFamily: 'Arial, sans-serif'
             }}>
               {/* <div>Personal: {personalSeleccionadoParaImprimir.length} | {new Date().toLocaleDateString()}</div> */}
-              <div style={{ marginTop: '2px' }}>Recibo de pagos - {getCurrentDateTime()}</div>
+              {/* <div style={{ marginTop: '2px' }}>Recibo impreso el: {getCurrentDateForLima()}</div> */}
               <div>www.ceramicosalva.com</div>
               <div style={{ borderTop: '1px solid #666', marginTop: '4px', paddingTop: '2px' }}>_________________________</div>
             </div>
